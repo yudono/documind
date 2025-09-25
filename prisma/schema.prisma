@@ -49,6 +49,7 @@ model User {
   documents     Document[]
   folders       Folder[]
   chatSessions  ChatSession[]
+  templates     Template[]
   userSettings  UserSettings?
   billing       Billing?
   createdAt     DateTime  @default(now())
@@ -171,4 +172,23 @@ model Billing {
   stripeSubscriptionId String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  type        String   // pptx, xlsx, docx, etc.
+  category    String?  // business, education, personal, etc.
+  url         String?  // S3 URL
+  key         String?  // S3 key
+  bucket      String?  // S3 bucket
+  size        Int?     // File size in bytes
+  thumbnail   String?  // Thumbnail image URL
+  isPublic    Boolean  @default(true) // Whether template is publicly available
+  downloadCount Int    @default(0)
+  userId      String?  // Optional: creator of the template
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
