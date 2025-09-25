@@ -1,13 +1,32 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Download, Search, Filter, FileText, FileSpreadsheet, Presentation } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Download,
+  Search,
+  Filter,
+  FileText,
+  FileSpreadsheet,
+  Presentation,
+} from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
 interface Template {
   id: string;
@@ -28,11 +47,11 @@ interface Template {
 
 const getFileIcon = (type: string) => {
   switch (type.toLowerCase()) {
-    case 'docx':
+    case "docx":
       return <FileText className="h-5 w-5 text-blue-600" />;
-    case 'xlsx':
+    case "xlsx":
       return <FileSpreadsheet className="h-5 w-5 text-green-600" />;
-    case 'pptx':
+    case "pptx":
       return <Presentation className="h-5 w-5 text-orange-600" />;
     default:
       return <FileText className="h-5 w-5 text-gray-600" />;
@@ -40,18 +59,18 @@ const getFileIcon = (type: string) => {
 };
 
 const formatFileSize = (bytes: number | null) => {
-  if (!bytes) return 'Unknown size';
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  if (!bytes) return "Unknown size";
+  const sizes = ["Bytes", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+  return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i];
 };
 
 export default function TemplatePage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedType, setSelectedType] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedType, setSelectedType] = useState<string>("all");
 
   useEffect(() => {
     fetchTemplates();
@@ -61,20 +80,21 @@ export default function TemplatePage() {
     try {
       setLoading(true);
       const params = new URLSearchParams();
-      if (selectedCategory !== 'all') params.append('category', selectedCategory);
-      if (selectedType !== 'all') params.append('type', selectedType);
+      if (selectedCategory !== "all")
+        params.append("category", selectedCategory);
+      if (selectedType !== "all") params.append("type", selectedType);
 
       const response = await fetch(`/api/templates?${params.toString()}`);
-      if (!response.ok) throw new Error('Failed to fetch templates');
+      if (!response.ok) throw new Error("Failed to fetch templates");
 
       const data = await response.json();
       setTemplates(data.templates);
     } catch (error) {
-      console.error('Error fetching templates:', error);
+      console.error("Error fetching templates:", error);
       toast({
-        title: 'Error',
-        description: 'Failed to load templates. Please try again.',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to load templates. Please try again.",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -84,36 +104,47 @@ export default function TemplatePage() {
   const handleDownload = async (templateId: string, templateName: string) => {
     try {
       const response = await fetch(`/api/templates/${templateId}/download`);
-      if (!response.ok) throw new Error('Failed to download template');
+      if (!response.ok) throw new Error("Failed to download template");
 
       const data = await response.json();
-      
+
       // Open the download URL in a new tab
       if (data.downloadUrl) {
-        window.open(data.downloadUrl, '_blank');
+        window.open(data.downloadUrl, "_blank");
       }
-      
+
       toast({
-        title: 'Download Started',
+        title: "Download Started",
         description: `${templateName} download has been initiated.`,
       });
     } catch (error) {
-      console.error('Error downloading template:', error);
+      console.error("Error downloading template:", error);
       toast({
-        title: 'Error',
-        description: 'Failed to download template. Please try again.',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to download template. Please try again.",
+        variant: "destructive",
       });
     }
   };
 
-  const filteredTemplates = templates.filter(template =>
-    template.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (template.description && template.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredTemplates = templates.filter(
+    (template) =>
+      template.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (template.description &&
+        template.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const categories = ['all', 'business', 'marketing', 'finance', 'sales', 'hr', 'operations', 'education'];
-  const types = ['all', 'docx', 'xlsx', 'pptx'];
+  const categories = [
+    "all",
+    "business",
+    "marketing",
+    "finance",
+    "sales",
+    "hr",
+    "operations",
+    "education",
+  ];
+  const types = ["all", "docx", "xlsx", "pptx"];
 
   return (
     <div className="min-h-screen">
@@ -144,15 +175,20 @@ export default function TemplatePage() {
             />
           </div>
           <div className="flex gap-2">
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <Select
+              value={selectedCategory}
+              onValueChange={setSelectedCategory}
+            >
               <SelectTrigger className="w-[140px]">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
-                {categories.map(category => (
+                {categories.map((category) => (
                   <SelectItem key={category} value={category}>
-                    {category === 'all' ? 'All Categories' : category.charAt(0).toUpperCase() + category.slice(1)}
+                    {category === "all"
+                      ? "All Categories"
+                      : category.charAt(0).toUpperCase() + category.slice(1)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -162,9 +198,9 @@ export default function TemplatePage() {
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent>
-                {types.map(type => (
+                {types.map((type) => (
                   <SelectItem key={type} value={type}>
-                    {type === 'all' ? 'All Types' : type.toUpperCase()}
+                    {type === "all" ? "All Types" : type.toUpperCase()}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -196,13 +232,18 @@ export default function TemplatePage() {
             <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">No templates found</h3>
             <p className="text-muted-foreground">
-              {searchTerm ? 'Try adjusting your search terms or filters.' : 'No templates available at the moment.'}
+              {searchTerm
+                ? "Try adjusting your search terms or filters."
+                : "No templates available at the moment."}
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredTemplates.map((template) => (
-              <Card key={template.id} className="hover:shadow-md transition-shadow">
+              <Card
+                key={template.id}
+                className="hover:shadow-md transition-shadow"
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-2">
@@ -225,7 +266,12 @@ export default function TemplatePage() {
                   {template.thumbnail && (
                     <div className="mb-3">
                       <img
-                        src={template.thumbnail}
+                        src={
+                          template.thumbnail || "https://placehold.co/600x400"
+                        }
+                        onError={(e: any) => {
+                          e.target.src = "https://placehold.co/600x400";
+                        }}
                         alt={template.name}
                         className="w-full h-32 object-cover rounded-md bg-muted"
                       />
@@ -245,8 +291,8 @@ export default function TemplatePage() {
                     className="w-full"
                     size="sm"
                   >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download
+                    {/* <Download className="h-4 w-4 mr-2" /> */}
+                    Use Template
                   </Button>
                 </CardContent>
               </Card>

@@ -152,10 +152,24 @@ interface DocumentTemplate {
   category: string;
 }
 
+interface Template {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  category: string;
+  thumbnailUrl?: string;
+  isPublic: boolean;
+  downloadCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function MyDocumentsPage() {
   const router = useRouter();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -218,11 +232,27 @@ export default function MyDocumentsPage() {
     }
   }, [currentFolderId]);
 
+  // Load templates
+  const loadTemplates = useCallback(async () => {
+    try {
+      const response = await fetch("/api/templates?limit=10");
+      if (response.ok) {
+        const data = await response.json();
+        setTemplates(data.templates);
+      } else {
+        console.error("Failed to load templates");
+      }
+    } catch (error) {
+      console.error("Error loading templates:", error);
+    }
+  }, []);
+
   // Load documents and folders on mount and when current folder changes
   useEffect(() => {
     loadDocuments();
     loadFolders();
-  }, [loadDocuments, loadFolders]);
+    loadTemplates();
+  }, [loadDocuments, loadFolders, loadTemplates]);
 
   const documentTemplates: DocumentTemplate[] = [
     {
@@ -549,6 +579,45 @@ export default function MyDocumentsPage() {
         </div>
 
         <div className="p-8 relative h-[calc(100vh-80px)] overflow-auto">
+          {/* scrollable horizontal badge/pills */}
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-muted-foreground">
+              Template
+            </h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/dashboard/templates")}
+              className="text-xs"
+            >
+              Lihat Semua
+            </Button>
+          </div>
+          <div className="overflow-x-auto max-w-[calc(100vw-320px)] mb-8">
+            <div className="flex items-center space-x-3 pb-2">
+              {templates.length > 0
+                ? templates.map((template) => (
+                    <div
+                      key={template.id}
+                      className="px-4 py-2 text-primary rounded-full border border-primary whitespace-nowrap cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                      onClick={() =>
+                        router.push(
+                          `/dashboard/templates?template=${template.id}`
+                        )
+                      }
+                    >
+                      {template.name}
+                    </div>
+                  ))
+                : // Fallback skeleton loaders while templates are loading
+                  Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="px-4 py-2 rounded-full border animate-pulse bg-gray-200 h-8 w-24"
+                    />
+                  ))}
+            </div>
+          </div>
           {/* Breadcrumb navigation */}
           {currentFolderId && (
             <div className="mb-4">
