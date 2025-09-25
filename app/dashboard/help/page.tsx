@@ -303,9 +303,9 @@ export default function HelpPage() {
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center space-x-3">
             <div>
-              <h1 className="font-semibold">Bantuan & Dukungan</h1>
+              <h1 className="font-semibold">Help & Support</h1>
               <p className="text-sm text-muted-foreground">
-                Temukan jawaban, panduan, dan dapatkan bantuan untuk UMKM Anda
+                Find answers, guides, and get support for your business
               </p>
             </div>
           </div>

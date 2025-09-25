@@ -104,17 +104,94 @@ export default function ChatPage() {
   // Session management
   const sessions = chatSessions;
 
-  const createNewSession = () => {
-    const newSession: ChatSession = {
-      id: `session-${Date.now()}`,
-      title: "New Chat",
-      lastMessage: "",
-      timestamp: new Date(),
-      messageCount: 0,
+  // Load chat sessions on component mount
+  useEffect(() => {
+    const loadChatSessions = async () => {
+      try {
+        const response = await fetch('/api/chat-sessions');
+        if (response.ok) {
+          const data = await response.json();
+          setChatSessions(data.chatSessions.map((session: any) => ({
+            id: session.id,
+            title: session.title,
+            lastMessage: session.messages[session.messages.length - 1]?.content || '',
+            timestamp: new Date(session.updatedAt),
+            messageCount: session.messages.length,
+          })));
+        }
+      } catch (error) {
+        console.error('Error loading chat sessions:', error);
+      }
     };
-    setChatSessions((prev) => [newSession, ...prev]);
-    setCurrentSession(newSession);
-    setMessages([]);
+
+    loadChatSessions();
+  }, []);
+
+  // Load messages for current session
+  useEffect(() => {
+    const loadSessionMessages = async () => {
+      if (currentSession && currentSession.id !== 'current') {
+        try {
+          const response = await fetch(`/api/chat-messages?sessionId=${currentSession.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            setMessages(data.messages.map((msg: any) => ({
+              id: msg.id,
+              content: msg.content,
+              role: msg.role,
+              timestamp: new Date(msg.createdAt),
+              referencedDocuments: msg.referencedDocs || [],
+            })));
+          }
+        } catch (error) {
+          console.error('Error loading session messages:', error);
+        }
+      }
+    };
+
+    loadSessionMessages();
+  }, [currentSession]);
+
+  const createNewSession = async () => {
+    try {
+      const response = await fetch('/api/chat-sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: 'New Chat',
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newSession: ChatSession = {
+          id: data.chatSession.id,
+          title: data.chatSession.title,
+          lastMessage: '',
+          timestamp: new Date(data.chatSession.createdAt),
+          messageCount: 0,
+        };
+        
+        setChatSessions(prev => [newSession, ...prev]);
+        setCurrentSession(newSession);
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error('Error creating new session:', error);
+      // Fallback to local session
+      const newSession: ChatSession = {
+        id: `session-${Date.now()}`,
+        title: 'New Chat',
+        lastMessage: '',
+        timestamp: new Date(),
+        messageCount: 0,
+      };
+      setChatSessions(prev => [newSession, ...prev]);
+      setCurrentSession(newSession);
+      setMessages([]);
+    }
   };
 
   const toggleDocumentSelection = (doc: Document) => {
@@ -237,7 +314,7 @@ export default function ChatPage() {
   };
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -251,7 +328,6 @@ export default function ChatPage() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    const currentInput = input;
     setInput("");
     setSelectedDocuments([]);
     setIsLoading(true);
@@ -267,6 +343,33 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, typingMessage]);
 
     try {
+      // Ensure we have a current session
+      let sessionId = currentSession?.id;
+      if (!sessionId || sessionId === 'current') {
+        await createNewSession();
+        sessionId = currentSession?.id || `session-${Date.now()}`;
+      }
+
+      // Save user message to database
+      if (sessionId && sessionId !== 'current') {
+        try {
+          await fetch('/api/chat-messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+             sessionId,
+             content: input,
+             role: 'user',
+             referencedDocs: selectedDocuments.map((doc) => doc.id),
+           }),
+          });
+        } catch (error) {
+          console.error('Error saving user message:', error);
+        }
+      }
+
       // Call the chat API with semantic search if enabled
       const apiEndpoint = useSemanticSearch
         ? "/api/chat-with-context"
@@ -277,14 +380,11 @@ export default function ChatPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message: currentInput,
+          message: input,
+          sessionId,
           useSemanticSearch: useSemanticSearch,
           documentIds:
-            selectedDocuments.length > 0 ? selectedDocuments : undefined,
-          context:
-            selectedDocuments.length > 0
-              ? `Referenced documents: ${selectedDocuments.join(", ")}`
-              : undefined,
+            selectedDocuments.length > 0 ? selectedDocuments.map((doc) => doc.id) : undefined,
         }),
       });
 
@@ -304,6 +404,7 @@ export default function ChatPage() {
         content: data.response,
         role: "assistant",
         timestamp: new Date(),
+        referencedDocuments: data.referencedDocuments || [],
         documentFile: data.documentFile
           ? {
               name: data.documentFile.name,
@@ -316,6 +417,34 @@ export default function ChatPage() {
       setMessages((prev) =>
         prev.filter((msg) => msg.id !== "typing").concat(assistantMessage)
       );
+
+      // Save assistant message to database
+      if (sessionId && sessionId !== 'current') {
+        try {
+          await fetch('/api/chat-messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              sessionId,
+              content: data.response,
+              role: 'assistant',
+              referencedDocs: data.referencedDocuments || [],
+            }),
+          });
+
+          // Update session in local state
+          setChatSessions(prev => prev.map(session => 
+            session.id === sessionId 
+              ? { ...session, lastMessage: data.response, timestamp: new Date(), messageCount: session.messageCount + 2 }
+              : session
+          ));
+        } catch (error) {
+          console.error('Error saving assistant message:', error);
+        }
+      }
+
     } catch (error) {
       console.error("Chat error:", error);
 
@@ -522,8 +651,7 @@ export default function ChatPage() {
   };
 
   const newChat = () => {
-    setMessages([]);
-    setSelectedSession("current");
+    createNewSession();
   };
 
   // Generate document function
@@ -600,20 +728,24 @@ export default function ChatPage() {
         throw new Error(`Document analysis failed: ${response.statusText}`);
       }
 
-      const analysis = await response.json();
+      const data = await response.json();
 
-      const analysisMessage: Message = {
-        id: `analysis-${Date.now()}`,
-        content: `📊 Document Analysis Complete:\n\n${
-          analysis.summary
-        }\n\nKey Points:\n${
-          analysis.keyPoints?.map((point: string) => `• ${point}`).join("\n") ||
-          "No key points found"
-        }`,
-        role: "assistant",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, analysisMessage]);
+      if (data.success) {
+        const analysisMessage: Message = {
+          id: `analysis-${Date.now()}`,
+          content: `📊 Document Analysis Complete:\n\n**Summary:** ${data.analysis.summary}\n\n**Key Points:**\n${data.analysis.keyPoints?.map((point: string) => `• ${point}`).join("\n") || "No key points found"}\n\n**Sentiment:** ${data.analysis.sentiment}\n**Topics:** ${data.analysis.topics?.join(", ") || "None identified"}`,
+          role: "assistant",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, analysisMessage]);
+        
+        // Store extracted text for future queries
+        if (data.extractedText) {
+          console.log('Document text extracted:', data.extractedText.substring(0, 200) + '...');
+        }
+      } else {
+        throw new Error(data.error || 'Analysis failed');
+      }
     } catch (error) {
       console.error("Document analysis error:", error);
       const errorMessage: Message = {
@@ -637,16 +769,44 @@ export default function ChatPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("/api/upload", {
+      // First, upload to S3
+      const uploadResponse = await fetch("/api/upload", {
         method: "POST",
         body: formData,
       });
 
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.error || "Upload failed");
       }
 
-      const result = await response.json();
+      const uploadResult = await uploadResponse.json();
+
+      // Then, save document metadata to database
+      const documentData = {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        content: "", // We'll store the S3 URL instead
+        url: uploadResult.file.url,
+        key: uploadResult.file.key,
+        bucket: uploadResult.file.bucket,
+        folderId: null, // Chat uploads go to root folder
+      };
+
+      const documentResponse = await fetch("/api/documents", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(documentData),
+      });
+
+      if (!documentResponse.ok) {
+        throw new Error("Failed to save document to database");
+      }
+
+      const newDocument = await documentResponse.json();
 
       // Add success message
       const successMessage: Message = {
@@ -657,7 +817,7 @@ export default function ChatPage() {
         documentFile: {
           name: file.name,
           type: file.type,
-          downloadUrl: result.downloadUrl || "#",
+          downloadUrl: uploadResult.file.url || "#",
         },
       };
       setMessages((prev) => [...prev, successMessage]);

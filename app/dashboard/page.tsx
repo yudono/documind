@@ -120,7 +120,7 @@ export default function Dashboard() {
             <div>
               <h1 className="font-semibold">Dashboard Analytics</h1>
               <p className="text-sm text-muted-foreground">
-                Selamat datang kembali, {session?.user?.name?.split(" ")[0]}!
+                Welcome back, {session?.user?.name?.split(" ")[0]}!
               </p>
             </div>
           </div>
@@ -244,9 +244,7 @@ export default function Dashboard() {
               <Activity className="h-5 w-5 mr-2" />
               Quick Actions
             </CardTitle>
-            <CardDescription>
-              Access your most used features
-            </CardDescription>
+            <CardDescription>Access your most used features</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -265,7 +263,7 @@ export default function Dashboard() {
                   </p>
                 </div>
               </Link>
-              
+
               <Link href="/dashboard/chat">
                 <div className="group p-4 rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all cursor-pointer">
                   <div className="flex items-center space-x-3 mb-3">
@@ -281,7 +279,7 @@ export default function Dashboard() {
                   </p>
                 </div>
               </Link>
-              
+
               <Link href="/dashboard/billing">
                 <div className="group p-4 rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all cursor-pointer">
                   <div className="flex items-center space-x-3 mb-3">

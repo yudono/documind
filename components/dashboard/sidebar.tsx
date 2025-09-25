@@ -14,11 +14,13 @@ import {
   Settings,
   HelpCircle,
   CreditCard,
+  Layout,
 } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "My Documents", href: "/dashboard/documents", icon: FileText },
+  { name: "Templates", href: "/dashboard/templates", icon: Layout },
   { name: "Chat AI", href: "/dashboard/chat", icon: MessageSquare },
   { name: "Billing & Usage", href: "/dashboard/billing", icon: CreditCard },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },

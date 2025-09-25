@@ -9,6 +9,7 @@ interface AgentInput {
   sessionId?: string;
   useSemanticSearch: boolean;
   documentIds?: string[];
+  conversationContext?: string;
 }
 
 interface AgentOutput {
@@ -28,7 +29,7 @@ export class DocumentAgent {
   }
 
   async processQuery(input: AgentInput): Promise<AgentOutput> {
-    const { query, userId, sessionId, useSemanticSearch, documentIds } = input;
+    const { query, userId, sessionId, useSemanticSearch, documentIds, conversationContext } = input;
     
     // Step 1: Retrieve context if semantic search is enabled
     let context = '';
@@ -40,10 +41,15 @@ export class DocumentAgent {
       referencedDocuments = contextResult.referencedDocuments;
     }
 
-    // Step 2: Generate response
+    // Step 2: Add conversation context if provided
+    if (conversationContext) {
+      context = conversationContext + (context ? '\n\n' + context : '');
+    }
+
+    // Step 3: Generate response
     const response = await this.generateResponse(query, context);
 
-    // Step 3: Save conversation if sessionId is provided
+    // Step 4: Save conversation if sessionId is provided
     if (sessionId) {
       await this.saveConversation(sessionId, query, response, referencedDocuments);
     }

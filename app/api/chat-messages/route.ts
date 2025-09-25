@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { generateChatMessageEmbedding } from '@/lib/chat-embeddings';
 
 // POST /api/chat-messages - Add a message to a chat session
 export async function POST(request: NextRequest) {
@@ -55,6 +56,11 @@ export async function POST(request: NextRequest) {
         sessionId,
         referencedDocs: referencedDocs || [],
       },
+    });
+
+    // Generate embedding for the message (async, don't wait)
+    generateChatMessageEmbedding(message.id, content).catch(error => {
+      console.error('Failed to generate embedding for message:', error);
     });
 
     // Update the chat session's updatedAt timestamp

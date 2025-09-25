@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { generateChatWithAgent } from '@/lib/groq';
 import { prisma } from '@/lib/prisma';
+import { getChatContext } from '@/lib/chat-embeddings';
 
 // POST /api/chat-with-context - Chat with document context using semantic search
 export async function POST(request: NextRequest) {
@@ -27,13 +28,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
+    // Get conversation context from previous messages if sessionId is provided
+    let conversationContext = '';
+    if (sessionId && sessionId !== 'current') {
+      conversationContext = await getChatContext(message, sessionId, 3);
+    }
+
     // Use the document agent to process the query
     const result = await generateChatWithAgent(
       message,
       user.id,
       sessionId,
       useSemanticSearch,
-      documentIds
+      documentIds,
+      conversationContext
     );
 
     return NextResponse.json({

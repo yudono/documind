@@ -200,7 +200,8 @@ export async function generateChatWithAgent(
   userId: string,
   sessionId?: string,
   useSemanticSearch: boolean = false,
-  documentIds?: string[]
+  documentIds?: string[],
+  conversationContext?: string
 ): Promise<{ response: string; referencedDocuments: string[] }> {
   try {
     return await documentAgent.processQuery({
@@ -208,7 +209,8 @@ export async function generateChatWithAgent(
       userId,
       sessionId,
       useSemanticSearch,
-      documentIds
+      documentIds,
+      conversationContext
     });
   } catch (error) {
     console.error('Error generating chat with agent:', error);

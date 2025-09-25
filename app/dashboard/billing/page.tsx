@@ -242,9 +242,9 @@ export default function BillingPage() {
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center space-x-3">
             <div>
-              <h1 className="font-semibold">Tagihan & Penggunaan</h1>
+              <h1 className="font-semibold">Billing</h1>
               <p className="text-sm text-muted-foreground">
-                Kelola langganan dan pantau penggunaan layanan UMKM Anda
+                Manage your billing and usage
               </p>
             </div>
           </div>
