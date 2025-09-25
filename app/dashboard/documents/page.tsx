@@ -1,22 +1,57 @@
-'use client';
+"use client";
 
-import { useState, useCallback, useRef } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Progress } from '@/components/ui/progress';
-import { 
-  Upload, 
-  FileText, 
-  Search, 
-  Grid3X3, 
-  List, 
-  Eye, 
-  Download, 
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useDropzone } from "react-dropzone";
+import { useRouter } from "next/navigation";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  Upload,
+  FileText,
+  Search,
+  Grid3X3,
+  List,
+  Eye,
+  Download,
   Trash2,
   Filter,
   Calendar,
@@ -32,8 +67,45 @@ import {
   Plus,
   FileImage,
   FileSpreadsheet,
-  PenTool
-} from 'lucide-react';
+  PenTool,
+  PlusIcon,
+  UploadIcon,
+  UploadCloud,
+  ScrollText,
+  WandSparkles,
+  Grid,
+  MoreVertical,
+  Wand2,
+  FileUp,
+  MoreHorizontal,
+  TrendingUp,
+  Activity,
+  Share2,
+  Folder,
+} from "lucide-react";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  BarChart,
+  Bar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  ResponsiveContainer,
+} from "recharts";
+import fileToIcon from "@/lib/fileToIcon";
+import fileSize from "@/lib/fileSize";
+import { twMerge } from "tailwind-merge";
 
 interface Document {
   id: string;
@@ -41,16 +113,31 @@ interface Document {
   type: string;
   size: number;
   uploadDate: string;
-  status: 'processing' | 'ready' | 'error';
+  createdAt: string;
+  updatedAt: string;
+  url?: string;
+  key?: string;
+  bucket?: string;
+  folderId?: string | null;
+  status: "processing" | "ready" | "error";
   preview?: string;
   content?: string;
   analysis?: AnalysisResult;
 }
 
+interface Folder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface AnalysisResult {
   summary: string;
   keyPoints: string[];
-  sentiment: 'positive' | 'neutral' | 'negative';
+  sentiment: "positive" | "neutral" | "negative";
   readingTime: number;
   wordCount: number;
   topics: string[];
@@ -66,220 +153,280 @@ interface DocumentTemplate {
 }
 
 export default function MyDocumentsPage() {
-  const [documents, setDocuments] = useState<Document[]>([
-    {
-      id: '1',
-      name: 'Invoice Toko Sembako Jaya - November 2024.pdf',
-      type: 'application/pdf',
-      size: 1248576,
-      uploadDate: '2024-11-15',
-      status: 'ready',
-      content: 'Invoice untuk pembelian bahan makanan dan minuman untuk toko sembako...',
-      analysis: {
-        summary: 'Invoice pembelian barang dagangan dari supplier utama dengan total Rp 15.750.000. Menunjukkan pola pembelian rutin bulanan dengan margin keuntungan yang sehat.',
-        keyPoints: ['Total pembelian Rp 15.750.000', 'Diskon supplier 5%', 'Estimasi margin keuntungan 35%', 'Stok untuk 2 minggu operasional'],
-        sentiment: 'positive',
-        readingTime: 5,
-        wordCount: 850,
-        topics: ['Pembelian Barang', 'Manajemen Stok', 'Keuangan UMKM', 'Supplier Management']
-      }
-    },
-    {
-      id: '2',
-      name: 'Laporan Laba Rugi Oktober 2024.xlsx',
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      size: 856000,
-      uploadDate: '2024-11-01',
-      status: 'ready',
-      content: 'Laporan keuangan bulanan menunjukkan pendapatan dan pengeluaran...',
-      analysis: {
-        summary: 'Laporan laba rugi menunjukkan pertumbuhan pendapatan 18% dibanding bulan sebelumnya dengan total omzet Rp 45.2 juta dan laba bersih Rp 12.8 juta.',
-        keyPoints: ['Omzet naik 18% menjadi Rp 45.2 juta', 'Laba bersih Rp 12.8 juta (28% margin)', 'Biaya operasional terkendali', 'Penjualan online meningkat 35%'],
-        sentiment: 'positive',
-        readingTime: 7,
-        wordCount: 1200,
-        topics: ['Kinerja Keuangan', 'Analisis Pendapatan', 'Manajemen Biaya']
-      }
-    },
-    {
-      id: '3',
-      name: 'Kontrak Kerjasama Supplier Beras.pdf',
-      type: 'application/pdf',
-      size: 1856000,
-      uploadDate: '2024-10-25',
-      status: 'ready',
-      content: 'Kontrak kerjasama dengan supplier beras untuk pasokan bulanan...',
-      analysis: {
-        summary: 'Kontrak kerjasama dengan CV Beras Sejahtera untuk pasokan beras premium 5 ton per bulan dengan harga Rp 12.500/kg. Kontrak berlaku 1 tahun dengan opsi perpanjangan.',
-        keyPoints: ['Pasokan 5 ton/bulan beras premium', 'Harga Rp 12.500/kg (kompetitif)', 'Kontrak 1 tahun + opsi perpanjangan', 'Pembayaran 30 hari setelah delivery'],
-        sentiment: 'positive',
-        readingTime: 8,
-        wordCount: 1450,
-        topics: ['Kontrak Supplier', 'Manajemen Pasokan', 'Negosiasi Harga', 'Kerjasama Bisnis']
-      }
-    },
-    {
-      id: '4',
-      name: 'Surat Penawaran Catering Kantor.docx',
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      size: 645000,
-      uploadDate: '2024-10-20',
-      status: 'ready',
-      content: 'Surat penawaran layanan catering untuk kantor dan acara perusahaan...',
-      analysis: {
-        summary: 'Surat penawaran layanan catering harian untuk 50 karyawan dengan menu bervariasi. Harga Rp 25.000/porsi dengan potensi kontrak 6 bulan senilai Rp 195 juta.',
-        keyPoints: ['Target 50 porsi/hari', 'Harga Rp 25.000/porsi', 'Menu bervariasi 4 minggu', 'Potensi kontrak Rp 195 juta/6 bulan'],
-        sentiment: 'positive',
-        readingTime: 6,
-        wordCount: 980,
-        topics: ['Penawaran Bisnis', 'Layanan Catering', 'Strategi Penjualan', 'B2B Marketing']
-      }
-    },
-    {
-      id: '5',
-      name: 'Catatan Rapat Pengembangan Produk.txt',
-      type: 'text/plain',
-      size: 12800,
-      uploadDate: '2024-10-18',
-      status: 'processing',
-      content: 'Catatan rapat membahas pengembangan produk baru dan strategi pemasaran...'
-    }
-  ]);
-  
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const router = useRouter();
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(
+    null
+  );
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(
+    null
+  );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<DocumentTemplate | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<
+    "idle" | "uploading" | "success" | "error"
+  >("idle");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load documents on component mount
+  const loadDocuments = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const url = currentFolderId
+        ? `/api/documents?folderId=${currentFolderId}`
+        : "/api/documents";
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        setDocuments(data);
+      } else {
+        console.error("Failed to load documents");
+      }
+    } catch (error) {
+      console.error("Error loading documents:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentFolderId]);
+
+  // Load folders
+  const loadFolders = useCallback(async () => {
+    try {
+      const url = currentFolderId
+        ? `/api/folders?parentId=${currentFolderId}`
+        : "/api/folders";
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        setFolders(data);
+      } else {
+        console.error("Failed to load folders");
+      }
+    } catch (error) {
+      console.error("Error loading folders:", error);
+    }
+  }, [currentFolderId]);
+
+  // Load documents and folders on mount and when current folder changes
+  useEffect(() => {
+    loadDocuments();
+    loadFolders();
+  }, [loadDocuments, loadFolders]);
 
   const documentTemplates: DocumentTemplate[] = [
     {
-      id: '1',
-      name: 'Invoice UMKM',
-      description: 'Template invoice untuk usaha kecil dan menengah',
+      id: "1",
+      name: "Invoice UMKM",
+      description: "Template invoice untuk usaha kecil dan menengah",
       icon: <FileText className="h-8 w-8 text-blue-600" />,
-      fields: ['Nama Pelanggan', 'Nomor Invoice', 'Tanggal', 'Daftar Barang/Jasa', 'Total Harga'],
-      category: 'Keuangan'
+      fields: [
+        "Nama Pelanggan",
+        "Nomor Invoice",
+        "Tanggal",
+        "Daftar Barang/Jasa",
+        "Total Harga",
+      ],
+      category: "Keuangan",
     },
     {
-      id: '2',
-      name: 'Surat Penawaran',
-      description: 'Template surat penawaran produk/jasa untuk calon klien',
+      id: "2",
+      name: "Surat Penawaran",
+      description: "Template surat penawaran produk/jasa untuk calon klien",
       icon: <PenTool className="h-8 w-8 text-green-600" />,
-      fields: ['Nama Perusahaan', 'Produk/Jasa', 'Harga', 'Syarat & Ketentuan'],
-      category: 'Pemasaran'
+      fields: ["Nama Perusahaan", "Produk/Jasa", "Harga", "Syarat & Ketentuan"],
+      category: "Pemasaran",
     },
     {
-      id: '3',
-      name: 'Laporan Keuangan Bulanan',
-      description: 'Template laporan keuangan sederhana untuk UMKM',
+      id: "3",
+      name: "Laporan Keuangan Bulanan",
+      description: "Template laporan keuangan sederhana untuk UMKM",
       icon: <BarChart3 className="h-8 w-8 text-purple-600" />,
-      fields: ['Pendapatan', 'Pengeluaran', 'Laba Rugi', 'Arus Kas'],
-      category: 'Keuangan'
+      fields: ["Pendapatan", "Pengeluaran", "Laba Rugi", "Arus Kas"],
+      category: "Keuangan",
     },
     {
-      id: '4',
-      name: 'Kontrak Kerjasama',
-      description: 'Template kontrak kerjasama dengan supplier atau mitra bisnis',
+      id: "4",
+      name: "Kontrak Kerjasama",
+      description:
+        "Template kontrak kerjasama dengan supplier atau mitra bisnis",
       icon: <FileIcon className="h-8 w-8 text-orange-600" />,
-      fields: ['Pihak Pertama', 'Pihak Kedua', 'Ruang Lingkup', 'Syarat & Ketentuan'],
-      category: 'Legal'
+      fields: [
+        "Pihak Pertama",
+        "Pihak Kedua",
+        "Ruang Lingkup",
+        "Syarat & Ketentuan",
+      ],
+      category: "Legal",
     },
     {
-      id: '5',
-      name: 'Proposal Usaha',
-      description: 'Template proposal untuk pengajuan modal atau kerjasama',
+      id: "5",
+      name: "Proposal Usaha",
+      description: "Template proposal untuk pengajuan modal atau kerjasama",
       icon: <FileSpreadsheet className="h-8 w-8 text-indigo-600" />,
-      fields: ['Ringkasan Eksekutif', 'Analisis Pasar', 'Proyeksi Keuangan', 'Tim'],
-      category: 'Bisnis'
+      fields: [
+        "Ringkasan Eksekutif",
+        "Analisis Pasar",
+        "Proyeksi Keuangan",
+        "Tim",
+      ],
+      category: "Bisnis",
     },
     {
-      id: '6',
-      name: 'Surat Izin Usaha',
-      description: 'Template surat permohonan izin usaha ke instansi terkait',
+      id: "6",
+      name: "Surat Izin Usaha",
+      description: "Template surat permohonan izin usaha ke instansi terkait",
       icon: <FileText className="h-8 w-8 text-red-600" />,
-      fields: ['Data Pemohon', 'Jenis Usaha', 'Lokasi', 'Dokumen Pendukung'],
-      category: 'Legal'
-    }
+      fields: ["Data Pemohon", "Jenis Usaha", "Lokasi", "Dokumen Pendukung"],
+      category: "Legal",
+    },
   ];
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    setIsUploading(true);
-    setIsAnalyzing(true);
-    
-    // Simulate upload and analysis
-    setTimeout(() => {
-      const newDocuments: Document[] = acceptedFiles.map((file, index) => {
-        const mockAnalysis: AnalysisResult = {
-          summary: `Analisis AI untuk ${file.name}. Dokumen ini berisi informasi penting untuk bisnis UMKM dengan insight strategis yang dapat ditindaklanjuti.`,
-          keyPoints: [
-            'Potensi peningkatan efisiensi operasional',
-            'Peluang pengembangan pasar baru',
-            'Rekomendasi optimalisasi keuangan'
-          ],
-          sentiment: Math.random() > 0.5 ? 'positive' : 'neutral',
-          readingTime: Math.floor(Math.random() * 10) + 3,
-          wordCount: Math.floor(Math.random() * 2000) + 500,
-          topics: ['Analisis Bisnis UMKM', 'Strategi Pemasaran', 'Manajemen Keuangan']
-        };
+  const onDrop = useCallback(
+    async (acceptedFiles: File[]) => {
+      if (acceptedFiles.length === 0) return;
 
-        return {
-          id: Date.now().toString() + index,
+      const file = acceptedFiles[0];
+      setUploadStatus("uploading");
+      setUploadError(null);
+
+      try {
+        // First, upload to S3
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const uploadResponse = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json();
+          throw new Error(errorData.error || "Upload failed");
+        }
+
+        const uploadResult = await uploadResponse.json();
+
+        // Then, save document metadata to database
+        const documentData = {
           name: file.name,
           type: file.type,
           size: file.size,
-          uploadDate: new Date().toISOString().split('T')[0],
-          status: 'ready' as const,
-          content: `Konten dokumen ${file.name}. Berisi informasi bisnis yang telah diekstrak dan dianalisis untuk memberikan insight yang berguna bagi UMKM.`,
-          analysis: mockAnalysis
+          content: "", // We'll store the S3 URL instead
+          url: uploadResult.file.url,
+          key: uploadResult.file.key,
+          bucket: uploadResult.file.bucket,
+          folderId: currentFolderId,
         };
-      });
-      
-      setDocuments(prev => [...prev, ...newDocuments]);
-      setIsUploading(false);
-      setIsAnalyzing(false);
-      if (newDocuments.length > 0) {
-        setSelectedDocument(newDocuments[0]);
+
+        const documentResponse = await fetch("/api/documents", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(documentData),
+        });
+
+        if (!documentResponse.ok) {
+          throw new Error("Failed to save document metadata");
+        }
+
+        const newDocument = await documentResponse.json();
+
+        // Add to documents list
+        setDocuments((prev) => [newDocument, ...prev]);
+        setUploadStatus("success");
+
+        // Reset after 3 seconds
+        setTimeout(() => {
+          setUploadStatus("idle");
+        }, 3000);
+      } catch (error) {
+        console.error("Upload error:", error);
+        setUploadError(
+          error instanceof Error ? error.message : "Upload failed"
+        );
+        setUploadStatus("error");
+
+        // Reset error after 5 seconds
+        setTimeout(() => {
+          setUploadStatus("idle");
+          setUploadError(null);
+        }, 5000);
       }
-    }, 3000);
+    },
+    [currentFolderId, loadDocuments]
+  );
+
+  // Delete document function
+  const deleteDocument = useCallback(async (documentId: string) => {
+    try {
+      const response = await fetch(`/api/documents/${documentId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        // Remove from documents list
+        setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
+
+        // Clear selection if deleted document was selected
+        setSelectedDocumentId((prev) => (prev === documentId ? null : prev));
+      } else {
+        console.error("Failed to delete document");
+      }
+    } catch (error) {
+      console.error("Error deleting document:", error);
+    }
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'application/pdf': ['.pdf'],
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-      'text/plain': ['.txt'],
+      "application/pdf": [".pdf"],
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        [".docx"],
+      "text/plain": [".txt"],
     },
     multiple: true,
   });
 
   const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return "0 Bytes";
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
   const getFileIcon = (type: string) => {
-    if (type.includes('pdf')) return '📄';
-    if (type.includes('word')) return '📝';
-    if (type.includes('text')) return '📃';
-    return '📁';
+    if (type.includes("pdf")) return "📄";
+    if (type.includes("word")) return "📝";
+    if (type.includes("text")) return "📃";
+    return "📁";
   };
 
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment) {
-      case 'positive': return 'text-green-600 bg-green-100';
-      case 'negative': return 'text-red-600 bg-red-100';
-      default: return 'text-blue-600 bg-blue-100';
+      case "positive":
+        return "text-green-600 bg-green-100";
+      case "negative":
+        return "text-red-600 bg-red-100";
+      default:
+        return "text-blue-600 bg-blue-100";
     }
   };
 
-  const filteredDocuments = documents.filter(doc =>
+  const filteredDocuments = documents.filter((doc) =>
     doc.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -297,410 +444,805 @@ export default function MyDocumentsPage() {
   const handleTemplateSelect = (template: DocumentTemplate) => {
     setSelectedTemplate(template);
     // In a real implementation, this would open a form to fill out the template
-    console.log('Selected template:', template);
+    console.log("Selected template:", template);
+  };
+
+  const [show, setShow] = useState(false);
+
+  // Create folder function
+  const createFolder = async () => {
+    if (!newFolderName.trim()) return;
+
+    try {
+      setIsCreatingFolder(true);
+      const response = await fetch("/api/folders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: newFolderName,
+          parentId: currentFolderId,
+        }),
+      });
+
+      if (response.ok) {
+        setNewFolderName("");
+        loadFolders();
+      } else {
+        console.error("Failed to create folder");
+      }
+    } catch (error) {
+      console.error("Error creating folder:", error);
+    } finally {
+      setIsCreatingFolder(false);
+    }
+  };
+
+  // Delete folder function
+  const deleteFolder = async (folderId: string) => {
+    try {
+      const response = await fetch(`/api/folders/${folderId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        loadFolders();
+      } else {
+        console.error("Failed to delete folder");
+      }
+    } catch (error) {
+      console.error("Error deleting folder:", error);
+    }
+  };
+
+  // Navigate to folder
+  const navigateToFolder = (folderId: string | null) => {
+    setCurrentFolderId(folderId);
   };
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">My Documents</h1>
-        <p className="text-slate-600">Read, analyze, and generate documents with AI assistance</p>
+    <div className="flex h-screen">
+      {/* Upload Status Notification */}
+      {(uploadStatus === "success" || uploadStatus === "error") && (
+        <div
+          className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 ${
+            uploadStatus === "success"
+              ? "bg-green-500 text-white"
+              : "bg-red-500 text-white"
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            {uploadStatus === "success" ? (
+              <>
+                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                  <div className="w-2 h-2 bg-white rounded-full"></div>
+                </div>
+                <span>Document uploaded successfully!</span>
+              </>
+            ) : (
+              <>
+                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                  <div className="w-2 h-2 bg-white rounded-full"></div>
+                </div>
+                <span>{uploadError || "Upload failed"}</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Main Chat Area */}
+      <div className="bg-white min-h-screen flex-1">
+        {/* Header */}
+        <div className="border-b p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 h-20 flex items-center w-full">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center space-x-3">
+              <div>
+                <h1 className="font-semibold">My Documents</h1>
+                <p className="text-sm text-muted-foreground">
+                  Upload and manage your documents, analyze their content, and
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-8 relative h-[calc(100vh-80px)] overflow-auto">
+          {/* Breadcrumb navigation */}
+          {currentFolderId && (
+            <div className="mb-4">
+              <Button
+                variant="ghost"
+                onClick={() => navigateToFolder(null)}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                ← Back to root
+              </Button>
+            </div>
+          )}
+
+          {/* Folders */}
+          {folders.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">
+                Folders
+              </h3>
+              <div
+                className={twMerge(
+                  "grid grid-cols-1 gap-4",
+                  selectedDocument ? "lg:grid-cols-4" : "lg:grid-cols-6"
+                )}
+              >
+                {folders.map((folder) => (
+                  <div
+                    key={folder.id}
+                    className="relative flex flex-col items-center justify-center space-y-2 bg-blue-50 rounded-lg min-h-32 p-4 cursor-pointer transition-all duration-200 hover:bg-blue-100 group border-2 border-transparent hover:border-blue-200"
+                    onClick={() => navigateToFolder(folder.id)}
+                  >
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          className="absolute top-2 right-2 p-1 rounded-full bg-gray-200 text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-gray-300 z-10"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                          }}
+                        >
+                          <MoreHorizontal className="w-3 h-3" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                          <Share2 className="w-4 h-4 mr-2" />
+                          Share
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                          <Download className="w-4 h-4 mr-2" />
+                          Download
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <DropdownMenuItem
+                              className="text-red-600 focus:text-red-600"
+                              onSelect={(e) => e.preventDefault()}
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Folder</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete "{folder.name}"?
+                                This action cannot be undone and will delete all
+                                documents in this folder.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteFolder(folder.id)}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <Folder className="w-12 h-12 text-blue-600" />
+                    <div className="text-center text-sm text-slate-600 line-clamp-2">
+                      {folder.name}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Documents */}
+          <div
+            className={twMerge(
+              "grid grid-cols-1  gap-8",
+              selectedDocument ? "lg:grid-cols-4" : "lg:grid-cols-6"
+            )}
+          >
+            {isLoading ? (
+              <div className="col-span-full text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                <p className="text-muted-foreground mt-2">
+                  Loading documents...
+                </p>
+              </div>
+            ) : filteredDocuments.length === 0 ? (
+              <div className="col-span-full text-center py-12">
+                <FileSearch className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-slate-900 mb-2">
+                  No Documents Found
+                </h3>
+                <p className="text-slate-500">
+                  {searchTerm
+                    ? "No documents match your search."
+                    : "Upload your first document to get started."}
+                </p>
+              </div>
+            ) : (
+              filteredDocuments.map((doc) => (
+                <div
+                  key={doc.id}
+                  className={`relative flex flex-col items-center justify-center space-y-2 bg-slate-100 rounded-lg min-h-40 p-4 cursor-pointer transition-all duration-200 hover:bg-slate-200 group ${
+                    selectedDocumentId === doc.id
+                      ? "border-2 border-indigo-500 bg-indigo-50"
+                      : "border-2 border-transparent"
+                  }`}
+                  onClick={() => setSelectedDocumentId(doc.id)}
+                >
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className="absolute top-2 right-2 p-1 rounded-full bg-gray-200 text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-gray-300 z-10"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreHorizontal className="w-3 h-3" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                        <Share2 className="w-4 h-4 mr-2" />
+                        Share
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                        <Download className="w-4 h-4 mr-2" />
+                        Download
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <DropdownMenuItem
+                            className="text-red-600 focus:text-red-600"
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Document</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete "{doc.name}"? This
+                              action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => deleteDocument(doc.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <img
+                    src={fileToIcon(doc.type.split("/").pop() || "unknown")}
+                    alt={doc.name}
+                    className="w-12"
+                  />
+                  <div className="text-center text-sm text-slate-600 break-all hyphens-auto line-clamp-2 ">
+                    {doc.name}
+                  </div>
+                  <div className="text-center text-xs text-slate-800 font-semibold">
+                    {fileSize(doc.size)}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* {add document is floating} */}
+          <div className="absolute bottom-8 right-8 flex flex-col items-end space-y-4">
+            {/* Action Buttons with Staggered Animation */}
+            <div
+              className={`flex flex-col items-end space-y-3 transition-all duration-500 ease-out ${
+                show
+                  ? "opacity-100 translate-y-0 pointer-events-auto"
+                  : "opacity-0 translate-y-8 pointer-events-none"
+              }`}
+            >
+              {/* Generate Document Button */}
+              <button
+                onClick={() => router.push("/dashboard/chat")}
+                className={`bg-emerald-500 hover:bg-emerald-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl flex items-center space-x-3 transition-all duration-300 ease-out transform hover:scale-105 active:scale-95 ${
+                  show ? "animate-slideInUp" : ""
+                }`}
+                style={{ animationDelay: show ? "0.1s" : "0s" }}
+              >
+                <Sparkles className="w-6 h-6 transition-transform duration-300 group-hover:rotate-12" />
+                <span className="font-medium">Generate Document</span>
+              </button>
+
+              {/* Summarize Document Button */}
+              <button
+                onClick={() => router.push("/dashboard/chat")}
+                className={`bg-orange-500 hover:bg-orange-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl flex items-center space-x-3 transition-all duration-300 ease-out transform hover:scale-105 active:scale-95 ${
+                  show ? "animate-slideInUp" : ""
+                }`}
+                style={{ animationDelay: show ? "0.2s" : "0s" }}
+              >
+                <WandSparkles className="w-6 h-6 transition-transform duration-300 group-hover:rotate-12" />
+                <span className="font-medium">Summarize Document</span>
+              </button>
+
+              {/* Upload Document Button */}
+              <button
+                onClick={handleFileSelect}
+                disabled={uploadStatus === "uploading"}
+                className={`bg-indigo-500 hover:bg-indigo-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl flex items-center space-x-3 transition-all duration-300 ease-out transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none ${
+                  show ? "animate-slideInUp" : ""
+                }`}
+                style={{ animationDelay: show ? "0.2s" : "0s" }}
+              >
+                {uploadStatus === "uploading" ? (
+                  <>
+                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span className="font-medium">Uploading...</span>
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="w-6 h-6 transition-transform duration-300 hover:-translate-y-1" />
+                    <span className="font-medium">Upload Document</span>
+                  </>
+                )}
+              </button>
+
+              {/* add folder Button */}
+              <button
+                onClick={() => setIsCreatingFolder(true)}
+                className={`bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl flex items-center space-x-3 transition-all duration-300 ease-out transform hover:scale-105 active:scale-95 ${
+                  show ? "animate-slideInUp" : ""
+                }`}
+                style={{ animationDelay: show ? "0.2s" : "0s" }}
+              >
+                <Folder className="w-6 h-6 transition-transform duration-300 hover:-translate-y-1" />
+                <span className="font-medium">Add Folder</span>
+              </button>
+            </div>
+
+            {/* Main Toggle Button */}
+            <button
+              className={`bg-primary hover:bg-primary/90 cursor-pointer text-white p-4 rounded-full shadow-lg hover:shadow-xl flex items-center justify-center transition-all duration-300 ease-out transform hover:scale-110 active:scale-95 ${
+                show ? "rotate-45" : "rotate-0"
+              }`}
+              onClick={() => setShow(!show)}
+            >
+              <Plus
+                className={`w-8 h-8 transition-transform duration-300 ease-out ${
+                  show ? "rotate-45" : "rotate-0"
+                }`}
+              />
+            </button>
+          </div>
+        </div>
       </div>
 
-      <Tabs defaultValue="read" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="read">Read & Analyze</TabsTrigger>
-          <TabsTrigger value="create">Generate Documents</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="read" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            {/* Upload and File List */}
-            <div className="lg:col-span-1">
-              <Card className="mb-6">
-                <CardHeader>
-                  <CardTitle className="text-lg">Upload Document</CardTitle>
-                  <CardDescription>
-                    Upload files for AI analysis
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept=".pdf,.docx,.txt"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <div
-                    {...getRootProps()}
-                    className={`
-                      border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
-                      ${isDragActive 
-                        ? 'border-primary bg-primary/5' 
-                        : 'border-slate-300 hover:border-primary hover:bg-slate-50'
-                      }
-                      ${isUploading ? 'pointer-events-none opacity-50' : ''}
-                    `}
-                  >
-                    <input {...getInputProps()} />
-                    <Upload className="h-8 w-8 text-slate-400 mx-auto mb-3" />
-                    {isUploading ? (
-                      <div>
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2"></div>
-                        <p className="text-sm text-slate-600">Uploading & Analyzing...</p>
-                      </div>
-                    ) : isDragActive ? (
-                      <p className="text-sm text-slate-600">Drop files here...</p>
-                    ) : (
-                      <div>
-                        <p className="text-sm text-slate-600 mb-1">
-                          Drop files or{' '}
-                          <button 
-                            onClick={handleFileSelect}
-                            className="text-primary hover:underline"
-                          >
-                            browse
-                          </button>
-                        </p>
-                        <p className="text-xs text-slate-400">PDF, DOCX, TXT</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+      {/* Sidebar with Chat History */}
+      {selectedDocumentId && (
+        <div className="w-[480px] border-l h-screen bg-white flex flex-col">
+          <div className="p-4 border-b h-20 flex items-center w-full">
+            <div className="flex items-center justify-between space-x-2 w-full">
+              {selectedDocumentId ? (
+                (() => {
+                  const selectedDoc = documents.find(
+                    (doc: Document) => doc.id === selectedDocumentId
+                  );
+                  if (!selectedDoc) return <div>Document not found</div>;
 
-              {/* File List */}
-              {documents.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Documents</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {documents.map((doc) => (
-                        <div
-                          key={doc.id}
-                          onClick={() => setSelectedDocument(doc)}
-                          className={`
-                            p-3 border rounded-lg cursor-pointer transition-colors
-                            ${selectedDocument?.id === doc.id 
-                              ? 'border-primary bg-primary/5' 
-                              : 'border-slate-200 hover:border-slate-300'
-                            }
-                          `}
-                        >
-                          <div className="flex items-center space-x-3">
-                            <div className="text-lg">{getFileIcon(doc.type)}</div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-medium text-slate-900 truncate text-sm">{doc.name}</h3>
-                              <div className="flex items-center space-x-2">
-                                <p className="text-xs text-slate-500">{formatFileSize(doc.size)}</p>
-                                <Badge 
-                                  variant={doc.status === 'ready' ? 'default' : doc.status === 'processing' ? 'secondary' : 'destructive'}
-                                  className="text-xs"
-                                >
-                                  {doc.status}
-                                </Badge>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                  return (
+                    <div className="flex items-center space-x-3 w-full">
+                      <img
+                        src={fileToIcon(selectedDoc.type)}
+                        alt={selectedDoc.name}
+                        className="w-8 h-8"
+                      />
+                      <div className="flex-1 overflow-hidden">
+                        <h3 className="font-semibold text-lg truncate">
+                          {selectedDoc.name}
+                        </h3>
+                        <p className="text-sm text-slate-500">
+                          {fileSize(selectedDoc.size)} •{" "}
+                          {selectedDoc.uploadDate}
+                        </p>
+                      </div>
+                      <MoreHorizontal className="w-6 h-6 text-slate-500" />
                     </div>
-                  </CardContent>
-                </Card>
+                  );
+                })()
+              ) : (
+                <></>
               )}
             </div>
+          </div>
 
-            {/* Analysis Results */}
-            <div className="lg:col-span-3">
-              {selectedDocument ? (
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center">
-                          <FileSearch className="h-5 w-5 mr-2 text-primary" />
-                          {selectedDocument.name}
-                        </CardTitle>
-                        <CardDescription>AI Analysis Results</CardDescription>
+          <ScrollArea className="flex-1 p-4">
+            <div className="space-y-4">
+              {selectedDocumentId ? (
+                (() => {
+                  const selectedDoc = documents.find(
+                    (doc: Document) => doc.id === selectedDocumentId
+                  );
+                  if (!selectedDoc) return <div>Document not found</div>;
+
+                  return (
+                    <div className="space-y-6">
+                      {/* Document Preview */}
+                      <div className="space-y-4">
+                        <h4 className="font-medium text-slate-900">Preview</h4>
+                        <div className="border rounded-lg p-4 bg-slate-50 min-h-[200px] flex items-center justify-center">
+                          {selectedDoc.type === "pdf" ? (
+                            <div className="text-center space-y-2">
+                              <FileText className="w-12 h-12 text-slate-400 mx-auto" />
+                              <p className="text-sm text-slate-600">
+                                PDF Preview
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                Click to view full document
+                              </p>
+                            </div>
+                          ) : selectedDoc.type === "docx" ? (
+                            <div className="text-center space-y-2">
+                              <FileText className="w-12 h-12 text-blue-500 mx-auto" />
+                              <p className="text-sm text-slate-600">
+                                Word Document Preview
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                Click to view full document
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="text-center space-y-2">
+                              <FileIcon className="w-12 h-12 text-slate-400 mx-auto" />
+                              <p className="text-sm text-slate-600">
+                                Document Preview
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                Click to view full document
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => window.location.href = '/dashboard/chat'}>
-                          <Brain className="h-4 w-4 mr-2" />
-                          Chat AI
-                        </Button>
-                        <Button variant="outline" size="sm">
+
+                      {/* AI Analytics Section */}
+                      <div className="space-y-4">
+                        <h4 className="font-medium text-slate-900 flex items-center">
+                          <Brain className="w-4 h-4 mr-2 text-indigo-600" />
+                          AI Analytics
+                        </h4>
+
+                        {/* Quick Stats */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <Card>
+                            <CardContent className="p-3">
+                              <div className="flex items-center space-x-2">
+                                <Clock className="h-4 w-4 text-blue-600" />
+                                <div>
+                                  <p className="text-sm font-medium">5 min</p>
+                                  <p className="text-xs text-slate-500">
+                                    Reading Time
+                                  </p>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          <Card>
+                            <CardContent className="p-3">
+                              <div className="flex items-center space-x-2">
+                                <FileText className="h-4 w-4 text-green-600" />
+                                <div>
+                                  <p className="text-sm font-medium">1,250</p>
+                                  <p className="text-xs text-slate-500">
+                                    Words
+                                  </p>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        {/* Document Analytics Charts */}
+                        <div className="space-y-4">
+                          {/* Reading Progress Line Chart */}
+                          <Card>
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-sm flex items-center">
+                                <TrendingUp className="h-4 w-4 mr-2 text-blue-600" />
+                                Reading Progress
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0 w-[440px]">
+                              <ChartContainer
+                                config={{
+                                  progress: {
+                                    label: "Progress %",
+                                    color: "hsl(var(--chart-1))",
+                                  },
+                                }}
+                                className="h-[200px]"
+                              >
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <LineChart
+                                    data={[
+                                      { day: "Mon", progress: 20 },
+                                      { day: "Tue", progress: 35 },
+                                      { day: "Wed", progress: 50 },
+                                      { day: "Thu", progress: 65 },
+                                      { day: "Fri", progress: 80 },
+                                      { day: "Sat", progress: 95 },
+                                      { day: "Sun", progress: 100 },
+                                    ]}
+                                  >
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="day" />
+                                    <YAxis />
+                                    <ChartTooltip
+                                      content={<ChartTooltipContent />}
+                                    />
+                                    <Line
+                                      type="monotone"
+                                      dataKey="progress"
+                                      stroke="#3b82f6"
+                                      strokeWidth={2}
+                                      dot={{ fill: "#3b82f6" }}
+                                    />
+                                  </LineChart>
+                                </ResponsiveContainer>
+                              </ChartContainer>
+                            </CardContent>
+                          </Card>
+
+                          {/* Document Statistics Bar Chart */}
+                          <Card>
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-sm flex items-center">
+                                <BarChart3 className="h-4 w-4 mr-2 text-green-600" />
+                                Document Statistics
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0 w-[440px]">
+                              <ChartContainer
+                                config={{
+                                  count: {
+                                    label: "Count",
+                                    color: "hsl(var(--chart-2))",
+                                  },
+                                }}
+                                className="h-[200px]"
+                              >
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart
+                                    data={[
+                                      { category: "Pages", count: 12 },
+                                      { category: "Sections", count: 8 },
+                                      { category: "Images", count: 5 },
+                                      { category: "Tables", count: 3 },
+                                      { category: "Charts", count: 2 },
+                                    ]}
+                                  >
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="category" />
+                                    <YAxis />
+                                    <ChartTooltip
+                                      content={<ChartTooltipContent />}
+                                    />
+                                    <Bar
+                                      dataKey="count"
+                                      fill="#10b981"
+                                      radius={[4, 4, 0, 0]}
+                                    />
+                                  </BarChart>
+                                </ResponsiveContainer>
+                              </ChartContainer>
+                            </CardContent>
+                          </Card>
+
+                          {/* Document Complexity Radar Chart */}
+                          <Card>
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-sm flex items-center">
+                                <Activity className="h-4 w-4 mr-2 text-purple-600" />
+                                Complexity Analysis
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0 w-[440px]">
+                              <ChartContainer
+                                config={{
+                                  score: {
+                                    label: "Score",
+                                    color: "hsl(var(--chart-3))",
+                                  },
+                                }}
+                                className="h-[250px]"
+                              >
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <RadarChart
+                                    data={[
+                                      { metric: "Readability", score: 85 },
+                                      { metric: "Technical", score: 70 },
+                                      { metric: "Structure", score: 90 },
+                                      { metric: "Clarity", score: 80 },
+                                      { metric: "Completeness", score: 95 },
+                                      { metric: "Engagement", score: 75 },
+                                    ]}
+                                  >
+                                    <PolarGrid />
+                                    <PolarAngleAxis dataKey="metric" />
+                                    <PolarRadiusAxis
+                                      angle={90}
+                                      domain={[0, 100]}
+                                    />
+                                    <Radar
+                                      name="Score"
+                                      dataKey="score"
+                                      stroke="#8b5cf6"
+                                      fill="#8b5cf6"
+                                      fillOpacity={0.3}
+                                      strokeWidth={2}
+                                    />
+                                    <ChartTooltip
+                                      content={<ChartTooltipContent />}
+                                    />
+                                  </RadarChart>
+                                </ResponsiveContainer>
+                              </ChartContainer>
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        {/* AI Summary */}
+                        <Card>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-sm flex items-center">
+                              <Sparkles className="h-4 w-4 mr-2 text-indigo-600" />
+                              AI Summary
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <p className="text-sm text-slate-700 leading-relaxed">
+                              This document appears to be a business proposal
+                              containing key information about partnership
+                              opportunities, financial projections, and
+                              strategic objectives for the upcoming quarter.
+                            </p>
+                          </CardContent>
+                        </Card>
+
+                        {/* Key Points */}
+                        <Card>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-sm flex items-center">
+                              <Key className="h-4 w-4 mr-2 text-orange-600" />
+                              Key Points
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <ul className="space-y-2">
+                              <li className="flex items-start space-x-2">
+                                <div className="h-1.5 w-1.5 bg-indigo-600 rounded-full mt-2 flex-shrink-0"></div>
+                                <span className="text-sm text-slate-700">
+                                  Partnership agreement terms and conditions
+                                </span>
+                              </li>
+                              <li className="flex items-start space-x-2">
+                                <div className="h-1.5 w-1.5 bg-indigo-600 rounded-full mt-2 flex-shrink-0"></div>
+                                <span className="text-sm text-slate-700">
+                                  Financial projections for Q1 2024
+                                </span>
+                              </li>
+                              <li className="flex items-start space-x-2">
+                                <div className="h-1.5 w-1.5 bg-indigo-600 rounded-full mt-2 flex-shrink-0"></div>
+                                <span className="text-sm text-slate-700">
+                                  Strategic objectives and milestones
+                                </span>
+                              </li>
+                            </ul>
+                          </CardContent>
+                        </Card>
+
+                        {/* Action Buttons */}
+                        <div className="flex space-x-2">
+                          <Button
+                            className="flex-1"
+                            onClick={() =>
+                              (window.location.href = "/dashboard/chat")
+                            }
+                          >
+                            <Brain className="h-4 w-4 mr-2" />
+                            Chat with AI
+                          </Button>
+                          {/* <Button variant="outline" size="sm">
                           <Download className="h-4 w-4 mr-2" />
                           Export
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Share className="h-4 w-4 mr-2" />
-                          Share
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {selectedDocument.analysis ? (
-                      <Tabs defaultValue="analysis" className="w-full">
-                        <TabsList className="grid w-full grid-cols-3">
-                          <TabsTrigger value="analysis">Analysis</TabsTrigger>
-                          <TabsTrigger value="content">Content</TabsTrigger>
-                          <TabsTrigger value="insights">Insights</TabsTrigger>
-                        </TabsList>
-                        
-                        <TabsContent value="analysis" className="space-y-6">
-                          {/* Quick Stats */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <Card>
-                              <CardContent className="p-4">
-                                <div className="flex items-center space-x-2">
-                                  <Clock className="h-4 w-4 text-blue-600" />
-                                  <div>
-                                    <p className="text-sm font-medium">{selectedDocument.analysis.readingTime} min</p>
-                                    <p className="text-xs text-slate-500">Reading Time</p>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                            
-                            <Card>
-                              <CardContent className="p-4">
-                                <div className="flex items-center space-x-2">
-                                  <FileText className="h-4 w-4 text-green-600" />
-                                  <div>
-                                    <p className="text-sm font-medium">{selectedDocument.analysis.wordCount}</p>
-                                    <p className="text-xs text-slate-500">Words</p>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                            
-                            <Card>
-                              <CardContent className="p-4">
-                                <div className="flex items-center space-x-2">
-                                  <BarChart3 className="h-4 w-4 text-purple-600" />
-                                  <div>
-                                    <Badge className={`text-xs ${getSentimentColor(selectedDocument.analysis.sentiment)}`}>
-                                      {selectedDocument.analysis.sentiment}
-                                    </Badge>
-                                    <p className="text-xs text-slate-500">Sentiment</p>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                            
-                            <Card>
-                              <CardContent className="p-4">
-                                <div className="flex items-center space-x-2">
-                                  <Key className="h-4 w-4 text-orange-600" />
-                                  <div>
-                                    <p className="text-sm font-medium">{selectedDocument.analysis.topics.length}</p>
-                                    <p className="text-xs text-slate-500">Topics</p>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </div>
-
-                          {/* Summary */}
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="text-lg flex items-center">
-                                <Brain className="h-5 w-5 mr-2 text-primary" />
-                                AI Summary
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <p className="text-slate-700 leading-relaxed">
-                                {selectedDocument.analysis.summary}
-                              </p>
-                            </CardContent>
-                          </Card>
-
-                          {/* Key Points */}
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="text-lg flex items-center">
-                                <Key className="h-5 w-5 mr-2 text-primary" />
-                                Key Points
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <ul className="space-y-2">
-                                {selectedDocument.analysis.keyPoints.map((point, index) => (
-                                  <li key={index} className="flex items-start space-x-2">
-                                    <div className="h-2 w-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
-                                    <span className="text-slate-700">{point}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </CardContent>
-                          </Card>
-
-                          {/* Topics */}
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="text-lg">Topics Identified</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="flex flex-wrap gap-2">
-                                {selectedDocument.analysis.topics.map((topic, index) => (
-                                  <Badge key={index} variant="secondary">
-                                    {topic}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </TabsContent>
-                        
-                        <TabsContent value="content">
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="text-lg">Document Content</CardTitle>
-                              <CardDescription>Extracted text from the document</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                              <ScrollArea className="h-96 w-full border rounded-lg p-4">
-                                <div className="prose prose-sm max-w-none">
-                                  <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                    {selectedDocument.content}
-                                  </p>
-                                </div>
-                              </ScrollArea>
-                            </CardContent>
-                          </Card>
-                        </TabsContent>
-                        
-                        <TabsContent value="insights">
-                          <div className="space-y-6">
-                            <Card>
-                              <CardHeader>
-                                <CardTitle className="text-lg flex items-center">
-                                  <Sparkles className="h-5 w-5 mr-2 text-primary" />
-                                  AI Insights
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent className="space-y-4">
-                                <div>
-                                  <h4 className="font-medium text-slate-900 mb-2">Document Structure</h4>
-                                  <p className="text-sm text-slate-600">
-                                    The document follows a well-organized structure with clear sections and logical flow.
-                                  </p>
-                                </div>
-                                
-                                <div>
-                                  <h4 className="font-medium text-slate-900 mb-2">Content Quality</h4>
-                                  <div className="flex items-center space-x-2">
-                                    <Progress value={85} className="flex-1" />
-                                    <span className="text-sm text-slate-600">85%</span>
-                                  </div>
-                                </div>
-                                
-                                <div>
-                                  <h4 className="font-medium text-slate-900 mb-2">Readability Score</h4>
-                                  <div className="flex items-center space-x-2">
-                                    <Progress value={78} className="flex-1" />
-                                    <span className="text-sm text-slate-600">78%</span>
-                                  </div>
-                                </div>
-                                
-                                <div>
-                                  <h4 className="font-medium text-slate-900 mb-2">Recommendations</h4>
-                                  <ul className="text-sm text-slate-600 space-y-1">
-                                    <li>• Consider adding more visual elements to improve engagement</li>
-                                    <li>• Some sections could benefit from clearer headings</li>
-                                    <li>• Overall structure is well-organized and professional</li>
-                                  </ul>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </div>
-                        </TabsContent>
-                      </Tabs>
-                    ) : (
-                      <div className="flex items-center justify-center h-48">
-                        <div className="text-center">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                          <p className="text-slate-600">Analyzing document...</p>
+                        </Button> */}
+                          <Button variant="outline" size="sm">
+                            <Share2 className="h-4 w-4 mr-2" />
+                            Share
+                          </Button>
                         </div>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card>
-                  <CardContent className="flex items-center justify-center h-96">
-                    <div className="text-center">
-                      <FileSearch className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-slate-900 mb-2">No Document Selected</h3>
-                      <p className="text-slate-500 mb-4">Upload a document to start analyzing</p>
-                      <Button onClick={handleFileSelect}>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload Document
-                      </Button>
                     </div>
-                  </CardContent>
-                </Card>
+                  );
+                })()
+              ) : (
+                <div className="text-center py-12">
+                  <FileSearch className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-slate-900 mb-2">
+                    Select a Document
+                  </h3>
+                  <p className="text-slate-500">
+                    Choose a document from the grid to view its preview and AI
+                    analysis
+                  </p>
+                </div>
               )}
             </div>
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="create" className="space-y-6">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Generate Documents</h2>
-            <p className="text-slate-600">Choose a template to create professional documents with AI assistance</p>
-          </div>
+          </ScrollArea>
+        </div>
+      )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {documentTemplates.map((template) => (
-              <Card 
-                key={template.id} 
-                className="cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => handleTemplateSelect(template)}
-              >
-                <CardHeader>
-                  <div className="flex items-center space-x-3">
-                    {template.icon}
-                    <div>
-                      <CardTitle className="text-lg">{template.name}</CardTitle>
-                      <Badge variant="secondary" className="text-xs">
-                        {template.category}
-                      </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-slate-600 mb-4">{template.description}</p>
-                  <div className="space-y-2">
-                    <h4 className="font-medium text-slate-900 text-sm">Required Fields:</h4>
-                    <div className="flex flex-wrap gap-1">
-                      {template.fields.map((field, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {field}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <Button 
-                    className="w-full mt-4" 
-                    variant="outline"
-                    onClick={() => window.location.href = `/dashboard/create?template=${template.id}`}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Document
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".pdf,.docx,.txt"
+        multiple
+        style={{ display: "none" }}
+      />
+
+      {/* Folder Creation Dialog */}
+      <Dialog open={isCreatingFolder} onOpenChange={setIsCreatingFolder}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Folder</DialogTitle>
+            <DialogDescription>
+              Enter a name for your new folder.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Input
+              placeholder="Folder name"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  createFolder();
+                }
+              }}
+            />
           </div>
-        </TabsContent>
-      </Tabs>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsCreatingFolder(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={createFolder} disabled={!newFolderName.trim()}>
+              Create Folder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

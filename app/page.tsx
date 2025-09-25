@@ -51,9 +51,7 @@ export default function Home() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className="h-8 w-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
-                <Brain className="h-5 w-5 text-white" />
-              </div>
+              <img src="/logo/logo.svg" alt="DocuMind AI Logo" className="h-8 w-8" />
               <span className="text-xl font-bold text-slate-900">DocuMind AI</span>
             </div>
             <Button 

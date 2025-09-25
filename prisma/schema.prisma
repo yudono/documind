@@ -47,6 +47,10 @@ model User {
   accounts      Account[]
   sessions      Session[]
   documents     Document[]
+  folders       Folder[]
+  chatSessions  ChatSession[]
+  userSettings  UserSettings?
+  billing       Billing?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -65,13 +69,97 @@ model Document {
   type        String
   size        Int
   content     String?
+  url         String?  // S3 URL
+  key         String?  // S3 key
+  bucket      String?  // S3 bucket
   summary     String?
   keyPoints   String?
   sentiment   String?
   topics      String?
   uploadDate  DateTime @default(now())
+  folderId    String?  // Optional folder association
+  folder      Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  embeddings  DocumentEmbedding[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Folder {
+  id          String     @id @default(cuid())
+  name        String
+  color       String?    @default("#3B82F6") // Default blue color
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents   Document[]
+  parentId    String?    // For nested folders
+  parent      Folder?    @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Folder[]   @relation("FolderHierarchy")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model ChatSession {
+  id          String   @id @default(cuid())
+  title       String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    ChatMessage[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ChatMessage {
+  id            String      @id @default(cuid())
+  content       String
+  role          String      // 'user' or 'assistant'
+  sessionId     String
+  session       ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  referencedDocs String[]   // Array of document IDs
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model DocumentEmbedding {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkText  String
+  embedding  Float[]  // Vector embedding
+  chunkIndex Int
+  createdAt  DateTime @default(now())
+}
+
+model UserSettings {
+  id                    String  @id @default(cuid())
+  userId                String  @unique
+  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme                 String  @default("light")
+  language              String  @default("en")
+  notificationsEnabled  Boolean @default(true)
+  autoSaveEnabled       Boolean @default(true)
+  defaultModel          String  @default("llama-3.3-70b-versatile")
+  maxTokens             Int     @default(1024)
+  temperature           Float   @default(0.7)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Billing {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan              String   @default("free") // free, pro, enterprise
+  tokensUsed        Int      @default(0)
+  tokensLimit       Int      @default(10000)
+  documentsUploaded Int      @default(0)
+  documentsLimit    Int      @default(10)
+  billingCycle      String   @default("monthly")
+  lastBillingDate   DateTime?
+  nextBillingDate   DateTime?
+  stripeCustomerId  String?
+  stripeSubscriptionId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
