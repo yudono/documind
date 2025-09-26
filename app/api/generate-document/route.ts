@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { documentGenerator, DocumentGenerationOptions } from '@/lib/document-generator';
+import { enhancedPDFGenerator, EnhancedPDFOptions } from '@/lib/enhanced-pdf-generator';
+import { documentFormatParser } from '@/lib/document-format-parser';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
@@ -28,7 +30,17 @@ export async function POST(request: NextRequest) {
       subject, 
       keywords, 
       data, 
-      template 
+      template,
+      useAIFormatting = true,
+      fontSize,
+      fontFamily,
+      margins,
+      pageSize,
+      orientation,
+      includeHeader,
+      includeFooter,
+      headerText,
+      footerText
     } = await request.json();
 
     if (!content || !format) {
@@ -37,18 +49,44 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const options: DocumentGenerationOptions = {
-      content,
-      format,
-      title: title || 'Generated Document',
-      author: author || user.name || 'Document Assistant',
-      subject,
-      keywords,
-      data,
-      template: template || 'report'
-    };
+    let result: Buffer | string;
 
-    const result = await documentGenerator.generate(options);
+    // Use enhanced PDF generator for PDF format with AI formatting
+    if (format === 'pdf' && useAIFormatting) {
+      const enhancedOptions: EnhancedPDFOptions = {
+        title: title || 'Generated Document',
+        author: author || user.name || 'Document Assistant',
+        subject,
+        keywords,
+        content,
+        useAIFormatting: true,
+        fontSize,
+        fontFamily,
+        margins,
+        pageSize,
+        orientation,
+        includeHeader,
+        includeFooter,
+        headerText,
+        footerText
+      };
+
+      result = await enhancedPDFGenerator.generatePDF(enhancedOptions);
+    } else {
+      // Use original document generator for other formats or non-AI PDF
+      const options: DocumentGenerationOptions = {
+        content,
+        format,
+        title: title || 'Generated Document',
+        author: author || user.name || 'Document Assistant',
+        subject,
+        keywords,
+        data,
+        template: template || 'report'
+      };
+
+      result = await documentGenerator.generate(options);
+    }
 
     if (format === 'html') {
       return new NextResponse(result as string, {

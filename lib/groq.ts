@@ -1,5 +1,5 @@
 import Groq from 'groq-sdk'
-import { documentAgent } from './agent';
+import { documentAgent } from './agent-langgraph';
 
 // Initialize Groq client
 const groq = new Groq({
@@ -164,15 +164,35 @@ export async function generateDocument(
   additionalInstructions?: string
 ): Promise<string> {
   try {
-    const systemPrompt = `You are a professional document generator. Create well-formatted, professional documents based on the template type and provided data. Ensure the document is complete, properly structured, and ready for use.`
+    const fileType = formData.fileType || 'pdf';
     
-    const userPrompt = `Generate a ${templateType} document using the following information:
+    // File type specific prompts and formatting
+    const getFileTypePrompt = (type: string) => {
+      switch (type) {
+        case 'pdf':
+          return `Create a professional PDF-style document with proper headings, sections, and formatting. Use clear structure with titles, subtitles, and well-organized content. Include executive summary, main content sections, and conclusion where appropriate.`;
+        case 'docx':
+          return `Create a Microsoft Word-style document with proper formatting. Use headings (H1, H2, H3), bullet points, numbered lists, and professional layout. Structure the content with clear sections and subsections.`;
+        case 'xlsx':
+          return `Create spreadsheet-style content with tabular data, calculations, and structured information. Present data in rows and columns format with headers, totals, and relevant formulas where applicable. Include data analysis and summaries.`;
+        default:
+          return `Create a well-formatted professional document with proper structure and organization.`;
+      }
+    };
+
+    const systemPrompt = `You are a professional document generator specializing in ${fileType.toUpperCase()} documents. ${getFileTypePrompt(fileType)} Ensure the document is complete, properly structured, and ready for professional use.`
     
-${Object.entries(formData).map(([key, value]) => `${key}: ${value}`).join('\n')}
+    const userPrompt = `Generate a ${templateType} document in ${fileType.toUpperCase()} format using the following information:
+    
+${Object.entries(formData).filter(([key]) => key !== 'fileType').map(([key, value]) => `${key}: ${value}`).join('\n')}
 
 ${additionalInstructions ? `Additional instructions: ${additionalInstructions}` : ''}
 
-Please create a complete, professional document that includes all necessary sections and formatting.`
+Please create a complete, professional ${fileType.toUpperCase()} document that includes all necessary sections, proper formatting, and is suitable for ${fileType === 'xlsx' ? 'data analysis and spreadsheet use' : 'professional presentation and distribution'}.
+
+${fileType === 'xlsx' ? 'Format the content as structured data with clear headers, rows, and columns. Include calculations, totals, and data analysis where relevant.' : ''}
+${fileType === 'docx' ? 'Use proper document structure with headings, subheadings, bullet points, and professional formatting.' : ''}
+${fileType === 'pdf' ? 'Create content suitable for PDF format with clear sections, professional layout, and comprehensive information.' : ''}`
 
     const messages: ChatMessage[] = [
       {
@@ -187,7 +207,7 @@ Please create a complete, professional document that includes all necessary sect
 
     return await generateChatCompletion(messages, {
       temperature: 0.2,
-      max_tokens: 2048,
+      max_tokens: 3000, // Increased for more comprehensive documents
     })
   } catch (error) {
     console.error('Error generating document:', error)
@@ -202,7 +222,7 @@ export async function generateChatWithAgent(
   useSemanticSearch: boolean = false,
   documentIds?: string[],
   conversationContext?: string
-): Promise<{ response: string; referencedDocuments: string[] }> {
+): Promise<{ response: string; referencedDocuments: string[]; documentFile?: any }> {
   try {
     return await documentAgent.processQuery({
       query,

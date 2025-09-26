@@ -46,7 +46,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       response: result.response,
-      referencedDocuments: result.referencedDocuments
+      referencedDocuments: result.referencedDocuments,
+      documentFile: result.documentFile
     });
 
   } catch (error) {

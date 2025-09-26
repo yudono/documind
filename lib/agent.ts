@@ -2,6 +2,7 @@ import { ChatGroq } from '@langchain/groq';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 import { prisma } from './prisma';
 import { findSimilarChunks, generateEmbedding } from './embeddings';
+import { generateDocument } from './groq';
 
 interface AgentInput {
   query: string;
@@ -15,6 +16,14 @@ interface AgentInput {
 interface AgentOutput {
   response: string;
   referencedDocuments: string[];
+  documentFile?: {
+    name: string;
+    type: string;
+    size: number;
+    url: string;
+    content: string;
+    generatedAt: string;
+  };
 }
 
 export class DocumentAgent {
@@ -46,7 +55,7 @@ export class DocumentAgent {
       context = conversationContext + (context ? '\n\n' + context : '');
     }
 
-    // Step 3: Generate response
+    // Step 3: Generate response with AI-driven document detection
     const response = await this.generateResponse(query, context);
 
     // Step 4: Save conversation if sessionId is provided

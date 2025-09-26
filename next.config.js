@@ -7,9 +7,15 @@ const nextConfig = {
     unoptimized: true 
   },
   webpack: (config, { isServer }) => {
-    // Handle binary files for onnxruntime-node
+    // Handle binary files (.node files) - use file-loader for server, ignore for client
     config.module.rules.push({
       test: /\.node$/,
+      use: isServer ? 'file-loader' : 'ignore-loader'
+    });
+
+    // Handle Sharp binary files specifically
+    config.module.rules.push({
+      test: /sharp-.*\.node$/,
       use: 'ignore-loader'
     });
 
@@ -23,10 +29,17 @@ const nextConfig = {
         stream: false,
         util: false,
         buffer: false,
+        os: false,
+        child_process: false,
       };
       
       config.externals = config.externals || [];
-      config.externals.push('onnxruntime-node', '@xenova/transformers');
+      config.externals.push(
+        'onnxruntime-node', 
+        '@xenova/transformers',
+        'sharp',
+        /^sharp\/.*/
+      );
     }
 
     // Ignore test files and directories
@@ -34,6 +47,15 @@ const nextConfig = {
       ...config.resolve.alias,
       './test/data': false,
     };
+
+    // Ignore Sharp and other native modules in client bundle
+    config.externals = config.externals || [];
+    if (!isServer) {
+      config.externals.push({
+        'sharp': 'commonjs sharp',
+        '@xenova/transformers': 'commonjs @xenova/transformers'
+      });
+    }
 
     return config;
   },
