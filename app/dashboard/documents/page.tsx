@@ -593,13 +593,20 @@ export default function MyDocumentsPage() {
               Lihat Semua
             </Button>
           </div>
-          <div className="overflow-x-auto max-w-[calc(100vw-320px)] mb-8">
+          <div
+            className={twMerge(
+              "overflow-x-auto mb-8",
+              selectedDocumentId
+                ? "max-w-[calc(100vw-800px)]"
+                : "max-w-[calc(100vw-320px)]"
+            )}
+          >
             <div className="flex items-center space-x-3 pb-2">
               {templates.length > 0
                 ? templates.map((template) => (
                     <div
                       key={template.id}
-                      className="px-4 py-2 text-primary rounded-full border border-primary whitespace-nowrap cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                      className="px-4 py-2 text-sm text-primary rounded-full border border-primary whitespace-nowrap cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
                       onClick={() =>
                         router.push(
                           `/dashboard/templates?template=${template.id}`
@@ -640,7 +647,7 @@ export default function MyDocumentsPage() {
               <div
                 className={twMerge(
                   "grid grid-cols-1 gap-4",
-                  selectedDocument ? "lg:grid-cols-4" : "lg:grid-cols-6"
+                  selectedDocumentId ? "lg:grid-cols-4" : "lg:grid-cols-6"
                 )}
               >
                 {folders.map((folder) => (
@@ -717,7 +724,7 @@ export default function MyDocumentsPage() {
           <div
             className={twMerge(
               "grid grid-cols-1  gap-8",
-              selectedDocument ? "lg:grid-cols-4" : "lg:grid-cols-6"
+              selectedDocumentId ? "lg:grid-cols-4" : "lg:grid-cols-6"
             )}
           >
             {isLoading ? (
