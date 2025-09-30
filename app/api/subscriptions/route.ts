@@ -54,10 +54,10 @@ export async function GET(request: NextRequest) {
         description: plan.description,
         price: plan.price,
         currency: plan.currency,
-        billingPeriod: plan.billingPeriod,
-        creditsPerMonth: plan.creditsPerMonth,
+        billingPeriod: 'monthly', // Default billing period
+        creditsPerMonth: plan.monthlyCredits, // Use monthlyCredits from schema
         features: plan.features,
-        isPopular: plan.isPopular,
+        isPopular: false, // Default value since isPopular doesn't exist in SubscriptionPlan
       })),
       currentPlan,
       userCredit: user.userCredit ? {
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
         data: {
           userId: user.id,
           balance: 0,
-          dailyLimit: plan.creditsPerMonth || 500,
+          dailyLimit: plan.monthlyCredits || 500,
           lastResetDate: new Date(),
         },
       });
@@ -139,16 +139,16 @@ export async function POST(request: NextRequest) {
       prisma.userCredit.update({
         where: { userId: user.id },
         data: {
-          balance: { increment: plan.creditsPerMonth || 0 },
-          dailyLimit: plan.creditsPerMonth || 500,
-          totalEarned: { increment: plan.creditsPerMonth || 0 },
+          balance: { increment: plan.monthlyCredits || 0 },
+          dailyLimit: plan.monthlyCredits || 500,
+          totalEarned: { increment: plan.monthlyCredits || 0 },
         },
       }),
       prisma.creditTransaction.create({
         data: {
           userId: user.id,
           type: 'earn',
-          amount: plan.creditsPerMonth || 0,
+          amount: plan.monthlyCredits || 0,
           description: `Subscription: ${plan.name}`,
           reference: transactionId,
           metadata: {
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
             planName: plan.name,
             paymentMethod,
             price: plan.price,
-            billingPeriod: plan.billingPeriod,
+            billingPeriod: 'monthly',
             subscriptionEndDate: subscriptionEndDate.toISOString(),
           },
         },
@@ -169,12 +169,12 @@ export async function POST(request: NextRequest) {
       plan: {
         id: plan.id,
         name: plan.name,
-        creditsPerMonth: plan.creditsPerMonth,
+        creditsPerMonth: plan.monthlyCredits,
         subscriptionEndDate,
       },
       transaction: {
         transactionId,
-        amount: plan.creditsPerMonth,
+        amount: plan.monthlyCredits,
       },
     });
 

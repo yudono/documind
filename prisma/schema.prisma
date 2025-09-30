@@ -187,6 +187,7 @@ model UserCredit {
   totalEarned   Int      @default(0) // Total credits earned (from subscriptions, top-ups)
   totalSpent    Int      @default(0) // Total credits spent
   dailyLimit    Int      @default(500) // Daily credit limit based on plan
+  dailyUsed     Int      @default(0) // Credits used today
   lastResetDate DateTime @default(now()) // Last daily reset date
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -213,6 +214,8 @@ model CreditPackage {
   currency    String   @default("USD")
   stripePriceId String? // Stripe price ID for one-time purchases
   isActive    Boolean  @default(true)
+  isPopular   Boolean  @default(false) // Whether this package is marked as popular
+  bonusCredits Int?    @default(0) // Additional bonus credits
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -250,6 +253,7 @@ model Template {
   templateFields Json?   // JSON structure defining form fields and placeholders
   previewUrl    String?  // URL for template preview/sample
   instructions  String?  // Instructions for using the template
+  aiPrompt      String?  // AI prompt template for document generation
   userId        String?  // Optional: creator of the template
   user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   generatedDocs TemplateGeneration[]

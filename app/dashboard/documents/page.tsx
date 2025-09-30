@@ -608,9 +608,7 @@ export default function MyDocumentsPage() {
                       key={template.id}
                       className="px-4 py-2 text-sm text-primary rounded-full border border-primary whitespace-nowrap cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
                       onClick={() =>
-                        router.push(
-                          `/dashboard/templates?template=${template.id}`
-                        )
+                        router.push(`/dashboard/templates/${template.id}`)
                       }
                     >
                       {template.name}

@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FileUpload } from "@/components/ui/file-upload";
 import { useSession } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Send,
   Bot,
@@ -87,6 +87,7 @@ interface Document {
 export default function ChatPage() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
@@ -121,6 +122,16 @@ export default function ChatPage() {
   // Session management
   const sessions = chatSessions;
 
+  // Get sessionId from URL parameters
+  const sessionId = searchParams.get('sessionId');
+
+  // Function to update URL with sessionId
+  const updateUrlWithSessionId = (newSessionId: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('sessionId', newSessionId);
+    router.replace(url.pathname + url.search);
+  };
+
   // Load chat sessions on component mount
   useEffect(() => {
     const loadChatSessions = async () => {
@@ -137,12 +148,23 @@ export default function ChatPage() {
           }));
           setChatSessions(sessions);
           
-          // If no current session and sessions exist, select the first one
-          // If no sessions exist, create a new one
-          if (!currentSession) {
+          // Handle sessionId from URL
+          if (sessionId) {
+            const foundSession = sessions.find((s: ChatSession) => s.id === sessionId);
+            if (foundSession) {
+              setCurrentSession(foundSession);
+              setSelectedSession(foundSession.id);
+            } else {
+              // Session not found, create new one or redirect
+              await createNewSession();
+            }
+          } else {
+            // No sessionId in URL
             if (sessions.length > 0) {
-              setCurrentSession(sessions[0]);
-              setSelectedSession(sessions[0].id);
+              const firstSession = sessions[0];
+              setCurrentSession(firstSession);
+              setSelectedSession(firstSession.id);
+              updateUrlWithSessionId(firstSession.id);
             } else {
               // Create new session if none exist
               await createNewSession();
@@ -159,7 +181,7 @@ export default function ChatPage() {
     };
 
     loadChatSessions();
-  }, []);
+  }, [sessionId]);
 
   // Load messages for current session
   useEffect(() => {
@@ -212,6 +234,7 @@ export default function ChatPage() {
         setCurrentSession(newSession);
         setSelectedSession(newSession.id);
         setMessages([]);
+        updateUrlWithSessionId(newSession.id);
       }
     } catch (error) {
       console.error('Error creating new session:', error);
@@ -227,7 +250,15 @@ export default function ChatPage() {
       setCurrentSession(newSession);
       setSelectedSession(newSession.id);
       setMessages([]);
+      updateUrlWithSessionId(newSession.id);
     }
+  };
+
+  // Function to switch to a different session
+  const switchToSession = (session: ChatSession) => {
+    setCurrentSession(session);
+    setSelectedSession(session.id);
+    updateUrlWithSessionId(session.id);
   };
 
   const toggleDocumentSelection = (doc: Document) => {
@@ -267,42 +298,92 @@ export default function ChatPage() {
 
   // Handle template mode initialization
   useEffect(() => {
-    const mode = searchParams.get("mode");
-    const data = searchParams.get("data");
-
-    if (mode === "template" && data) {
-      try {
-        const parsedData = JSON.parse(data);
-        setIsTemplateMode(true);
-        setTemplateData(parsedData);
-
-        // Create initial template message
-        const templateMessage: Message = {
-          id: "template-init",
-          content: `Saya akan membantu Anda membuat ${
-            parsedData.templateName
-          }. Berdasarkan informasi yang Anda berikan:\n\n${Object.entries(
-            parsedData.formData
-          )
-            .map(([key, value]) => `• ${key.replace("_", " ")}: ${value}`)
-            .join(
-              "\n"
-            )}\n\nSaya akan memproses dan membuat dokumen untuk Anda...`,
-          role: "assistant",
-          timestamp: new Date(),
-        };
-
-        setMessages((prev) => [...prev, templateMessage]);
-
-        // Auto-generate document after a delay
-        setTimeout(() => {
-          generateTemplateDocument(parsedData);
-        }, 2000);
-      } catch (error) {
-        console.error("Error parsing template data:", error);
+    const initializeTemplateMode = async () => {
+      const mode = searchParams.get("mode");
+      const data = searchParams.get("data");
+      const templateId = searchParams.get("template");
+      
+      // Handle new template context from sessionId parameter
+      if (templateId && sessionId) {
+        try {
+          // Load the session that was created by the template API
+          const response = await fetch(`/api/chat-sessions/${sessionId}`);
+          if (response.ok) {
+            const sessionData = await response.json();
+            const session = {
+              id: sessionData.chatSession.id,
+              title: sessionData.chatSession.title,
+              lastMessage: sessionData.chatSession.messages[sessionData.chatSession.messages.length - 1]?.content || '',
+              timestamp: new Date(sessionData.chatSession.updatedAt),
+              messageCount: sessionData.chatSession.messages.length,
+            };
+            
+            setCurrentSession(session);
+            setSelectedSession(session.id);
+            setIsTemplateMode(true);
+            
+            // Load messages for this session
+            const messages = sessionData.chatSession.messages.map((msg: any) => ({
+              id: msg.id,
+              content: msg.content,
+              role: msg.role,
+              timestamp: new Date(msg.createdAt),
+              referencedDocuments: msg.referencedDocs || [],
+            }));
+            setMessages(messages);
+            
+            // Update chat sessions list
+            setChatSessions(prev => {
+              const exists = prev.find(s => s.id === session.id);
+              if (!exists) {
+                return [session, ...prev];
+              }
+              return prev.map(s => s.id === session.id ? session : s);
+            });
+          }
+        } catch (error) {
+          console.error('Error loading template session:', error);
+        }
+        return;
       }
-    }
-  }, [searchParams]);
+      
+      // Handle legacy template mode
+      if (mode === "template" && data) {
+        try {
+          const parsedData = JSON.parse(data);
+          setIsTemplateMode(true);
+          setTemplateData(parsedData);
+
+          // Create initial template message
+          const templateMessage: Message = {
+            id: "template-init",
+            content: `Saya akan membantu Anda membuat ${
+              parsedData.templateName
+            }. Berdasarkan informasi yang Anda berikan:\n\n${Object.entries(
+              parsedData.formData
+            )
+              .map(([key, value]) => `• ${key.replace("_", " ")}: ${value}`)
+              .join(
+                "\n"
+              )}\n\nSaya akan memproses dan membuat dokumen untuk Anda...`,
+            role: "assistant",
+            timestamp: new Date(),
+          };
+
+          setMessages((prev) => [...prev, templateMessage]);
+
+          // Auto-generate document after a delay
+          setTimeout(() => {
+            generateTemplateDocument(parsedData);
+          }, 2000);
+        } catch (error) {
+          console.error("Error parsing template data:", error);
+        }
+      }
+    };
+
+    initializeTemplateMode();
+  }, [searchParams, sessionId]);
 
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
@@ -863,9 +944,13 @@ export default function ChatPage() {
                   </AvatarFallback>
                 </Avatar> */}
                 <div>
-                  <h1 className="font-semibold">AI Assistant</h1>
+                  <h1 className="font-semibold">
+                    {isTemplateMode ? "Template Generator" : "AI Assistant"}
+                  </h1>
                   <p className="text-sm text-muted-foreground">
-                    {session?.user?.name
+                    {isTemplateMode 
+                      ? `Generating document from template`
+                      : session?.user?.name
                       ? `Chatting with ${session.user.name}`
                       : "Ready to help"}
                   </p>
@@ -1466,12 +1551,7 @@ export default function ChatPage() {
                       : ""
                   }`}
                   onClick={() => {
-                    setSelectedSession(chatSession.id);
-                    // Find the session and set it as current
-                    const session = chatSessions.find(s => s.id === chatSession.id);
-                    if (session) {
-                      setCurrentSession(session);
-                    }
+                    switchToSession(chatSession);
                   }}
                 >
                   <CardContent className="p-3">

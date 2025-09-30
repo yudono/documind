@@ -17,13 +17,17 @@ export async function GET(request: NextRequest) {
     const totalUsers = await prisma.userCredit.count();
 
     // Get users who have used credits today
-    const activeUsers = await prisma.creditTransaction.count({
+    const activeUsersResult = await prisma.creditTransaction.findMany({
       where: {
         createdAt: { gte: today },
         type: 'consumption'
       },
+      select: {
+        userId: true
+      },
       distinct: ['userId']
     });
+    const activeUsers = activeUsersResult.length;
 
     // Get total credits issued (all positive transactions)
     const creditsIssuedResult = await prisma.creditTransaction.aggregate({
@@ -56,12 +60,16 @@ export async function GET(request: NextRequest) {
     });
 
     // Get daily active users (users with any transaction today)
-    const dailyActiveUsers = await prisma.creditTransaction.count({
+    const dailyActiveUsersResult = await prisma.creditTransaction.findMany({
       where: {
         createdAt: { gte: today }
       },
+      select: {
+        userId: true
+      },
       distinct: ['userId']
     });
+    const dailyActiveUsers = dailyActiveUsersResult.length;
 
     // Calculate total revenue (this is a simplified calculation)
     // In a real system, you'd track actual payment amounts separately

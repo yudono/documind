@@ -9,8 +9,6 @@ export async function resetDailyCredits() {
     const usersToReset = await prisma.userCredit.findMany({
       where: {
         OR: [
-          // Users who have never been reset
-          { lastResetDate: null },
           // Users whose last reset was before today
           { lastResetDate: { lt: today } }
         ]

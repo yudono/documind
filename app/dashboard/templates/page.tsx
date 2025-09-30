@@ -226,7 +226,7 @@ export default function TemplatePage() {
                   <div className="h-3 bg-muted rounded w-1/2"></div>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-32 bg-muted rounded mb-4"></div>
+                  {/**<div className="h-32 bg-muted rounded mb-4"></div> **/}
                   <div className="h-3 bg-muted rounded w-full mb-2"></div>
                   <div className="h-3 bg-muted rounded w-2/3"></div>
                 </CardContent>

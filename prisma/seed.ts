@@ -20,6 +20,7 @@ async function main() {
       bucket: 'example-bucket',
       previewUrl: 'https://via.placeholder.com/600x800/4F46E5/FFFFFF?text=Business+Proposal+Preview',
       instructions: 'Fill in your company details, project information, and budget to create a professional business proposal.',
+      aiPrompt: 'Create a comprehensive business proposal document for {{companyName}} to present to {{clientName}}. The proposal should include: 1) Executive Summary highlighting the project "{{projectTitle}}" 2) Detailed project description: {{projectDescription}} 3) Timeline of {{timeline}} weeks with key milestones 4) Budget breakdown totaling {{budget}} 5) Company credentials and why {{companyName}} is the best choice 6) Next steps and contact information ({{contactEmail}}). Make it professional, persuasive, and tailored to win the client\'s business. Use formal business language and include relevant industry insights.',
       templateFields: {
         fields: [
           { name: 'companyName', label: 'Company Name', type: 'text', placeholder: 'Enter your company name', required: true },
@@ -56,6 +57,7 @@ async function main() {
       bucket: 'example-bucket',
       previewUrl: 'https://via.placeholder.com/600x800/7C2D12/FFFFFF?text=Invoice+Preview',
       instructions: 'Enter your business details and invoice items to generate a professional invoice.',
+      aiPrompt: 'Generate a professional invoice document from {{businessName}} to {{clientName}}. Include: 1) Business header with {{businessName}} and address: {{businessAddress}} 2) Client information: {{clientName}} at {{clientAddress}} 3) Invoice details: Invoice #{{invoiceNumber}}, Date: {{invoiceDate}}, Due Date: {{dueDate}} 4) Itemized billing: {{itemDescription}} - Quantity: {{quantity}} x Unit Price: {{unitPrice}} 5) Calculate subtotal, apply {{taxRate}}% tax if provided, and show total amount 6) Payment terms and instructions 7) Professional formatting with clear sections. Make it legally compliant and business-ready.',
       templateFields: {
         fields: [
           { name: 'businessName', label: 'Business Name', type: 'text', placeholder: 'Enter your business name', required: true },
@@ -99,6 +101,7 @@ async function main() {
       bucket: 'example-bucket',
       previewUrl: 'https://via.placeholder.com/600x800/059669/FFFFFF?text=Contract+Preview',
       instructions: 'Fill in the contract details to create a legally binding service agreement.',
+      aiPrompt: 'Create a comprehensive service agreement contract between {{partyAName}} and {{partyBName}}. Include: 1) Contract header with parties and effective date 2) Service description: {{serviceDescription}} 3) Contract terms: Start Date {{startDate}}, End Date {{endDate}}, Value {{contractValue}} 4) Payment terms: {{paymentTerms}} 5) Responsibilities and obligations of both parties 6) Termination clauses and conditions 7) Governing law under {{jurisdiction}} jurisdiction 8) Signature blocks and legal disclaimers. Ensure the contract is legally sound, comprehensive, and protects both parties\' interests.',
       templateFields: {
         fields: [
           { name: 'partyAName', label: 'Party A Name', type: 'text', placeholder: 'Enter first party name', required: true },
