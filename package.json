@@ -80,6 +80,7 @@
     "pdf-parse": "^1.1.1",
     "postcss": "8.4.30",
     "pptx-parser": "^1.1.7-beta.9",
+    "pptxgenjs": "^4.0.1",
     "prisma": "^6.16.2",
     "puppeteer": "^24.22.2",
     "react": "18.2.0",

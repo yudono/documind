@@ -24,6 +24,7 @@ const AgentStateAnnotation = Annotation.Root({
   >,
   finalResponse: Annotation<string>,
   shouldGenerateDoc: Annotation<boolean>,
+  documentType: Annotation<"pdf" | "xlsx" | "docx" | "pptx" | undefined>,
 });
 
 type AgentState = typeof AgentStateAnnotation.State;
@@ -169,7 +170,7 @@ export class LangGraphDocumentAgent {
   }
 
   /**
-   * Node: Generate AI response based on query and context
+   * Node: Generate AI response based on query and context with document type awareness
    */
   private async generateResponseNode(
     state: AgentState
@@ -180,7 +181,11 @@ export class LangGraphDocumentAgent {
 
 You can also generate documents when requested. If the user asks you to create, generate, or write a document, report, analysis, or any structured content, please provide the complete content in your response.
 
-IMPORTANT: When generating documents for PDF output, you MUST format your response as HTML with proper structure. Use HTML tags like <h1>, <h2>, <p>, <ul>, <li>, <table>, etc. to structure the content properly. This is required for PDF generation.
+IMPORTANT DOCUMENT FORMATTING GUIDELINES:
+- For PDF documents: Format your response as HTML with proper structure using <h1>, <h2>, <p>, <ul>, <li>, <table>, etc.
+- For Excel/XLSX documents: Structure data in tabular format with clear headers, rows, and columns. Include calculations and summaries where appropriate.
+- For Word/DOCX documents: Use structured text with clear headings, paragraphs, lists, and professional formatting.
+- For PowerPoint/PPTX documents: Organize content into slides with titles, bullet points, and clear sections.
 
 ${
   state.context
@@ -192,11 +197,11 @@ Please use this context to answer the user's question. If the context doesn't co
 }
 
 When generating documents, please:
-1. Provide complete, well-structured HTML content
-2. Use appropriate HTML formatting and organization
+1. Provide complete, well-structured content appropriate for the document type
+2. Use proper formatting and organization
 3. Include relevant details and information
 4. Make the content professional and comprehensive
-5. Format as HTML for PDF generation compatibility
+5. Consider the specific format requirements for the document type
 `),
         new HumanMessage(state.query),
       ];
@@ -215,7 +220,7 @@ When generating documents, please:
   }
 
   /**
-   * Node: Decide whether to generate a document based on AI response analysis
+   * Node: Decide whether to generate a document and determine document type
    */
   private async decideDocumentGenerationNode(
     state: AgentState
@@ -225,39 +230,77 @@ When generating documents, please:
 
       if (!this.llm) {
         console.error("LLM not initialized");
-        return { shouldGenerateDoc: false };
+        return { shouldGenerateDoc: false, documentType: undefined };
       }
 
-      const prompt = `Based on the following AI response, determine if a document should be generated.
+      // First, decide if a document should be generated
+      const decisionPrompt = `Based on the following user query and AI response, determine if a document should be generated.
       
+      User Query: ${state.query}
       AI Response: ${state.aiResponse}
       
-      Generate a document if the response contains:
-      - Structured information that would benefit from formatting (reports, summaries, lists)
-      - Data that could be presented in a table or organized format
-      - Content that the user might want to save or share
+      Generate a document if:
+      - The user explicitly requests document creation (e.g., "create a report", "generate a document", "make a presentation")
+      - The response contains structured information that would benefit from formatting
+      - The content includes data that could be presented in tables, charts, or organized format
+      - The user asks for something to be saved, exported, or shared
       
       Do NOT generate a document for:
-      - Simple conversational responses
+      - Simple conversational responses or questions
       - Short answers or confirmations
       - Error messages or clarifications
+      - General information requests without document creation intent
       
       Respond with only "yes" or "no".`;
 
-      const decision = await this.llm.invoke(prompt);
+      const decision = await this.llm.invoke(decisionPrompt);
       const shouldGenerate = decision.content
         .toString()
         .toLowerCase()
         .includes("yes");
 
-      console.log(
-        `Document generation decision: ${shouldGenerate ? "yes" : "no"}`
-      );
+      console.log(`Document generation decision: ${shouldGenerate ? "yes" : "no"}`);
 
-      return { shouldGenerateDoc: shouldGenerate };
+      if (!shouldGenerate) {
+        return { shouldGenerateDoc: false, documentType: undefined };
+      }
+
+      // If document should be generated, determine the type
+      const typePrompt = `Based on the user query and content, determine the most appropriate document type:
+
+      User Query: ${state.query}
+      AI Response: ${state.aiResponse}
+
+      Choose the best document type:
+      - "pdf": For reports, articles, formal documents, text-heavy content, or when user specifically mentions PDF
+      - "xlsx": For data analysis, tables, calculations, spreadsheets, financial reports, or when user mentions Excel/spreadsheet
+      - "docx": For formal documents, letters, proposals, structured text documents, or when user mentions Word document
+      - "pptx": For presentations, slide decks, visual content, or when user mentions PowerPoint/presentation
+
+      Consider these keywords:
+      - PDF: report, document, article, formal, text, analysis
+      - XLSX: data, table, spreadsheet, calculation, numbers, Excel, financial, budget
+      - DOCX: letter, proposal, document, Word, formal text, contract
+      - PPTX: presentation, slides, PowerPoint, deck, visual, meeting
+
+      Respond with only one of: pdf, xlsx, docx, pptx`;
+
+      const typeDecision = await this.llm.invoke(typePrompt);
+      const documentType = typeDecision.content.toString().toLowerCase().trim() as "pdf" | "xlsx" | "docx" | "pptx";
+
+      // Validate the document type
+      const validTypes = ["pdf", "xlsx", "docx", "pptx"];
+      const finalDocumentType = validTypes.includes(documentType) ? documentType : "pdf";
+
+      console.log(`Document type decision: ${finalDocumentType}`);
+
+      return { 
+        shouldGenerateDoc: true, 
+        documentType: finalDocumentType 
+      };
     } catch (error) {
       console.error("Error in document generation decision:", error);
-      return { shouldGenerateDoc: false };
+      return { shouldGenerateDoc: false, documentType: undefined };
     }
   }
 
@@ -269,47 +312,370 @@ When generating documents, please:
   }
 
   /**
-   * Node: Generate document file based on AI response
+   * Generate PDF document with HTML formatting
+   */
+  private async generatePDFDocument(content: string, title: string): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
+    const documentGenerator = new DocumentGenerator();
+
+    // Enhanced system prompt for PDF generation
+    const pdfPrompt = `Transform the following content into well-structured HTML suitable for PDF generation:
+
+Content: ${content}
+
+Requirements:
+- Use proper HTML structure with <h1>, <h2>, <h3> for headings
+- Use <p> tags for paragraphs
+- Use <ul>/<ol> and <li> for lists
+- Use <table>, <tr>, <td> for tabular data
+- Include proper spacing and formatting
+- Make it professional and readable
+- Ensure content is complete and well-organized
+
+Provide only the HTML content (no explanations):`;
+
+    const htmlResponse = await this.llm.invoke(pdfPrompt);
+    let htmlContent = htmlResponse.content as string;
+
+    // Ensure proper HTML structure
+    if (!htmlContent.includes("<html>") && !htmlContent.includes("<body>")) {
+      htmlContent = `
+        <html>
+          <head>
+            <title>${title}</title>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; margin: 20px; }
+              h1, h2, h3 { color: #333; margin-top: 20px; }
+              p { margin-bottom: 10px; }
+              table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background-color: #f2f2f2; }
+            </style>
+          </head>
+          <body>
+            ${htmlContent}
+          </body>
+        </html>
+      `;
+    }
+
+    const buffer = await documentGenerator.generatePDF({
+      format: "pdf",
+      content: htmlContent,
+      title,
+    });
+
+    return {
+      buffer,
+      filename: `${title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
+      mimeType: "application/pdf",
+    };
+  }
+
+  /**
+   * Generate Excel document with structured data
+   */
+  private async generateExcelDocument(content: string, title: string): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
+    const documentGenerator = new DocumentGenerator();
+
+    // Enhanced system prompt for Excel generation
+    const excelPrompt = `Transform the following content into structured data suitable for Excel generation:
+
+Content: ${content}
+
+Requirements:
+- Extract or create tabular data with clear headers
+- Include calculations, totals, or summaries where appropriate
+- Organize data logically in rows and columns
+- If no tabular data exists, create a structured format
+- Include data analysis or insights
+
+Provide the data in JSON format with this structure:
+{
+  "title": "Sheet Title",
+  "headers": ["Column1", "Column2", "Column3"],
+  "data": [
+    {"Column1": "value1", "Column2": "value2", "Column3": "value3"},
+    {"Column1": "value4", "Column2": "value5", "Column3": "value6"}
+  ]
+}
+
+Provide only the JSON (no explanations):`;
+
+    const excelResponse = await this.llm.invoke(excelPrompt);
+    let excelData;
+    
+    try {
+      excelData = JSON.parse(excelResponse.content as string);
+    } catch (error) {
+      // Fallback to simple data structure
+      excelData = {
+        title: title,
+        headers: ["Item", "Description", "Value"],
+        data: [
+          { "Item": "Generated Content", "Description": content.substring(0, 100), "Value": "AI Generated" }
+        ]
+      };
+    }
+
+    const buffer = await documentGenerator.generateExcel({
+      format: "excel",
+      content: content,
+      title: excelData.title || title,
+      data: excelData.data || [],
+    });
+
+    return {
+      buffer,
+      filename: `${title.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`,
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    };
+  }
+
+  /**
+   * Generate DOCX document with structured text
+   */
+  private async generateDOCXDocument(content: string, title: string): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
+
+    // Enhanced system prompt for DOCX generation
+    const docxPrompt = `Transform the following content into well-structured text suitable for Word document generation:
+
+Content: ${content}
+
+Requirements:
+- Organize content with clear headings and subheadings
+- Use proper paragraph structure
+- Include bullet points or numbered lists where appropriate
+- Make it professional and readable
+- Ensure logical flow and organization
+
+Provide the content in this JSON structure:
+{
+  "title": "Document Title",
+  "sections": [
+    {
+      "heading": "Section Title",
+      "level": 1,
+      "content": "Paragraph content here"
+    },
+    {
+      "heading": "Subsection Title", 
+      "level": 2,
+      "content": "More content here"
+    }
+  ]
+}
+
+Provide only the JSON (no explanations):`;
+
+    const docxResponse = await this.llm.invoke(docxPrompt);
+    let docxData;
+    
+    try {
+      docxData = JSON.parse(docxResponse.content as string);
+    } catch (error) {
+      // Fallback structure
+      docxData = {
+        title: title,
+        sections: [
+          { heading: title, level: 1, content: content }
+        ]
+      };
+    }
+
+    // Create DOCX document
+    const children = [];
+    
+    // Add title
+    children.push(
+      new Paragraph({
+        text: docxData.title || title,
+        heading: HeadingLevel.TITLE,
+      })
+    );
+
+    // Add sections
+    for (const section of docxData.sections || []) {
+      if (section.heading) {
+        children.push(
+          new Paragraph({
+            text: section.heading,
+            heading: section.level === 1 ? HeadingLevel.HEADING_1 : HeadingLevel.HEADING_2,
+          })
+        );
+      }
+      
+      if (section.content) {
+        children.push(
+          new Paragraph({
+            children: [new TextRun(section.content)],
+          })
+        );
+      }
+    }
+
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: children,
+      }],
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+
+    return {
+      buffer,
+      filename: `${title.replace(/[^a-zA-Z0-9]/g, '_')}.docx`,
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    };
+  }
+
+  /**
+   * Generate PPTX document with slide structure
+   */
+  private async generatePPTXDocument(content: string, title: string): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
+    const PptxGenJS = (await import('pptxgenjs')).default;
+
+    // Enhanced system prompt for PPTX generation
+    const pptxPrompt = `Transform the following content into slide structure suitable for PowerPoint generation:
+
+Content: ${content}
+
+Requirements:
+- Organize content into logical slides
+- Each slide should have a clear title
+- Use bullet points for key information
+- Keep content concise and presentation-friendly
+- Include introduction and conclusion slides if appropriate
+
+Provide the content in this JSON structure:
+{
+  "title": "Presentation Title",
+  "slides": [
+    {
+      "title": "Slide Title",
+      "content": ["Bullet point 1", "Bullet point 2", "Bullet point 3"]
+    },
+    {
+      "title": "Another Slide",
+      "content": ["More bullet points", "Additional information"]
+    }
+  ]
+}
+
+Provide only the JSON (no explanations):`;
+
+    const pptxResponse = await this.llm.invoke(pptxPrompt);
+    let pptxData;
+    
+    try {
+      pptxData = JSON.parse(pptxResponse.content as string);
+    } catch (error) {
+      // Fallback structure
+      pptxData = {
+        title: title,
+        slides: [
+          { title: title, content: [content.substring(0, 200)] }
+        ]
+      };
+    }
+
+    // Create PPTX presentation
+    const pres = new PptxGenJS();
+
+    // Add title slide
+    const titleSlide = pres.addSlide();
+    titleSlide.addText(pptxData.title || title, {
+      x: 1,
+      y: 2,
+      w: 8,
+      h: 2,
+      fontSize: 32,
+      bold: true,
+      align: 'center'
+    });
+
+    // Add content slides
+    for (const slide of pptxData.slides || []) {
+      const contentSlide = pres.addSlide();
+      
+      // Add slide title
+      contentSlide.addText(slide.title, {
+        x: 0.5,
+        y: 0.5,
+        w: 9,
+        h: 1,
+        fontSize: 24,
+        bold: true
+      });
+
+      // Add bullet points
+      if (slide.content && Array.isArray(slide.content)) {
+        const bulletText = slide.content.map((item: string) => `• ${item}`).join('\n');
+        contentSlide.addText(bulletText, {
+          x: 0.5,
+          y: 1.5,
+          w: 9,
+          h: 5,
+          fontSize: 16,
+          valign: 'top'
+        });
+      }
+    }
+
+    // Generate buffer - use writeFile with callback
+    const buffer = await new Promise<Buffer>((resolve, reject) => {
+      try {
+        pres.writeFile({ fileName: 'temp.pptx' }).then((data: any) => {
+          resolve(Buffer.from(data));
+        }).catch(reject);
+      } catch (error) {
+        reject(error);
+      }
+    });
+
+    return {
+      buffer,
+      filename: `${title.replace(/[^a-zA-Z0-9]/g, '_')}.pptx`,
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    };
+  }
+
+  /**
+   * Node: Generate document file based on AI response and document type
    */
   private async generateDocumentNode(
     state: AgentState
   ): Promise<Partial<AgentState>> {
     try {
-      const documentGenerator = new DocumentGenerator();
+      const title = "AI Generated Document";
+      const documentType = state.documentType || "pdf";
 
-      // Ensure the content is properly formatted HTML
-      let htmlContent = state.aiResponse;
-      if (!htmlContent.includes("<html>") && !htmlContent.includes("<body>")) {
-        htmlContent = `
-          <html>
-            <head>
-              <title>AI Generated Document</title>
-              <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; margin: 20px; }
-                h1, h2, h3 { color: #333; }
-                p { margin-bottom: 10px; }
-              </style>
-            </head>
-            <body>
-              ${htmlContent}
-            </body>
-          </html>
-        `;
+      console.log(`Generating ${documentType.toUpperCase()} document...`);
+
+      let documentFile;
+
+      switch (documentType) {
+        case "pdf":
+          documentFile = await this.generatePDFDocument(state.aiResponse, title);
+          break;
+        case "xlsx":
+          documentFile = await this.generateExcelDocument(state.aiResponse, title);
+          break;
+        case "docx":
+          documentFile = await this.generateDOCXDocument(state.aiResponse, title);
+          break;
+        case "pptx":
+          documentFile = await this.generatePPTXDocument(state.aiResponse, title);
+          break;
+        default:
+          // Fallback to PDF
+          documentFile = await this.generatePDFDocument(state.aiResponse, title);
       }
 
-      const buffer = await documentGenerator.generatePDF({
-        format: "pdf",
-        content: htmlContent,
-        title: "AI Generated Document",
-      });
+      console.log(`Successfully generated ${documentType.toUpperCase()} document: ${documentFile.filename}`);
 
-      return {
-        documentFile: {
-          buffer,
-          filename: "ai-generated-document.pdf",
-          mimeType: "application/pdf",
-        },
-      };
+      return { documentFile };
     } catch (error) {
       console.error("Error generating document:", error);
       return {};
@@ -373,6 +739,7 @@ When generating documents, please:
         documentFile: undefined,
         finalResponse: "",
         shouldGenerateDoc: false,
+        documentType: undefined,
       };
 
       // Run the graph
