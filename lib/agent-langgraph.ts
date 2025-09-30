@@ -7,6 +7,7 @@ import {
   DocumentGenerator,
   DocumentGenerationOptions,
 } from "./document-generator";
+import { mdToPdf } from "md-to-pdf";
 
 // Define the state annotation for the graph
 const AgentStateAnnotation = Annotation.Root({
@@ -182,10 +183,10 @@ export class LangGraphDocumentAgent {
 You can also generate documents when requested. If the user asks you to create, generate, or write a document, report, analysis, or any structured content, please provide the complete content in your response.
 
 IMPORTANT DOCUMENT FORMATTING GUIDELINES:
-- For PDF documents: Format your response as HTML with proper structure using <h1>, <h2>, <p>, <ul>, <li>, <table>, etc.
+- For PDF documents: Format your response in Markdown with proper structure using # ## ### for headings, bullet points, tables, etc.
 - For Excel/XLSX documents: Structure data in tabular format with clear headers, rows, and columns. Include calculations and summaries where appropriate.
-- For Word/DOCX documents: Use structured text with clear headings, paragraphs, lists, and professional formatting.
-- For PowerPoint/PPTX documents: Organize content into slides with titles, bullet points, and clear sections.
+- For Word/DOCX documents: Format your response in Markdown with clear headings, paragraphs, lists, and professional formatting.
+- For PowerPoint/PPTX documents: Format your response in Markdown organized for slide presentation with clear sections and bullet points.
 
 ${
   state.context
@@ -259,7 +260,9 @@ When generating documents, please:
         .toLowerCase()
         .includes("yes");
 
-      console.log(`Document generation decision: ${shouldGenerate ? "yes" : "no"}`);
+      console.log(
+        `Document generation decision: ${shouldGenerate ? "yes" : "no"}`
+      );
 
       if (!shouldGenerate) {
         return { shouldGenerateDoc: false, documentType: undefined };
@@ -286,17 +289,22 @@ When generating documents, please:
       Respond with only one of: pdf, xlsx, docx, pptx`;
 
       const typeDecision = await this.llm.invoke(typePrompt);
-      const documentType = typeDecision.content.toString().toLowerCase().trim() as "pdf" | "xlsx" | "docx" | "pptx";
+      const documentType = typeDecision.content
+        .toString()
+        .toLowerCase()
+        .trim() as "pdf" | "xlsx" | "docx" | "pptx";
 
       // Validate the document type
       const validTypes = ["pdf", "xlsx", "docx", "pptx"];
-      const finalDocumentType = validTypes.includes(documentType) ? documentType : "pdf";
+      const finalDocumentType = validTypes.includes(documentType)
+        ? documentType
+        : "pdf";
 
       console.log(`Document type decision: ${finalDocumentType}`);
 
-      return { 
-        shouldGenerateDoc: true, 
-        documentType: finalDocumentType 
+      return {
+        shouldGenerateDoc: true,
+        documentType: finalDocumentType,
       };
     } catch (error) {
       console.error("Error in document generation decision:", error);
@@ -312,61 +320,55 @@ When generating documents, please:
   }
 
   /**
-   * Generate PDF document with HTML formatting
+   * Generate PDF document using @mohtasham/md-to-docx package (as PDF alternative)
    */
-  private async generatePDFDocument(content: string, title: string): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
-    const documentGenerator = new DocumentGenerator();
-
+  private async generatePDFDocument(
+    content: string,
+    title: string
+  ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
     // Enhanced system prompt for PDF generation
-    const pdfPrompt = `Transform the following content into well-structured HTML suitable for PDF generation:
+    const pdfPrompt = `Transform the following content into well-structured Markdown suitable for PDF generation:
 
 Content: ${content}
 
 Requirements:
-- Use proper HTML structure with <h1>, <h2>, <h3> for headings
-- Use <p> tags for paragraphs
-- Use <ul>/<ol> and <li> for lists
-- Use <table>, <tr>, <td> for tabular data
+- Use proper Markdown structure with # ## ### for headings
+- Use bullet points (-) and numbered lists (1.)
+- Use tables with | syntax for tabular data
 - Include proper spacing and formatting
 - Make it professional and readable
 - Ensure content is complete and well-organized
 
-Provide only the HTML content (no explanations):`;
+Provide only the Markdown content (no explanations):`;
 
-    const htmlResponse = await this.llm.invoke(pdfPrompt);
-    let htmlContent = htmlResponse.content as string;
+    const markdownResponse = await this.llm.invoke(pdfPrompt);
+    let markdownContent = markdownResponse.content as string;
 
-    // Ensure proper HTML structure
-    if (!htmlContent.includes("<html>") && !htmlContent.includes("<body>")) {
-      htmlContent = `
-        <html>
-          <head>
-            <title>${title}</title>
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; margin: 20px; }
-              h1, h2, h3 { color: #333; margin-top: 20px; }
-              p { margin-bottom: 10px; }
-              table { border-collapse: collapse; width: 100%; margin: 10px 0; }
-              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-              th { background-color: #f2f2f2; }
-            </style>
-          </head>
-          <body>
-            ${htmlContent}
-          </body>
-        </html>
-      `;
-    }
+    // Configure options for PDF generation
+    const pdf_options = {
+      pdf_options: {
+        format: "A4" as const,
+        margin: {
+          top: "20mm",
+          right: "20mm",
+          bottom: "20mm",
+          left: "20mm",
+        },
+        printBackground: true,
+        displayHeaderFooter: false,
+      },
+      stylesheet: [],
+      marked_options: {
+        highlight: null,
+      },
+    };
 
-    const buffer = await documentGenerator.generatePDF({
-      format: "pdf",
-      content: htmlContent,
-      title,
-    });
+    // Convert markdown to PDF
+    const pdf = await mdToPdf({ content: markdownContent }, pdf_options);
 
     return {
-      buffer,
-      filename: `${title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
+      buffer: pdf.content,
+      filename: `${title.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`,
       mimeType: "application/pdf",
     };
   }
@@ -374,7 +376,10 @@ Provide only the HTML content (no explanations):`;
   /**
    * Generate Excel document with structured data
    */
-  private async generateExcelDocument(content: string, title: string): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
+  private async generateExcelDocument(
+    content: string,
+    title: string
+  ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
     const documentGenerator = new DocumentGenerator();
 
     // Enhanced system prompt for Excel generation
@@ -403,7 +408,7 @@ Provide only the JSON (no explanations):`;
 
     const excelResponse = await this.llm.invoke(excelPrompt);
     let excelData;
-    
+
     try {
       excelData = JSON.parse(excelResponse.content as string);
     } catch (error) {
@@ -412,8 +417,12 @@ Provide only the JSON (no explanations):`;
         title: title,
         headers: ["Item", "Description", "Value"],
         data: [
-          { "Item": "Generated Content", "Description": content.substring(0, 100), "Value": "AI Generated" }
-        ]
+          {
+            Item: "Generated Content",
+            Description: content.substring(0, 100),
+            Value: "AI Generated",
+          },
+        ],
       };
     }
 
@@ -426,218 +435,150 @@ Provide only the JSON (no explanations):`;
 
     return {
       buffer,
-      filename: `${title.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`,
-      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      filename: `${title.replace(/[^a-zA-Z0-9]/g, "_")}.xlsx`,
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     };
   }
 
   /**
-   * Generate DOCX document with structured text
+   * Generate DOCX document with Markdown to DOCX conversion
    */
-  private async generateDOCXDocument(content: string, title: string): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
-    const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
+  private async generateDOCXDocument(
+    content: string,
+    title: string
+  ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
+    const { convertMarkdownToDocx } = await import("@mohtasham/md-to-docx");
 
-    // Enhanced system prompt for DOCX generation
-    const docxPrompt = `Transform the following content into well-structured text suitable for Word document generation:
+    // Enhanced system prompt for DOCX generation with markdown formatting
+    const docxPrompt = `Transform the following content into well-structured Markdown suitable for Word document generation:
 
 Content: ${content}
 
 Requirements:
-- Organize content with clear headings and subheadings
-- Use proper paragraph structure
-- Include bullet points or numbered lists where appropriate
-- Make it professional and readable
-- Ensure logical flow and organization
+- Use proper Markdown structure with # ## ### #### ##### for headings (H1-H5)
+- Use bullet points (-) and numbered lists (1.) where appropriate
+- Include proper paragraph breaks with double line breaks
+- Make it professional and document-style
+- Organize content with clear sections and subsections
+- Use **bold** and *italic* formatting where appropriate
+- Include tables using Markdown table syntax when presenting tabular data
+- Use > for blockquotes when highlighting important information
+- Use \`code\` for inline code or technical terms
+- Use \`\`\`language blocks for code snippets
+- Add [TOC] at the beginning if the document has multiple sections
+- Use \\pagebreak to separate major sections if needed
 
-Provide the content in this JSON structure:
-{
-  "title": "Document Title",
-  "sections": [
-    {
-      "heading": "Section Title",
-      "level": 1,
-      "content": "Paragraph content here"
-    },
-    {
-      "heading": "Subsection Title", 
-      "level": 2,
-      "content": "More content here"
-    }
-  ]
-}
+Provide only the Markdown content (no explanations):`;
 
-Provide only the JSON (no explanations):`;
+    const markdownResponse = await this.llm.invoke(docxPrompt);
+    let markdownContent = markdownResponse.content as string;
 
-    const docxResponse = await this.llm.invoke(docxPrompt);
-    let docxData;
-    
-    try {
-      docxData = JSON.parse(docxResponse.content as string);
-    } catch (error) {
-      // Fallback structure
-      docxData = {
-        title: title,
-        sections: [
-          { heading: title, level: 1, content: content }
-        ]
-      };
-    }
+    // Configure options for professional document styling
+    const options = {
+      documentType: "document" as const,
+      style: {
+        titleSize: 32,
+        headingSpacing: 240,
+        paragraphSpacing: 200,
+        lineSpacing: 1.15,
+        heading1Size: 28,
+        heading2Size: 24,
+        heading3Size: 20,
+        heading4Size: 18,
+        heading5Size: 16,
+        paragraphSize: 12,
+        listItemSize: 12,
+        codeBlockSize: 10,
+        blockquoteSize: 12,
+        tocFontSize: 14,
+        paragraphAlignment: "JUSTIFIED" as const,
+        blockquoteAlignment: "LEFT" as const,
+        direction: "LTR" as const,
+      },
+    };
 
-    // Create DOCX document
-    const children = [];
-    
-    // Add title
-    children.push(
-      new Paragraph({
-        text: docxData.title || title,
-        heading: HeadingLevel.TITLE,
-      })
-    );
+    // Convert markdown to DOCX
+    const blob = await convertMarkdownToDocx(markdownContent, options);
 
-    // Add sections
-    for (const section of docxData.sections || []) {
-      if (section.heading) {
-        children.push(
-          new Paragraph({
-            text: section.heading,
-            heading: section.level === 1 ? HeadingLevel.HEADING_1 : HeadingLevel.HEADING_2,
-          })
-        );
-      }
-      
-      if (section.content) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun(section.content)],
-          })
-        );
-      }
-    }
-
-    const doc = new Document({
-      sections: [{
-        properties: {},
-        children: children,
-      }],
-    });
-
-    const buffer = await Packer.toBuffer(doc);
+    // Convert blob to buffer
+    const arrayBuffer = await blob.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
     return {
       buffer,
-      filename: `${title.replace(/[^a-zA-Z0-9]/g, '_')}.docx`,
-      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      filename: `${title.replace(/[^a-zA-Z0-9]/g, "_")}.docx`,
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     };
   }
 
   /**
-   * Generate PPTX document with slide structure
+   * Generate PPTX document using @mohtasham/md-to-docx package
    */
-  private async generatePPTXDocument(content: string, title: string): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
-    const PptxGenJS = (await import('pptxgenjs')).default;
+  private async generatePPTXDocument(
+    content: string,
+    title: string
+  ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
+    const { convertMarkdownToDocx } = await import("@mohtasham/md-to-docx");
 
-    // Enhanced system prompt for PPTX generation
-    const pptxPrompt = `Transform the following content into slide structure suitable for PowerPoint generation:
+    // Enhanced system prompt for PPTX-style content (presentation format)
+    const pptxPrompt = `Transform the following content into well-structured presentation content suitable for slides:
 
 Content: ${content}
 
 Requirements:
-- Organize content into logical slides
-- Each slide should have a clear title
-- Use bullet points for key information
-- Keep content concise and presentation-friendly
-- Include introduction and conclusion slides if appropriate
+- Create clear, concise sections that would work well as slides
+- Use headings for slide titles
+- Use bullet points and numbered lists for key information
+- Keep content presentation-friendly and easy to read
+- Include introduction and conclusion sections if appropriate
+- Make it professional and presentation-style
+- Use markdown formatting (headings, lists, emphasis)
 
-Provide the content in this JSON structure:
-{
-  "title": "Presentation Title",
-  "slides": [
-    {
-      "title": "Slide Title",
-      "content": ["Bullet point 1", "Bullet point 2", "Bullet point 3"]
-    },
-    {
-      "title": "Another Slide",
-      "content": ["More bullet points", "Additional information"]
-    }
-  ]
-}
+Format the content as structured markdown that would translate well to presentation slides.
 
-Provide only the JSON (no explanations):`;
+Provide only the Markdown content (no explanations):`;
 
-    const pptxResponse = await this.llm.invoke(pptxPrompt);
-    let pptxData;
-    
-    try {
-      pptxData = JSON.parse(pptxResponse.content as string);
-    } catch (error) {
-      // Fallback structure
-      pptxData = {
-        title: title,
-        slides: [
-          { title: title, content: [content.substring(0, 200)] }
-        ]
-      };
-    }
+    const markdownResponse = await this.llm.invoke(pptxPrompt);
+    let markdownContent = markdownResponse.content as string;
 
-    // Create PPTX presentation
-    const pres = new PptxGenJS();
+    // Configure options for presentation-style document
+    const options = {
+      documentType: "document" as const,
+      style: {
+        titleSize: 36,
+        headingSpacing: 300,
+        paragraphSpacing: 240,
+        lineSpacing: 1.5,
+        heading1Size: 32,
+        heading2Size: 28,
+        heading3Size: 24,
+        heading4Size: 20,
+        heading5Size: 18,
+        paragraphSize: 14,
+        listItemSize: 14,
+        codeBlockSize: 12,
+        blockquoteSize: 14,
+        tocFontSize: 16,
+        paragraphAlignment: "LEFT" as const,
+        blockquoteAlignment: "LEFT" as const,
+        direction: "LTR" as const,
+      },
+    };
 
-    // Add title slide
-    const titleSlide = pres.addSlide();
-    titleSlide.addText(pptxData.title || title, {
-      x: 1,
-      y: 2,
-      w: 8,
-      h: 2,
-      fontSize: 32,
-      bold: true,
-      align: 'center'
-    });
+    // Convert markdown to DOCX (presentation-style formatting)
+    const blob = await convertMarkdownToDocx(markdownContent, options);
 
-    // Add content slides
-    for (const slide of pptxData.slides || []) {
-      const contentSlide = pres.addSlide();
-      
-      // Add slide title
-      contentSlide.addText(slide.title, {
-        x: 0.5,
-        y: 0.5,
-        w: 9,
-        h: 1,
-        fontSize: 24,
-        bold: true
-      });
-
-      // Add bullet points
-      if (slide.content && Array.isArray(slide.content)) {
-        const bulletText = slide.content.map((item: string) => `• ${item}`).join('\n');
-        contentSlide.addText(bulletText, {
-          x: 0.5,
-          y: 1.5,
-          w: 9,
-          h: 5,
-          fontSize: 16,
-          valign: 'top'
-        });
-      }
-    }
-
-    // Generate buffer - use writeFile with callback
-    const buffer = await new Promise<Buffer>((resolve, reject) => {
-      try {
-        pres.writeFile({ fileName: 'temp.pptx' }).then((data: any) => {
-          resolve(Buffer.from(data));
-        }).catch(reject);
-      } catch (error) {
-        reject(error);
-      }
-    });
+    // Convert blob to buffer
+    const arrayBuffer = await blob.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
     return {
       buffer,
-      filename: `${title.replace(/[^a-zA-Z0-9]/g, '_')}.pptx`,
-      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      filename: `${title.replace(/[^a-zA-Z0-9]/g, "_")}.docx`,
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     };
   }
 
@@ -657,23 +598,42 @@ Provide only the JSON (no explanations):`;
 
       switch (documentType) {
         case "pdf":
-          documentFile = await this.generatePDFDocument(state.aiResponse, title);
+          documentFile = await this.generatePDFDocument(
+            state.aiResponse,
+            title
+          );
           break;
         case "xlsx":
-          documentFile = await this.generateExcelDocument(state.aiResponse, title);
+          documentFile = await this.generateExcelDocument(
+            state.aiResponse,
+            title
+          );
           break;
         case "docx":
-          documentFile = await this.generateDOCXDocument(state.aiResponse, title);
+          documentFile = await this.generateDOCXDocument(
+            state.aiResponse,
+            title
+          );
           break;
         case "pptx":
-          documentFile = await this.generatePPTXDocument(state.aiResponse, title);
+          documentFile = await this.generatePPTXDocument(
+            state.aiResponse,
+            title
+          );
           break;
         default:
           // Fallback to PDF
-          documentFile = await this.generatePDFDocument(state.aiResponse, title);
+          documentFile = await this.generatePDFDocument(
+            state.aiResponse,
+            title
+          );
       }
 
-      console.log(`Successfully generated ${documentType.toUpperCase()} document: ${documentFile.filename}`);
+      console.log(
+        `Successfully generated ${documentType.toUpperCase()} document: ${
+          documentFile.filename
+        }`
+      );
 
       return { documentFile };
     } catch (error) {

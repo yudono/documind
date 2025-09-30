@@ -66,6 +66,7 @@ interface Message {
     type: string;
     downloadUrl: string;
     url?: string; // Add url property for data URLs
+    error?: string; // Add error property for failed downloads
   };
 }
 
@@ -1096,17 +1097,29 @@ export default function ChatPage() {
                                         size="sm"
                                         className="h-8 w-8 p-0"
                                         onClick={() => {
+                                          if (message.documentFile?.error) {
+                                            // Show error message if PDF processing failed
+                                            alert(`Download failed: ${message.documentFile.error}`);
+                                            return;
+                                          }
+                                          
                                           if (message.documentFile?.url && message.documentFile.url !== "#" && !message.documentFile.url.startsWith('data:')) {
                                             // For real URLs, open in new tab
                                             window.open(message.documentFile.url, '_blank');
                                           } else if (message.documentFile?.url && message.documentFile.url.startsWith('data:')) {
-                                            // For data URLs, create download link
-                                            const a = document.createElement('a');
-                                            a.href = message.documentFile.url;
-                                            a.download = message.documentFile.name || 'document.txt';
-                                            document.body.appendChild(a);
-                                            a.click();
-                                            document.body.removeChild(a);
+                                            try {
+                                              // For data URLs, create download link with better error handling
+                                              const a = document.createElement('a');
+                                              a.href = message.documentFile.url;
+                                              a.download = message.documentFile.name || 'document.pdf';
+                                              a.style.display = 'none';
+                                              document.body.appendChild(a);
+                                              a.click();
+                                              document.body.removeChild(a);
+                                            } catch (error) {
+                                              console.error('Download failed:', error);
+                                              alert('Download failed. The file may be too large or corrupted.');
+                                            }
                                           } else {
                                             // For mock documents, create a downloadable blob
                                             const content = `Mock Document: ${message.documentFile?.name}\nType: ${message.documentFile?.type}\nGenerated at: ${new Date().toISOString()}`;

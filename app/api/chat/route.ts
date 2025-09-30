@@ -1,15 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { generateChatCompletion, generateChatCompletionWithAgent, generateDocument } from '@/lib/groq'
-import { prisma } from '@/lib/prisma'
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import {
+  generateChatCompletion,
+  generateChatCompletionWithAgent,
+  generateDocument,
+} from "@/lib/groq";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
@@ -20,14 +24,17 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const body = await request.json()
-    const { message, context, documentRequest, sessionId } = body
+    const body = await request.json();
+    const { message, context, documentRequest, sessionId } = body;
 
     if (!message) {
-      return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+      return NextResponse.json(
+        { error: "Message is required" },
+        { status: 400 }
+      );
     }
 
     // Verify the chat session exists and belongs to the user if sessionId is provided
@@ -42,7 +49,7 @@ export async function POST(request: NextRequest) {
 
       if (!chatSession) {
         return NextResponse.json(
-          { error: 'Chat session not found' },
+          { error: "Chat session not found" },
           { status: 404 }
         );
       }
@@ -64,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     if (userCredit.balance < 1) {
       return NextResponse.json(
-        { error: 'Insufficient credits' },
+        { error: "Insufficient credits" },
         { status: 400 }
       );
     }
@@ -81,9 +88,9 @@ export async function POST(request: NextRequest) {
       prisma.creditTransaction.create({
         data: {
           userId: user.id,
-          type: 'spend',
+          type: "spend",
           amount: -1,
-          description: 'Chat completion',
+          description: "Chat completion",
           reference: `chat_${Date.now()}`,
         },
       }),
@@ -101,18 +108,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    let response: string
-    let documentFile: any = null
+    let response: string;
+    let documentFile: any = null;
 
     // Always use the agent for processing - let the agent decide whether to generate documents
-    let messages: Array<{role: 'system' | 'user' | 'assistant', content: string}> = [
+    let messages: Array<{
+      role: "system" | "user" | "assistant";
+      content: string;
+    }> = [
       {
-        role: 'system' as const,
-        content: 'You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.'
+        role: "system" as const,
+        content:
+          "You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.",
       },
-      ...(context ? [{ role: 'user' as const, content: `Context: ${context}` }] : []),
-      { role: 'user' as const, content: message }
-    ]
+      ...(context
+        ? [{ role: "user" as const, content: `Context: ${context}` }]
+        : []),
+      { role: "user" as const, content: message },
+    ];
 
     // If sessionId is provided, get previous messages for context
     if (sessionId) {
@@ -124,16 +137,19 @@ export async function POST(request: NextRequest) {
 
       messages = [
         {
-          role: 'system' as const,
-          content: 'You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.'
+          role: "system" as const,
+          content:
+            "You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.",
         },
-        ...(context ? [{ role: 'user' as const, content: `Context: ${context}` }] : []),
+        ...(context
+          ? [{ role: "user" as const, content: `Context: ${context}` }]
+          : []),
         ...previousMessages.slice(-9).map((msg: any) => ({
           role: msg.role as "user" | "assistant",
           content: msg.content,
         })),
-        { role: 'user' as const, content: message }
-      ]
+        { role: "user" as const, content: message },
+      ];
     }
 
     const agentResponse = await generateChatCompletionWithAgent(messages, {
@@ -141,23 +157,55 @@ export async function POST(request: NextRequest) {
       sessionId: sessionId,
       useSemanticSearch: false,
       documentIds: context ? [] : undefined,
-      conversationContext: context
-    })
+      conversationContext: context,
+    });
 
     // Handle different response types from the agent
-    if (typeof agentResponse === 'string') {
-      response = agentResponse
+    if (typeof agentResponse === "string") {
+      response = agentResponse;
     } else {
-      response = agentResponse.response
+      response = agentResponse.response;
       if (agentResponse.documentFile) {
-        // Convert PDF buffer to base64 data URL for download
-        const base64Data = agentResponse.documentFile.buffer.toString('base64')
-        documentFile = {
-          name: agentResponse.documentFile.filename,
-          type: agentResponse.documentFile.mimeType,
-          size: agentResponse.documentFile.buffer.length,
-          url: `data:${agentResponse.documentFile.mimeType};base64,${base64Data}`,
-          generatedAt: new Date().toISOString()
+        try {
+          // Validate buffer size (limit to 10MB for data URLs)
+          const bufferSize = agentResponse.documentFile.buffer.length;
+          console.log(`PDF buffer size: ${bufferSize} bytes`);
+
+          if (bufferSize > 10 * 1024 * 1024) {
+            throw new Error("PDF file too large for data URL");
+          }
+
+          // Convert PDF buffer to base64 data URL for download
+          const base64Data =
+            agentResponse.documentFile.buffer.toString("base64");
+
+          // Validate base64 encoding
+          if (!base64Data || base64Data.length === 0) {
+            throw new Error("Failed to encode PDF to base64");
+          }
+
+          documentFile = {
+            name: agentResponse.documentFile.filename,
+            type: agentResponse.documentFile.mimeType,
+            size: bufferSize,
+            url: `data:${agentResponse.documentFile.mimeType};base64,${base64Data}`,
+            generatedAt: new Date().toISOString(),
+          };
+
+          console.log(
+            `PDF document created: ${agentResponse.documentFile.filename}, size: ${bufferSize} bytes`
+          );
+        } catch (error) {
+          console.error("Error processing PDF document:", error);
+          // Return error information instead of failing silently
+          documentFile = {
+            name: agentResponse.documentFile.filename,
+            type: agentResponse.documentFile.mimeType,
+            size: agentResponse.documentFile.buffer.length,
+            url: null,
+            error: "Failed to process PDF for download",
+            generatedAt: new Date().toISOString(),
+          };
         }
       }
     }
@@ -195,31 +243,30 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       creditBalance: updatedCredit?.balance || 0,
       messageId: assistantMessage?.id,
-    })
-
+    });
   } catch (error) {
-    console.error('Chat API error:', error)
-    
+    console.error("Chat API error:", error);
+
     // Handle specific Groq API errors
     if (error instanceof Error) {
-      if (error.message.includes('rate limit')) {
+      if (error.message.includes("rate limit")) {
         return NextResponse.json(
-          { error: 'Rate limit exceeded. Please try again in a moment.' },
+          { error: "Rate limit exceeded. Please try again in a moment." },
           { status: 429 }
-        )
+        );
       }
-      if (error.message.includes('context length')) {
+      if (error.message.includes("context length")) {
         return NextResponse.json(
-          { error: 'Message too long. Please try a shorter message.' },
+          { error: "Message too long. Please try a shorter message." },
           { status: 400 }
-        )
+        );
       }
     }
 
     return NextResponse.json(
-      { error: 'Failed to process chat message' },
+      { error: "Failed to process chat message" },
       { status: 500 }
-    )
+    );
   }
 }
 
@@ -228,9 +275,9 @@ export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
     },
-  })
+  });
 }
