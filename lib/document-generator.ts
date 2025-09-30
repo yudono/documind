@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
-import { Document, Page, pdf, renderToBuffer } from '@react-pdf/renderer';
-import Html from 'react-pdf-html';
+import { Document, Page, renderToBuffer } from '@react-pdf/renderer';
+import { Html } from 'react-pdf-html';
 import React from 'react';
 
 export interface DocumentGenerationOptions {
@@ -8,109 +8,124 @@ export interface DocumentGenerationOptions {
   author?: string;
   subject?: string;
   keywords?: string[];
-  format: 'pdf' | 'excel' | 'html' | 'docx';
+  format: "pdf" | "excel" | "html" | "docx";
   content: string;
   data?: any[];
-  template?: 'report' | 'table' | 'presentation' | 'custom';
+  template?: "report" | "table" | "presentation" | "custom";
 }
 
 export class DocumentGenerator {
-  
   async generatePDF(options: DocumentGenerationOptions): Promise<Buffer> {
-    const { title = 'Generated Document', author = 'Document Assistant', content } = options;
-    
-    // Create HTML structure for PDF generation
-    const htmlContent = `
-      <html>
-        <head>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              margin: 20px;
-              line-height: 1.6;
-            }
-            h1 {
-              color: #333;
-              font-size: 24px;
-              margin-bottom: 20px;
-            }
-            p {
-              font-size: 12px;
-              margin-bottom: 10px;
-            }
-          </style>
-        </head>
-        <body>
-          <h1>${title}</h1>
-          <div>${content}</div>
-        </body>
-      </html>
-    `;
-    
-    // Create PDF document using react-pdf-html
-    const MyDocument = React.createElement(Document, {
-      title,
-      author,
-      subject: options.subject || '',
-      keywords: options.keywords?.join(', ') || '',
-      creator: 'Document Assistant'
-    }, 
-      React.createElement(Page, { size: 'A4', style: { padding: 30 } },
-        React.createElement(Html, null, htmlContent)
-      )
-    );
-    
-    const pdfBuffer = await renderToBuffer(MyDocument);
-    return pdfBuffer;
+    const {
+      title = "Generated Document",
+      author = "Document Assistant",
+      content,
+    } = options;
+
+    try {
+      // Clean the content to avoid double HTML wrapping
+      let cleanContent = content;
+      if (content.includes("<html>")) {
+        // Extract content from body if it's already wrapped in HTML
+        const bodyMatch = content.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+        if (bodyMatch) {
+          cleanContent = bodyMatch[1];
+        }
+      }
+
+      // Create minimal HTML structure for react-pdf-html without custom fonts
+      const htmlContent = `
+        <html>
+          <body>
+            <h1>${title}</h1>
+            ${cleanContent}
+          </body>
+        </html>
+      `;
+
+      // Create PDF document using react-pdf-html
+      const MyDocument = React.createElement(
+        Document,
+        {
+          title,
+          author,
+          creator: "Document Assistant",
+        },
+        React.createElement(
+          Page,
+          {
+            size: "A4",
+            style: {
+              padding: 30,
+            },
+          },
+          React.createElement(Html, null, htmlContent)
+        )
+      );
+
+      const pdfBuffer = await renderToBuffer(MyDocument);
+      return pdfBuffer;
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      throw new Error(
+        `Failed to generate PDF: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
   }
-  
+
   async generateExcel(options: DocumentGenerationOptions): Promise<Buffer> {
-    const { title = 'Generated Document', data = [], content } = options;
-    
+    const { title = "Generated Document", data = [], content } = options;
+
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'Document Assistant';
+    workbook.creator = "Document Assistant";
     workbook.created = new Date();
-    
+
     const worksheet = workbook.addWorksheet(title);
-    
+
     if (data.length > 0) {
       // If data is provided, create a table
       const headers = Object.keys(data[0]);
       worksheet.addRow(headers);
-      
-      data.forEach(row => {
-        const values = headers.map(header => row[header]);
+
+      data.forEach((row) => {
+        const values = headers.map((header) => row[header]);
         worksheet.addRow(values);
       });
-      
+
       // Style the header row
       const headerRow = worksheet.getRow(1);
       headerRow.font = { bold: true };
       headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE0E0E0" },
       };
     } else {
       // If no data, add content as text
-      const lines = content.split('\n');
+      const lines = content.split("\n");
       lines.forEach((line, index) => {
         worksheet.addRow([line]);
       });
     }
-    
+
     // Auto-fit columns
-    worksheet.columns.forEach(column => {
+    worksheet.columns.forEach((column) => {
       column.width = 15;
     });
-    
+
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
   }
-  
+
   async generateHTML(options: DocumentGenerationOptions): Promise<string> {
-    const { title = 'Generated Document', content, template = 'report' } = options;
-    
+    const {
+      title = "Generated Document",
+      content,
+      template = "report",
+    } = options;
+
     const templates = {
       report: `
         <!DOCTYPE html>
@@ -129,7 +144,7 @@ export class DocumentGenerator {
         <body>
           <h1>${title}</h1>
           <div class="content">
-            ${content.replace(/\n/g, '<br>')}
+            ${content.replace(/\n/g, "<br>")}
           </div>
           <div class="footer">
             Generated by Document Assistant on ${new Date().toLocaleDateString()}
@@ -154,7 +169,7 @@ export class DocumentGenerator {
         </head>
         <body>
           <h1>${title}</h1>
-          <div>${content.replace(/\n/g, '<br>')}</div>
+          <div>${content.replace(/\n/g, "<br>")}</div>
         </body>
         </html>
       `,
@@ -176,7 +191,7 @@ export class DocumentGenerator {
           <div class="slide">
             <h1>${title}</h1>
             <div class="content">
-              ${content.replace(/\n/g, '<br>')}
+              ${content.replace(/\n/g, "<br>")}
             </div>
           </div>
         </body>
@@ -196,29 +211,32 @@ export class DocumentGenerator {
         </head>
         <body>
           <h1>${title}</h1>
-          <div>${content.replace(/\n/g, '<br>')}</div>
+          <div>${content.replace(/\n/g, "<br>")}</div>
         </body>
         </html>
-      `
+      `,
     };
-    
+
     return templates[template] || templates.custom;
   }
-  
-  async generateAdvancedPDF(options: DocumentGenerationOptions): Promise<Buffer> {
+
+  async generateAdvancedPDF(
+    options: DocumentGenerationOptions
+  ): Promise<Buffer> {
     // Use the same HTML to PDF conversion as generatePDF
     return this.generatePDF(options);
   }
-  
+
   async generate(options: DocumentGenerationOptions): Promise<Buffer | string> {
     switch (options.format) {
-      case 'pdf':
-        return options.template === 'custom' || options.template === 'presentation' 
+      case "pdf":
+        return options.template === "custom" ||
+          options.template === "presentation"
           ? await this.generateAdvancedPDF(options)
           : await this.generatePDF(options);
-      case 'excel':
+      case "excel":
         return await this.generateExcel(options);
-      case 'html':
+      case "html":
         return await this.generateHTML(options);
       default:
         throw new Error(`Unsupported format: ${options.format}`);

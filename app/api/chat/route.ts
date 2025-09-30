@@ -101,76 +101,63 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Check if this is a document generation request
-    const isDocumentRequest = documentRequest || 
-      message.toLowerCase().includes('generate document') ||
-      message.toLowerCase().includes('buat dokumen') ||
-      message.toLowerCase().includes('create document') ||
-      message.toLowerCase().includes('buatkan dokumen')
-
     let response: string
     let documentFile: any = null
 
-    if (isDocumentRequest) {
-      // Generate document using Groq AI
-      const documentContent = await generateDocument(message, context)
-      
-      // Create a mock document file response
-      documentFile = {
-        name: `Generated_Document_${Date.now()}.docx`,
-        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        size: Math.floor(Math.random() * 50000) + 10000, // Random size between 10KB-60KB
-        url: '#', // In a real implementation, this would be the S3 URL
-        content: documentContent,
-        generatedAt: new Date().toISOString()
-      }
+    // Always use the agent for processing - let the agent decide whether to generate documents
+    let messages: Array<{role: 'system' | 'user' | 'assistant', content: string}> = [
+      {
+        role: 'system' as const,
+        content: 'You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.'
+      },
+      ...(context ? [{ role: 'user' as const, content: `Context: ${context}` }] : []),
+      { role: 'user' as const, content: message }
+    ]
 
-      response = `I've generated a document based on your request. The document contains:\n\n${documentContent.substring(0, 200)}...\n\nYou can download the complete document using the button below.`
-    } else {
-      // Regular chat completion using Groq AI
-      let messages: Array<{role: 'system' | 'user' | 'assistant', content: string}> = [
+    // If sessionId is provided, get previous messages for context
+    if (sessionId) {
+      const previousMessages = await prisma.chatMessage.findMany({
+        where: { sessionId: sessionId },
+        orderBy: { createdAt: "asc" },
+        take: 10, // Limit to last 10 messages for context
+      });
+
+      messages = [
         {
           role: 'system' as const,
           content: 'You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.'
         },
         ...(context ? [{ role: 'user' as const, content: `Context: ${context}` }] : []),
+        ...previousMessages.slice(-9).map((msg: any) => ({
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+        })),
         { role: 'user' as const, content: message }
       ]
+    }
 
-      // If sessionId is provided, get previous messages for context
-      if (sessionId) {
-        const previousMessages = await prisma.chatMessage.findMany({
-          where: { sessionId: sessionId },
-          orderBy: { createdAt: "asc" },
-          take: 10, // Limit to last 10 messages for context
-        });
+    const agentResponse = await generateChatCompletionWithAgent(messages, {
+      userId: user.id,
+      sessionId: sessionId,
+      useSemanticSearch: false,
+      documentIds: context ? [] : undefined,
+      conversationContext: context
+    })
 
-        messages = [
-          {
-            role: 'system' as const,
-            content: 'You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.'
-          },
-          ...(context ? [{ role: 'user' as const, content: `Context: ${context}` }] : []),
-          ...previousMessages.slice(-9).map((msg: any) => ({
-            role: msg.role as "user" | "assistant",
-            content: msg.content,
-          })),
-          { role: 'user' as const, content: message }
-        ]
-      }
-
-      const agentResponse = await generateChatCompletionWithAgent(messages, {
-        userId: user.id,
-        documentIds: context ? [] : undefined // Pass empty array if context exists, undefined otherwise
-      })
-
-      // Handle different response types from the agent
-      if (typeof agentResponse === 'string') {
-        response = agentResponse
-      } else {
-        response = agentResponse.response
-        if (agentResponse.documentFile) {
-          documentFile = agentResponse.documentFile
+    // Handle different response types from the agent
+    if (typeof agentResponse === 'string') {
+      response = agentResponse
+    } else {
+      response = agentResponse.response
+      if (agentResponse.documentFile) {
+        // Convert PDF buffer to base64 data URL for download
+        const base64Data = agentResponse.documentFile.buffer.toString('base64')
+        documentFile = {
+          name: agentResponse.documentFile.filename,
+          type: agentResponse.documentFile.mimeType,
+          size: agentResponse.documentFile.buffer.length,
+          url: `data:${agentResponse.documentFile.mimeType};base64,${base64Data}`,
+          generatedAt: new Date().toISOString()
         }
       }
     }

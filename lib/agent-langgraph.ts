@@ -60,26 +60,28 @@ export class LangGraphDocumentAgent {
   }
 
   private buildGraph() {
+    // Bind methods to preserve 'this' context
+    const retrieveContextNode = this.retrieveContextNode.bind(this);
+    const generateResponseNode = this.generateResponseNode.bind(this);
+    const decideDocumentGenerationNode =
+      this.decideDocumentGenerationNode.bind(this);
+    const generateDocumentNode = this.generateDocumentNode.bind(this);
+    const saveConversationNode = this.saveConversationNode.bind(this);
+    const shouldGenerateDocument = this.shouldGenerateDocument.bind(this);
+
     const workflow = new StateGraph(AgentStateAnnotation)
-      .addNode("retrieveContext", this.retrieveContextNode.bind(this))
-      .addNode("generateResponse", this.generateResponseNode.bind(this))
-      .addNode(
-        "decideDocumentGeneration",
-        this.decideDocumentGenerationNode.bind(this)
-      )
-      .addNode("generateDocument", this.generateDocumentNode.bind(this))
-      .addNode("saveConversation", this.saveConversationNode.bind(this))
+      .addNode("retrieveContext", retrieveContextNode)
+      .addNode("generateResponse", generateResponseNode)
+      .addNode("decideDocumentGeneration", decideDocumentGenerationNode)
+      .addNode("generateDocument", generateDocumentNode)
+      .addNode("saveConversation", saveConversationNode)
       .addEdge(START, "retrieveContext")
       .addEdge("retrieveContext", "generateResponse")
       .addEdge("generateResponse", "decideDocumentGeneration")
-      .addConditionalEdges(
-        "decideDocumentGeneration",
-        this.shouldGenerateDocument.bind(this),
-        {
-          generateDocument: "generateDocument",
-          saveConversation: "saveConversation",
-        }
-      )
+      .addConditionalEdges("decideDocumentGeneration", shouldGenerateDocument, {
+        generateDocument: "generateDocument",
+        saveConversation: "saveConversation",
+      })
       .addEdge("generateDocument", "saveConversation")
       .addEdge("saveConversation", END);
 
@@ -219,40 +221,43 @@ When generating documents, please:
     state: AgentState
   ): Promise<Partial<AgentState>> {
     try {
-      // Use AI to analyze if the response should be converted to a document
-      const decisionMessages = [
-        new SystemMessage(`You are a document generation decision maker. Analyze the AI response and determine if it should be converted to a document file.
+      console.log("Deciding whether to generate document...");
 
-Consider generating a document if the response:
-1. Contains structured content like reports, analyses, or formal documents
-2. Has multiple sections, headings, or organized information
-3. Would benefit from being saved as a PDF for reference
-4. Contains tables, lists, or formatted content
-5. Is a comprehensive answer that users might want to save
+      if (!this.llm) {
+        console.error("LLM not initialized");
+        return { shouldGenerateDoc: false };
+      }
 
-Respond with ONLY "YES" if a document should be generated, or "NO" if it should remain as a chat response.
+      const prompt = `Based on the following AI response, determine if a document should be generated.
+      
+      AI Response: ${state.aiResponse}
+      
+      Generate a document if the response contains:
+      - Structured information that would benefit from formatting (reports, summaries, lists)
+      - Data that could be presented in a table or organized format
+      - Content that the user might want to save or share
+      
+      Do NOT generate a document for:
+      - Simple conversational responses
+      - Short answers or confirmations
+      - Error messages or clarifications
+      
+      Respond with only "yes" or "no".`;
 
-AI Response to analyze:
-${state.aiResponse}`),
-        new HumanMessage(
-          "Should this response be converted to a document? Answer YES or NO only."
-        ),
-      ];
+      const decision = await this.llm.invoke(prompt);
+      const shouldGenerate = decision.content
+        .toString()
+        .toLowerCase()
+        .includes("yes");
 
-      const decisionResponse = await this.llm.invoke(decisionMessages);
-      const decision = (decisionResponse.content as string)
-        .trim()
-        .toUpperCase();
+      console.log(
+        `Document generation decision: ${shouldGenerate ? "yes" : "no"}`
+      );
 
-      return {
-        shouldGenerateDoc: decision === "YES",
-      };
+      return { shouldGenerateDoc: shouldGenerate };
     } catch (error) {
       console.error("Error in document generation decision:", error);
-      // Default to not generating document on error
-      return {
-        shouldGenerateDoc: false,
-      };
+      return { shouldGenerateDoc: false };
     }
   }
 
@@ -272,9 +277,29 @@ ${state.aiResponse}`),
     try {
       const documentGenerator = new DocumentGenerator();
 
+      // Ensure the content is properly formatted HTML
+      let htmlContent = state.aiResponse;
+      if (!htmlContent.includes("<html>") && !htmlContent.includes("<body>")) {
+        htmlContent = `
+          <html>
+            <head>
+              <title>AI Generated Document</title>
+              <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; margin: 20px; }
+                h1, h2, h3 { color: #333; }
+                p { margin-bottom: 10px; }
+              </style>
+            </head>
+            <body>
+              ${htmlContent}
+            </body>
+          </html>
+        `;
+      }
+
       const buffer = await documentGenerator.generatePDF({
         format: "pdf",
-        content: state.aiResponse,
+        content: htmlContent,
         title: "AI Generated Document",
       });
 
