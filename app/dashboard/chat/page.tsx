@@ -507,6 +507,7 @@ export default function ChatPage() {
           message: userMessage.content,
           context: context,
           documentRequest: false,
+          sessionId: currentSession?.id, // Pass the current session ID
         }),
       });
 

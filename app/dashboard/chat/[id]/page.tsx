@@ -180,14 +180,15 @@ export default function ChatSessionPage() {
     setMessages(prev => [...prev, typingMessage]);
 
     try {
-      const response = await fetch(`/api/chat-sessions/${sessionId}/messages`, {
+      const response = await fetch('/api/chat', {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           message: inputMessage,
-          templateId: templateId,
+          sessionId: sessionId,
+          documentRequest: false,
         }),
       });
 

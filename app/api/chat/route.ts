@@ -24,10 +24,28 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { message, context, documentRequest } = body
+    const { message, context, documentRequest, sessionId } = body
 
     if (!message) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+    }
+
+    // Verify the chat session exists and belongs to the user if sessionId is provided
+    let chatSession = null;
+    if (sessionId) {
+      chatSession = await prisma.chatSession.findFirst({
+        where: {
+          id: sessionId,
+          userId: user.id,
+        },
+      });
+
+      if (!chatSession) {
+        return NextResponse.json(
+          { error: 'Chat session not found' },
+          { status: 404 }
+        );
+      }
     }
 
     // Check credit balance and consume credits
@@ -71,6 +89,18 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
+    // Save user message to session if sessionId is provided
+    let userMessage = null;
+    if (sessionId) {
+      userMessage = await prisma.chatMessage.create({
+        data: {
+          content: message,
+          role: "user",
+          sessionId: sessionId,
+        },
+      });
+    }
+
     // Check if this is a document generation request
     const isDocumentRequest = documentRequest || 
       message.toLowerCase().includes('generate document') ||
@@ -98,7 +128,7 @@ export async function POST(request: NextRequest) {
       response = `I've generated a document based on your request. The document contains:\n\n${documentContent.substring(0, 200)}...\n\nYou can download the complete document using the button below.`
     } else {
       // Regular chat completion using Groq AI
-      const messages = [
+      let messages: Array<{role: 'system' | 'user' | 'assistant', content: string}> = [
         {
           role: 'system' as const,
           content: 'You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.'
@@ -107,7 +137,49 @@ export async function POST(request: NextRequest) {
         { role: 'user' as const, content: message }
       ]
 
+      // If sessionId is provided, get previous messages for context
+      if (sessionId) {
+        const previousMessages = await prisma.chatMessage.findMany({
+          where: { sessionId: sessionId },
+          orderBy: { createdAt: "asc" },
+          take: 10, // Limit to last 10 messages for context
+        });
+
+        messages = [
+          {
+            role: 'system' as const,
+            content: 'You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.'
+          },
+          ...(context ? [{ role: 'user' as const, content: `Context: ${context}` }] : []),
+          ...previousMessages.slice(-9).map((msg: any) => ({
+            role: msg.role as "user" | "assistant",
+            content: msg.content,
+          })),
+          { role: 'user' as const, content: message }
+        ]
+      }
+
       response = await generateChatCompletion(messages)
+    }
+
+    // Save AI response to session if sessionId is provided
+    let assistantMessage = null;
+    if (sessionId) {
+      assistantMessage = await prisma.chatMessage.create({
+        data: {
+          content: response,
+          role: "assistant",
+          sessionId: sessionId,
+        },
+      });
+
+      // Update chat session timestamp
+      await prisma.chatSession.update({
+        where: { id: sessionId },
+        data: {
+          updatedAt: new Date(),
+        },
+      });
     }
 
     // Get updated credit balance
@@ -122,6 +194,7 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
       userId: user.id,
       creditBalance: updatedCredit?.balance || 0,
+      messageId: assistantMessage?.id,
     })
 
   } catch (error) {
