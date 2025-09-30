@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useUserCredit } from "@/hooks/useUserCredit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,8 +64,11 @@ interface Plan {
 
 export default function BillingPage() {
   const [currentPlan] = useState("Pro");
-  const [currentCredits] = useState(3247);
-  const [dailyCredits] = useState(500); // For free tier daily reset
+  const { userCredit, loading, error } = useUserCredit();
+  
+  // Use real credit data or fallback to defaults
+  const currentCredits = userCredit?.balance || 0;
+  const dailyCredits = userCredit?.dailyLimit || 500;
 
   // Mock credit usage data
   const creditUsage: CreditUsage[] = [
@@ -264,9 +268,19 @@ export default function BillingPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-primary mb-2">
-                  {currentCredits.toLocaleString()} Credits
-                </div>
+                {loading ? (
+                  <div className="text-3xl font-bold text-muted-foreground mb-2">
+                    Loading...
+                  </div>
+                ) : error ? (
+                  <div className="text-3xl font-bold text-destructive mb-2">
+                    Error loading credits
+                  </div>
+                ) : (
+                  <div className="text-3xl font-bold text-primary mb-2">
+                    {currentCredits.toLocaleString()} Credits
+                  </div>
+                )}
                 <p className="text-sm text-muted-foreground">
                   {currentPlan === "Free"
                     ? `Resets daily • ${dailyCredits} credits per day`
