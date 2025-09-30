@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { generateChatCompletion } from '@/lib/groq';
 
 export async function POST(
   request: NextRequest,
@@ -70,6 +71,44 @@ export async function POST(
         content: processedPrompt,
         role: 'user',
         sessionId: chatSession.id,
+      },
+    });
+
+    // Generate AI response using Groq
+    const systemPrompt = `You are a helpful AI assistant for document generation. The user has requested to generate a document based on a template: "${template.name}". Description: ${template.description}. Please provide a comprehensive response based on their request.`;
+
+    const groqMessages = [
+      {
+        role: 'system' as const,
+        content: systemPrompt,
+      },
+      {
+        role: 'user' as const,
+        content: processedPrompt,
+      },
+    ];
+
+    // Get AI response using Groq
+    const aiResponse = await generateChatCompletion(groqMessages, {
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.7,
+      max_tokens: 1500,
+    });
+
+    // Save AI response
+    await prisma.chatMessage.create({
+      data: {
+        content: aiResponse,
+        role: 'assistant',
+        sessionId: chatSession.id,
+      },
+    });
+
+    // Update chat session timestamp
+    await prisma.chatSession.update({
+      where: { id: chatSession.id },
+      data: {
+        updatedAt: new Date(),
       },
     });
 

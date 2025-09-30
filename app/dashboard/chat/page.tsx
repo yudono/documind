@@ -436,7 +436,7 @@ export default function ChatPage() {
     
     try {
       setIsLoadingCredits(true);
-      const response = await fetch('/api/credits/balance');
+      const response = await fetch('/api/credits');
       if (response.ok) {
         const data = await response.json();
         setCreditBalance(data.balance || 0);
@@ -492,36 +492,47 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, typingMessage]);
 
     try {
-      // Consume 1 credit for the message
-      const creditResponse = await fetch('/api/credits/consume', {
+      // Prepare context from selected documents
+      const context = selectedDocuments.length > 0 
+        ? `Referenced documents: ${selectedDocuments.map(doc => doc.name).join(', ')}`
+        : undefined;
+
+      // Make API call to the main chat endpoint (which handles credit consumption internally)
+      const messageResponse = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ amount: 1 }),
+        body: JSON.stringify({
+          message: userMessage.content,
+          context: context,
+          documentRequest: false,
+        }),
       });
 
-      if (!creditResponse.ok) {
-        throw new Error('Failed to consume credits');
+      if (!messageResponse.ok) {
+        throw new Error('Failed to send message to AI');
       }
 
-      // Update credit balance
-      setCreditBalance(prev => Math.max(0, prev - 1));
+      const aiResponse = await messageResponse.json();
+      
+      // Update credit balance from the response
+      if (aiResponse.creditBalance !== undefined) {
+        setCreditBalance(aiResponse.creditBalance);
+      }
+      
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        content: aiResponse.response,
+        role: "assistant",
+        timestamp: new Date(),
+        documentFile: aiResponse.documentFile,
+      };
 
-      // Simulate AI response (replace with actual API call)
-      setTimeout(() => {
-        const assistantMessage: Message = {
-          id: `assistant-${Date.now()}`,
-          content: `I understand your message: "${input}". This is a simulated response. In a real implementation, this would be connected to your AI service.`,
-          role: "assistant",
-          timestamp: new Date(),
-        };
-
-        setMessages((prev) =>
-          prev.filter((msg) => msg.id !== "typing").concat(assistantMessage)
-        );
-        setIsLoading(false);
-      }, 2000);
+      setMessages((prev) =>
+        prev.filter((msg) => msg.id !== "typing").concat(assistantMessage)
+      );
+      setIsLoading(false);
 
     } catch (error) {
       console.error('Error sending message:', error);
