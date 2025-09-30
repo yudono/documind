@@ -112,33 +112,112 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        supportedFormats: ['ai-format', 'parse-markdown', 'parse-json', 'parse-plain', 'auto'],
-        defaultParsingOptions: {
-          preserveFormatting: true,
-          extractTables: true,
-          extractLists: true,
-          extractImages: false,
-          defaultFontSize: 12,
-          defaultAlignment: 'left'
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        userCredit: true,
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Check credit balance
+    let userCredit = user.userCredit;
+    if (!userCredit) {
+      // Initialize user credit if it doesn't exist
+      userCredit = await prisma.userCredit.create({
+        data: {
+          userId: user.id,
+          balance: 500, // Default daily credits for free plan
+          dailyLimit: 500,
+          lastResetDate: new Date(),
         },
-        capabilities: {
-          aiFormatting: true,
-          markdownParsing: true,
-          jsonParsing: true,
-          plainTextParsing: true,
-          autoDetection: true,
-          structuredOutput: true
-        }
+      });
+    }
+
+    if (userCredit.balance < 1) {
+      return NextResponse.json(
+        { error: 'Insufficient credits' },
+        { status: 400 }
+      );
+    }
+
+    // Consume 1 credit for the AI document format request
+    await prisma.$transaction([
+      prisma.userCredit.update({
+        where: { userId: user.id },
+        data: {
+          balance: { decrement: 1 },
+          totalSpent: { increment: 1 },
+        },
+      }),
+      prisma.creditTransaction.create({
+        data: {
+          userId: user.id,
+          type: 'spend',
+          amount: -1,
+          description: 'AI document format',
+          reference: `ai_format_${Date.now()}`,
+        },
+      }),
+    ]);
+
+    // Get updated credit balance
+    const updatedCredit = await prisma.userCredit.findUnique({
+      where: { userId: user.id },
+    });
+
+    // Return AI document formatting options
+    const formatOptions = [
+      {
+        id: 'summary',
+        name: 'Summary',
+        description: 'Generate a concise summary of the document',
+        icon: '📄'
+      },
+      {
+        id: 'bullet-points',
+        name: 'Bullet Points',
+        description: 'Convert content into organized bullet points',
+        icon: '•'
+      },
+      {
+        id: 'outline',
+        name: 'Outline',
+        description: 'Create a structured outline of the document',
+        icon: '📋'
+      },
+      {
+        id: 'key-insights',
+        name: 'Key Insights',
+        description: 'Extract key insights and important information',
+        icon: '💡'
+      },
+      {
+        id: 'action-items',
+        name: 'Action Items',
+        description: 'Identify actionable tasks and next steps',
+        icon: '✅'
+      },
+      {
+        id: 'questions',
+        name: 'Questions',
+        description: 'Generate relevant questions based on the content',
+        icon: '❓'
       }
+    ];
+
+    return NextResponse.json({
+      formatOptions,
+      creditBalance: updatedCredit?.balance || 0,
     });
 
   } catch (error) {
-    console.error('Error retrieving formatting options:', error);
+    console.error('Error in ai-document-format:', error);
     return NextResponse.json(
-      { error: 'Failed to retrieve formatting options' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

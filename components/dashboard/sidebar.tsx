@@ -15,7 +15,9 @@ import {
   HelpCircle,
   CreditCard,
   Layout,
+  Shield,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -30,6 +32,31 @@ const navigation = [
 export function DashboardSidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkAdminRole = async () => {
+      if (session?.user?.email) {
+        try {
+          const response = await fetch('/api/user/profile');
+          if (response.ok) {
+            const userData = await response.json();
+            setIsAdmin(userData.role === 'admin');
+          }
+        } catch (error) {
+          console.error('Error checking admin role:', error);
+        }
+      }
+    };
+
+    checkAdminRole();
+  }, [session]);
+
+  const adminNavigation = [
+    { name: "Admin Panel", href: "/admin/credits", icon: Shield },
+  ];
+
+  const allNavigation = isAdmin ? [...navigation, ...adminNavigation] : navigation;
 
   return (
     <div className="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200">
@@ -42,7 +69,7 @@ export function DashboardSidebar() {
         </div>
 
         <nav className="flex-1 p-4 space-y-2">
-          {navigation.map((item) => {
+          {allNavigation.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
 

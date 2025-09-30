@@ -1,214 +1,199 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document Generation Test</title>
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        max-width: 800px;
-        margin: 0 auto;
-        padding: 20px;
-      }
-      .test-section {
-        margin: 20px 0;
-        padding: 15px;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-      }
-      button {
-        background: #007bff;
-        color: white;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 5px;
-        cursor: pointer;
-        margin: 5px;
-      }
-      button:hover {
-        background: #0056b3;
-      }
-      .result {
-        margin-top: 10px;
-        padding: 10px;
-        border-radius: 5px;
-      }
-      .success {
-        background: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
-      }
-      .error {
-        background: #f8d7da;
-        color: #721c24;
-        border: 1px solid #f5c6cb;
-      }
-      .info {
-        background: #d1ecf1;
-        color: #0c5460;
-        border: 1px solid #bee5eb;
-      }
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
     </style>
-  </head>
-  <body>
+</head>
+<body>
     <h1>Document Generation Test</h1>
-    <p>
-      This page tests the document generation functionality. Make sure you're
-      logged in to the application first.
-    </p>
-
+    <p>This page tests the document generation functionality. Make sure you're logged in to the application first.</p>
+    
     <div class="test-section">
-      <h3>Test 1: Basic PDF Generation</h3>
-      <button onclick="testBasicPDF()">Test Basic PDF</button>
-      <div id="basic-pdf-result" class="result" style="display: none"></div>
+        <h3>Test 1: Basic PDF Generation</h3>
+        <button onclick="testBasicPDF()">Test Basic PDF</button>
+        <div id="basic-pdf-result" class="result" style="display: none;"></div>
     </div>
-
+    
     <div class="test-section">
-      <h3>Test 2: AI-Enhanced PDF Generation</h3>
-      <button onclick="testAIPDF()">Test AI-Enhanced PDF</button>
-      <div id="ai-pdf-result" class="result" style="display: none"></div>
+        <h3>Test 2: AI-Enhanced PDF Generation</h3>
+        <button onclick="testAIPDF()">Test AI-Enhanced PDF</button>
+        <div id="ai-pdf-result" class="result" style="display: none;"></div>
     </div>
-
+    
     <div class="test-section">
-      <h3>Test 3: Excel Generation</h3>
-      <button onclick="testExcel()">Test Excel Generation</button>
-      <div id="excel-result" class="result" style="display: none"></div>
+        <h3>Test 3: Excel Generation</h3>
+        <button onclick="testExcel()">Test Excel Generation</button>
+        <div id="excel-result" class="result" style="display: none;"></div>
     </div>
-
+    
     <div class="test-section">
-      <h3>Test 4: HTML Generation</h3>
-      <button onclick="testHTML()">Test HTML Generation</button>
-      <div id="html-result" class="result" style="display: none"></div>
+        <h3>Test 4: HTML Generation</h3>
+        <button onclick="testHTML()">Test HTML Generation</button>
+        <div id="html-result" class="result" style="display: none;"></div>
     </div>
 
     <script>
-      async function testDocumentGeneration(options, resultElementId) {
-        const resultElement = document.getElementById(resultElementId);
-        resultElement.style.display = "block";
-        resultElement.className = "result info";
-        resultElement.innerHTML = "Testing document generation...";
+        async function testDocumentGeneration(options, resultElementId) {
+            const resultElement = document.getElementById(resultElementId);
+            resultElement.style.display = 'block';
+            resultElement.className = 'result info';
+            resultElement.innerHTML = 'Testing document generation...';
+            
+            try {
+                console.log('Testing document generation with options:', options);
+                
+                const response = await fetch('/api/generate-document', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(options),
+                });
 
-        try {
-          console.log("Testing document generation with options:", options);
+                console.log('Response status:', response.status);
+                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`${response.status}: ${response.statusText} - ${errorText}`);
+                }
 
-          const response = await fetch("/api/generate-document", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(options),
-          });
-
-          console.log("Response status:", response.status);
-          console.log(
-            "Response headers:",
-            Object.fromEntries(response.headers.entries())
-          );
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(
-              `${response.status}: ${response.statusText} - ${errorText}`
-            );
-          }
-
-          const blob = await response.blob();
-          console.log("Generated document blob size:", blob.size, "bytes");
-          console.log("Generated document type:", blob.type);
-
-          // Create download link
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.style.display = "none";
-          a.href = url;
-          a.download = `${options.title || "test-document"}.${
-            options.format === "excel" ? "xlsx" : options.format
-          }`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-
-          resultElement.className = "result success";
-          resultElement.innerHTML = `✅ Success! Generated ${options.format.toUpperCase()} document (${
-            blob.size
-          } bytes) and downloaded.`;
-        } catch (error) {
-          console.error("Document generation error:", error);
-          resultElement.className = "result error";
-          resultElement.innerHTML = `❌ Error: ${error.message}`;
+                const blob = await response.blob();
+                console.log('Generated document blob size:', blob.size, 'bytes');
+                console.log('Generated document type:', blob.type);
+                
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `${options.title || 'test-document'}.${options.format === 'excel' ? 'xlsx' : options.format}`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                resultElement.className = 'result success';
+                resultElement.innerHTML = `✅ Success! Generated ${options.format.toUpperCase()} document (${blob.size} bytes) and downloaded.`;
+                
+            } catch (error) {
+                console.error('Document generation error:', error);
+                resultElement.className = 'result error';
+                resultElement.innerHTML = `❌ Error: ${error.message}`;
+            }
         }
-      }
 
-      function testBasicPDF() {
-        const options = {
-          content:
-            "This is a test document content for debugging purposes. It contains multiple lines and should be formatted properly in the generated PDF document.\n\nThis is a second paragraph to test formatting.",
-          format: "pdf",
-          title: "Basic PDF Test",
-          template: "report",
-          useAIFormatting: false,
-          fontSize: 12,
-          fontFamily: "helvetica",
-          margins: { top: 20, right: 20, bottom: 20, left: 20 },
-          pageSize: "a4",
-          orientation: "portrait",
-          includeHeader: true,
-          includeFooter: true,
-          headerText: "Basic PDF Test",
-          footerText: "Generated by Document Assistant Test",
-        };
-        testDocumentGeneration(options, "basic-pdf-result");
-      }
+        function testBasicPDF() {
+            const options = {
+                content: "This is a test document content for debugging purposes. It contains multiple lines and should be formatted properly in the generated PDF document.\n\nThis is a second paragraph to test formatting.",
+                format: "pdf",
+                title: "Basic PDF Test",
+                template: "report",
+                useAIFormatting: false,
+                fontSize: 12,
+                fontFamily: "helvetica",
+                margins: { top: 20, right: 20, bottom: 20, left: 20 },
+                pageSize: "a4",
+                orientation: "portrait",
+                includeHeader: true,
+                includeFooter: true,
+                headerText: "Basic PDF Test",
+                footerText: "Generated by Document Assistant Test",
+            };
+            testDocumentGeneration(options, 'basic-pdf-result');
+        }
 
-      function testAIPDF() {
-        const options = {
-          content:
-            "Create a professional report about artificial intelligence in document processing. Include sections on benefits, challenges, and future trends.",
-          format: "pdf",
-          title: "AI-Enhanced PDF Test",
-          template: "report",
-          useAIFormatting: true,
-          fontSize: 12,
-          fontFamily: "helvetica",
-          margins: { top: 20, right: 20, bottom: 20, left: 20 },
-          pageSize: "a4",
-          orientation: "portrait",
-          includeHeader: true,
-          includeFooter: true,
-          headerText: "AI-Enhanced PDF Test",
-          footerText: "Generated by AI Document Assistant",
-        };
-        testDocumentGeneration(options, "ai-pdf-result");
-      }
+        function testAIPDF() {
+            const options = {
+                content: "Create a professional report about artificial intelligence in document processing. Include sections on benefits, challenges, and future trends.",
+                format: "pdf",
+                title: "AI-Enhanced PDF Test",
+                template: "report",
+                useAIFormatting: true,
+                fontSize: 12,
+                fontFamily: "helvetica",
+                margins: { top: 20, right: 20, bottom: 20, left: 20 },
+                pageSize: "a4",
+                orientation: "portrait",
+                includeHeader: true,
+                includeFooter: true,
+                headerText: "AI-Enhanced PDF Test",
+                footerText: "Generated by AI Document Assistant",
+            };
+            testDocumentGeneration(options, 'ai-pdf-result');
+        }
 
-      function testExcel() {
-        const options = {
-          content:
-            "Sample data for Excel generation:\nName, Age, Department\nJohn Doe, 30, Engineering\nJane Smith, 25, Marketing\nBob Johnson, 35, Sales",
-          format: "excel",
-          title: "Excel Test",
-          template: "table",
-          data: [
-            { Name: "John Doe", Age: 30, Department: "Engineering" },
-            { Name: "Jane Smith", Age: 25, Department: "Marketing" },
-            { Name: "Bob Johnson", Age: 35, Department: "Sales" },
-          ],
-        };
-        testDocumentGeneration(options, "excel-result");
-      }
+        function testExcel() {
+            const options = {
+                content: "Sample data for Excel generation:\nName, Age, Department\nJohn Doe, 30, Engineering\nJane Smith, 25, Marketing\nBob Johnson, 35, Sales",
+                format: "excel",
+                title: "Excel Test",
+                template: "table",
+                data: [
+                    { Name: "John Doe", Age: 30, Department: "Engineering" },
+                    { Name: "Jane Smith", Age: 25, Department: "Marketing" },
+                    { Name: "Bob Johnson", Age: 35, Department: "Sales" }
+                ]
+            };
+            testDocumentGeneration(options, 'excel-result');
+        }
 
-      function testHTML() {
-        const options = {
-          content:
-            "This is a test HTML document content. It should be formatted as a proper HTML document with styling and structure.",
-          format: "html",
-          title: "HTML Test",
-          template: "report",
-        };
-        testDocumentGeneration(options, "html-result");
-      }
+        function testHTML() {
+            const options = {
+                content: "This is a test HTML document content. It should be formatted as a proper HTML document with styling and structure.",
+                format: "html",
+                title: "HTML Test",
+                template: "report"
+            };
+            testDocumentGeneration(options, 'html-result');
+        }
     </script>
-  </body>
+</body>
 </html>

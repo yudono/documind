@@ -49,6 +49,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Chat session not found' }, { status: 404 });
     }
 
+    // Consume credits for user messages
+    if (role === 'user') {
+      // Check user's credit balance
+      const userCredit = await prisma.userCredit.findUnique({
+        where: { userId: user.id },
+      });
+
+      if (!userCredit || userCredit.balance < 1) {
+        return NextResponse.json(
+          { error: 'Insufficient credits' },
+          { status: 400 }
+        );
+      }
+
+      // Consume 1 credit for the message
+      await prisma.$transaction([
+        prisma.userCredit.update({
+          where: { userId: user.id },
+          data: {
+            balance: { decrement: 1 },
+            totalSpent: { increment: 1 },
+          },
+        }),
+        prisma.creditTransaction.create({
+          data: {
+            userId: user.id,
+            type: 'spend',
+            amount: -1,
+            description: 'Chat message',
+            reference: sessionId,
+          },
+        }),
+      ]);
+    }
+
     const message = await prisma.chatMessage.create({
       data: {
         content,

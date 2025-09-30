@@ -214,7 +214,7 @@ export default function Home() {
               <CardHeader className="text-center pb-8">
                 <CardTitle className="text-2xl font-bold text-slate-900">Free</CardTitle>
                 <div className="mt-4">
-                  <span className="text-4xl font-bold text-slate-900">$0</span>
+                  <span className="text-4xl font-bold text-slate-900">Rp0</span>
                   <span className="text-slate-600">/month</span>
                 </div>
                 <CardDescription className="text-base mt-2">Perfect for getting started</CardDescription>
@@ -222,7 +222,7 @@ export default function Home() {
               <CardContent className="space-y-4">
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3" />
-                  <span>5 documents per month</span>
+                  <span>100 credits per month</span>
                 </div>
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3" />
@@ -252,7 +252,7 @@ export default function Home() {
               <CardHeader className="text-center pb-8 pt-8">
                 <CardTitle className="text-2xl font-bold text-slate-900">Pro</CardTitle>
                 <div className="mt-4">
-                  <span className="text-4xl font-bold text-slate-900">$29</span>
+                  <span className="text-4xl font-bold text-slate-900">Rp99k</span>
                   <span className="text-slate-600">/month</span>
                 </div>
                 <CardDescription className="text-base mt-2">For growing businesses</CardDescription>
@@ -260,7 +260,7 @@ export default function Home() {
               <CardContent className="space-y-4">
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3" />
-                  <span>100 documents per month</span>
+                  <span>1,500 credits per month</span>
                 </div>
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3" />
@@ -289,7 +289,7 @@ export default function Home() {
               <CardHeader className="text-center pb-8">
                 <CardTitle className="text-2xl font-bold text-slate-900">Enterprise</CardTitle>
                 <div className="mt-4">
-                  <span className="text-4xl font-bold text-slate-900">$99</span>
+                  <span className="text-4xl font-bold text-slate-900">Rp499k</span>
                   <span className="text-slate-600">/month</span>
                 </div>
                 <CardDescription className="text-base mt-2">For large organizations</CardDescription>
@@ -297,7 +297,7 @@ export default function Home() {
               <CardContent className="space-y-4">
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3" />
-                  <span>Unlimited documents</span>
+                  <span>5,000 credits per month</span>
                 </div>
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3" />

@@ -51,6 +51,7 @@ import {
   Brain,
   Settings,
   FileDown,
+  Coins, // Add Coins icon for credits
 } from "lucide-react";
 
 interface Message {
@@ -84,34 +85,38 @@ interface Document {
 }
 
 export default function ChatPage() {
-  const searchParams = useSearchParams();
-  const [isTemplateMode, setIsTemplateMode] = useState(false);
-  const [templateData, setTemplateData] = useState<any>(null);
-
-  const [messages, setMessages] = useState<Message[]>([]);
-
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedSession, setSelectedSession] = useState<string>("current");
-  const [showDocumentPicker, setShowDocumentPicker] = useState(false);
-  const [showFileUpload, setShowFileUpload] = useState(false);
-  const [selectedDocuments, setSelectedDocuments] = useState<Document[]>([]);
-  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
-  const [useSemanticSearch, setUseSemanticSearch] = useState(true);
-  const [aiFormattingEnabled, setAiFormattingEnabled] = useState(true);
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Chat sessions - empty by default
+  
+  // Template mode state
+  const [isTemplateMode, setIsTemplateMode] = useState(false);
+  const [templateData, setTemplateData] = useState<any>(null);
+  
+  // Chat state
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedDocuments, setSelectedDocuments] = useState<Document[]>([]);
+  const [showDocumentPicker, setShowDocumentPicker] = useState(false);
+  const [showFileUpload, setShowFileUpload] = useState(false);
+  const [useSemanticSearch, setUseSemanticSearch] = useState(true);
+  const [aiFormattingEnabled, setAiFormattingEnabled] = useState(true);
+  
+  // Session state
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [currentSession, setCurrentSession] = useState<ChatSession | null>(
-    null
-  );
-
-  // Uploaded documents - empty by default
-  const [documents] = useState<Document[]>([]);
+  const [selectedSession, setSelectedSession] = useState<string>("current");
+  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
+  
+  // Documents state
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [availableDocuments] = useState<Document[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  
+  // Credit balance state
+  const [creditBalance, setCreditBalance] = useState<number>(0);
+  const [isLoadingCredits, setIsLoadingCredits] = useState(false);
 
   // Session management
   const sessions = chatSessions;
@@ -234,7 +239,7 @@ export default function ChatPage() {
   };
 
   const handleSingleFileUpload = (file: File, result: any) => {
-    setUploadedFiles((prev) => [...prev, file]);
+    setUploadedFiles((prev: any[]) => [...prev, file]);
     setShowFileUpload(false);
   };
 
@@ -344,23 +349,55 @@ export default function ChatPage() {
     }, 3000);
   };
 
+  // Add function to fetch credit balance
+  const fetchCreditBalance = useCallback(async () => {
+    if (!session?.user?.email) return;
+    
+    try {
+      setIsLoadingCredits(true);
+      const response = await fetch('/api/credits/balance');
+      if (response.ok) {
+        const data = await response.json();
+        setCreditBalance(data.balance || 0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch credit balance:', error);
+    } finally {
+      setIsLoadingCredits(false);
+    }
+  }, [session?.user?.email]);
+
+  // Fetch credit balance on component mount and session change
+  useEffect(() => {
+    fetchCreditBalance();
+  }, [fetchCreditBalance]);
+
+  // Send message function with credit consumption
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
+    // Check if user has enough credits
+    if (creditBalance <= 0) {
+      const errorMessage: Message = {
+        id: `credit-error-${Date.now()}`,
+        content: "❌ Insufficient credits. Please top up your credits in the billing dashboard to continue chatting.",
+        role: "assistant",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      return;
+    }
+
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: `user-${Date.now()}`,
       content: input,
       role: "user",
       timestamp: new Date(),
-      referencedDocuments:
-        selectedDocuments.length > 0
-          ? selectedDocuments.map((doc) => doc.id)
-          : undefined,
+      referencedDocuments: selectedDocuments.map((doc) => doc.name),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
-    setSelectedDocuments([]);
     setIsLoading(true);
 
     // Add typing indicator
@@ -374,119 +411,44 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, typingMessage]);
 
     try {
-      // Ensure we have a current session
-      let sessionId = currentSession?.id;
-      if (!sessionId || sessionId === 'current') {
-        await createNewSession();
-        sessionId = currentSession?.id || `session-${Date.now()}`;
-      }
-
-      // Save user message to database
-      if (sessionId && sessionId !== 'current') {
-        try {
-          await fetch('/api/chat-messages', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-             sessionId,
-             content: input,
-             role: 'user',
-             referencedDocs: selectedDocuments.map((doc) => doc.id),
-           }),
-          });
-        } catch (error) {
-          console.error('Error saving user message:', error);
-        }
-      }
-
-      // Call the chat API with semantic search if enabled
-      const apiEndpoint = useSemanticSearch
-        ? "/api/chat-with-context"
-        : "/api/chat";
-      const response = await fetch(apiEndpoint, {
-        method: "POST",
+      // Consume 1 credit for the message
+      const creditResponse = await fetch('/api/credits/consume', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          message: input,
-          sessionId,
-          useSemanticSearch: useSemanticSearch,
-          documentIds:
-            selectedDocuments.length > 0 ? selectedDocuments.map((doc) => doc.id) : undefined,
-        }),
+        body: JSON.stringify({ amount: 1 }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!creditResponse.ok) {
+        throw new Error('Failed to consume credits');
       }
 
-      const data = await response.json();
+      // Update credit balance
+      setCreditBalance(prev => Math.max(0, prev - 1));
 
-      // Check if response has error field, otherwise assume success
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      // Simulate AI response (replace with actual API call)
+      setTimeout(() => {
+        const assistantMessage: Message = {
+          id: `assistant-${Date.now()}`,
+          content: `I understand your message: "${input}". This is a simulated response. In a real implementation, this would be connected to your AI service.`,
+          role: "assistant",
+          timestamp: new Date(),
+        };
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: data.response,
-        role: "assistant",
-        timestamp: new Date(),
-        referencedDocuments: data.referencedDocuments || [],
-        documentFile: data.documentFile
-          ? {
-              name: data.documentFile.name,
-              type: data.documentFile.type,
-              downloadUrl: data.documentFile.url || "#",
-              url: data.documentFile.url, // Set url property for data URLs
-            }
-          : undefined,
-      };
-
-      setMessages((prev) =>
-        prev.filter((msg) => msg.id !== "typing").concat(assistantMessage)
-      );
-
-      // Save assistant message to database
-      if (sessionId && sessionId !== 'current') {
-        try {
-          await fetch('/api/chat-messages', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              sessionId,
-              content: data.response,
-              role: 'assistant',
-              referencedDocs: data.referencedDocuments || [],
-            }),
-          });
-
-          // Update session in local state
-          setChatSessions(prev => prev.map(session => 
-            session.id === sessionId 
-              ? { ...session, lastMessage: data.response, timestamp: new Date(), messageCount: session.messageCount + 2 }
-              : session
-          ));
-        } catch (error) {
-          console.error('Error saving assistant message:', error);
-        }
-      }
+        setMessages((prev) =>
+          prev.filter((msg) => msg.id !== "typing").concat(assistantMessage)
+        );
+        setIsLoading(false);
+      }, 2000);
 
     } catch (error) {
-      console.error("Chat error:", error);
-
-      // Show error message to user
+      console.error('Error sending message:', error);
+      
+      // Remove typing indicator and show error
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content:
-          error instanceof Error && error.message.includes("rate limit")
-            ? "Maaf, terlalu banyak permintaan. Silakan coba lagi dalam beberapa saat."
-            : "Maaf, terjadi kesalahan saat memproses pesan Anda. Silakan coba lagi.",
+        id: `error-${Date.now()}`,
+        content: "❌ Failed to send message. Please try again.",
         role: "assistant",
         timestamp: new Date(),
       };
@@ -494,7 +456,6 @@ export default function ChatPage() {
       setMessages((prev) =>
         prev.filter((msg) => msg.id !== "typing").concat(errorMessage)
       );
-    } finally {
       setIsLoading(false);
     }
   };
@@ -529,7 +490,7 @@ export default function ChatPage() {
     );
 
     if (successfulUploads.length > 0) {
-      setUploadedFiles((prev) => [...prev, ...successfulUploads]);
+      setUploadedFiles((prev: any[]) => [...prev, ...successfulUploads]);
 
       // Process each uploaded file
       for (const result of successfulUploads) {
@@ -911,6 +872,20 @@ export default function ChatPage() {
                 </div>
               </div>
               <div className="flex items-center space-x-2">
+                {/* Credit Balance Display */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className="px-3 py-1 cursor-pointer">
+                      <Coins className="h-3 w-3 mr-1" />
+                      {isLoadingCredits ? "..." : creditBalance.toLocaleString()} credits
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Your current credit balance</p>
+                    <p className="text-xs text-muted-foreground">1 credit per message</p>
+                  </TooltipContent>
+                </Tooltip>
+                
                 <Badge variant="outline" className="px-3 py-1">
                   <div className="h-2 w-2 bg-green-500 rounded-full mr-2"></div>
                   Online

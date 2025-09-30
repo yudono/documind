@@ -2,13 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { generateChatCompletion, generateDocument } from '@/lib/groq'
+import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
     const session = await getServerSession(authOptions)
-    if (!session?.user) {
+    if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        userCredit: true,
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     const body = await request.json()
@@ -17,6 +29,47 @@ export async function POST(request: NextRequest) {
     if (!message) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 })
     }
+
+    // Check credit balance and consume credits
+    let userCredit = user.userCredit;
+    if (!userCredit) {
+      // Initialize user credit if it doesn't exist
+      userCredit = await prisma.userCredit.create({
+        data: {
+          userId: user.id,
+          balance: 500, // Default daily credits for free plan
+          dailyLimit: 500,
+          lastResetDate: new Date(),
+        },
+      });
+    }
+
+    if (userCredit.balance < 1) {
+      return NextResponse.json(
+        { error: 'Insufficient credits' },
+        { status: 400 }
+      );
+    }
+
+    // Consume 1 credit for the chat request
+    await prisma.$transaction([
+      prisma.userCredit.update({
+        where: { userId: user.id },
+        data: {
+          balance: { decrement: 1 },
+          totalSpent: { increment: 1 },
+        },
+      }),
+      prisma.creditTransaction.create({
+        data: {
+          userId: user.id,
+          type: 'spend',
+          amount: -1,
+          description: 'Chat completion',
+          reference: `chat_${Date.now()}`,
+        },
+      }),
+    ]);
 
     // Check if this is a document generation request
     const isDocumentRequest = documentRequest || 
@@ -57,12 +110,18 @@ export async function POST(request: NextRequest) {
       response = await generateChatCompletion(messages)
     }
 
+    // Get updated credit balance
+    const updatedCredit = await prisma.userCredit.findUnique({
+      where: { userId: user.id },
+    });
+
     return NextResponse.json({
       success: true,
       response,
       documentFile,
       timestamp: new Date().toISOString(),
-      userId: (session.user as any).id,
+      userId: user.id,
+      creditBalance: updatedCredit?.balance || 0,
     })
 
   } catch (error) {

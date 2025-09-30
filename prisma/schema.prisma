@@ -44,14 +44,18 @@ model User {
   password      String?
   emailVerified DateTime?
   image         String?
+  role          String    @default("user") // "user" or "admin"
   accounts      Account[]
   sessions      Session[]
   documents     Document[]
   folders       Folder[]
   chatSessions  ChatSession[]
   templates     Template[]
+  templateGenerations TemplateGeneration[]
   userSettings  UserSettings?
   billing       Billing?
+  userCredit    UserCredit?
+  creditTransactions CreditTransaction[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -174,21 +178,96 @@ model Billing {
   updatedAt         DateTime @updatedAt
 }
 
-model Template {
+// Credit system models
+model UserCredit {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance       Int      @default(0) // Current credit balance
+  totalEarned   Int      @default(0) // Total credits earned (from subscriptions, top-ups)
+  totalSpent    Int      @default(0) // Total credits spent
+  dailyLimit    Int      @default(500) // Daily credit limit based on plan
+  lastResetDate DateTime @default(now()) // Last daily reset date
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model CreditTransaction {
   id          String   @id @default(cuid())
-  name        String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // 'earn', 'spend', 'topup', 'subscription', 'daily_reset'
+  amount      Int      // Positive for earning, negative for spending
+  description String   // Description of the transaction
+  reference   String?  // Reference ID (e.g., chat message ID, payment ID)
+  metadata    Json?    // Additional metadata
+  createdAt   DateTime @default(now())
+}
+
+model CreditPackage {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "500 Credits", "2000 Credits"
   description String?
-  type        String   // pptx, xlsx, docx, etc.
-  category    String?  // business, education, personal, etc.
-  url         String?  // S3 URL
-  key         String?  // S3 key
-  bucket      String?  // S3 bucket
-  size        Int?     // File size in bytes
-  thumbnail   String?  // Thumbnail image URL
-  isPublic    Boolean  @default(true) // Whether template is publicly available
-  downloadCount Int    @default(0)
-  userId      String?  // Optional: creator of the template
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  credits     Int      // Number of credits in the package
+  price       Float    // Price in USD
+  currency    String   @default("USD")
+  stripePriceId String? // Stripe price ID for one-time purchases
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SubscriptionPlan {
+  id              String   @id @default(cuid())
+  name            String   // "Free", "Pro", "Enterprise"
+  description     String?
+  dailyCredits    Int      // Daily credit allowance
+  monthlyCredits  Int      // Monthly credit allowance (for display)
+  price           Float    @default(0) // Monthly price in USD
+  currency        String   @default("USD")
+  stripePriceId   String?  // Stripe price ID for subscriptions
+  features        Json?    // JSON array of features
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Template {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  type          String   // pptx, xlsx, docx, etc.
+  category      String?  // business, education, personal, etc.
+  url           String?  // S3 URL for original template file
+  key           String?  // S3 key for original template file
+  bucket        String?  // S3 bucket
+  size          Int?     // File size in bytes
+  thumbnail     String?  // Thumbnail image URL
+  isPublic      Boolean  @default(true) // Whether template is publicly available
+  downloadCount Int      @default(0)
+  templateFields Json?   // JSON structure defining form fields and placeholders
+  previewUrl    String?  // URL for template preview/sample
+  instructions  String?  // Instructions for using the template
+  userId        String?  // Optional: creator of the template
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  generatedDocs TemplateGeneration[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model TemplateGeneration {
+  id          String   @id @default(cuid())
+  templateId  String
+  template    Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  formData    Json     // The form data submitted by user
+  documentUrl String?  // Generated document URL
+  documentKey String?  // Generated document S3 key
+  status      String   @default("pending") // pending, processing, completed, failed
+  aiEnhanced  Boolean  @default(false) // Whether AI was used to enhance the generation
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

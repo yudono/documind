@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import {
   CreditCard,
@@ -23,23 +22,34 @@ import {
   Users,
   Crown,
   Star,
+  Plus,
+  Coins,
 } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
-interface UsageData {
+interface CreditUsage {
   category: string;
   used: number;
-  limit: number;
-  unit: string;
   icon: React.ReactNode;
 }
 
-interface BillingHistory {
+interface CreditTransaction {
   id: string;
   date: Date;
   amount: number;
-  status: "paid" | "pending" | "failed";
+  type: "purchase" | "usage" | "refund";
   description: string;
-  invoiceUrl?: string;
+  credits: number;
 }
 
 interface Plan {
@@ -47,144 +57,140 @@ interface Plan {
   price: number;
   period: string;
   features: string[];
-  limits: {
-    documents: number;
-    aiChats: number;
-    storage: number;
-  };
+  credits: number;
   popular?: boolean;
 }
 
 export default function BillingPage() {
-  const [currentPlan] = useState("UMKM Pro");
+  const [currentPlan] = useState("Pro");
+  const [currentCredits] = useState(3247);
+  const [dailyCredits] = useState(500); // For free tier daily reset
 
-  // Mock usage data
-  const usageData: UsageData[] = [
+  // Mock credit usage data
+  const creditUsage: CreditUsage[] = [
     {
-      category: "Dokumen Bisnis Diproses",
-      used: 127,
-      limit: 500,
-      unit: "dokumen",
-      icon: <FileText className="h-4 w-4" />,
-    },
-    {
-      category: "Konsultasi AI UMKM",
-      used: 89,
-      limit: 200,
-      unit: "sesi",
+      category: "Chat Messages",
+      used: 1253,
       icon: <MessageSquare className="h-4 w-4" />,
     },
     {
-      category: "Penyimpanan Dokumen",
-      used: 1.2,
-      limit: 5,
-      unit: "GB",
-      icon: <BarChart3 className="h-4 w-4" />,
+      category: "Document Processing",
+      used: 847,
+      icon: <FileText className="h-4 w-4" />,
     },
     {
-      category: "Analisis Otomatis",
-      used: 234,
-      limit: 1000,
-      unit: "analisis",
+      category: "AI Analysis",
+      used: 653,
       icon: <Zap className="h-4 w-4" />,
     },
   ];
 
-  // Mock billing history
-  const billingHistory: BillingHistory[] = [
+  // Mock usage analytics data for charts
+  const usageAnalytics = [
+    { date: "Jan", chatMessages: 120, documentProcessing: 80, aiAnalysis: 60 },
+    { date: "Feb", chatMessages: 150, documentProcessing: 95, aiAnalysis: 75 },
+    { date: "Mar", chatMessages: 180, documentProcessing: 110, aiAnalysis: 85 },
+    { date: "Apr", chatMessages: 200, documentProcessing: 130, aiAnalysis: 95 },
     {
-      id: "1",
-      date: new Date("2024-11-01"),
-      amount: 149000,
-      status: "paid",
-      description: "Paket UMKM Pro - November 2024",
-      invoiceUrl: "#",
+      date: "May",
+      chatMessages: 220,
+      documentProcessing: 140,
+      aiAnalysis: 105,
     },
     {
-      id: "2",
-      date: new Date("2024-10-01"),
-      amount: 149000,
-      status: "paid",
-      description: "Paket UMKM Pro - Oktober 2024",
-      invoiceUrl: "#",
-    },
-    {
-      id: "3",
-      date: new Date("2024-09-01"),
-      amount: 149000,
-      status: "paid",
-      description: "Paket UMKM Pro - September 2024",
-      invoiceUrl: "#",
-    },
-    {
-      id: "4",
-      date: new Date("2024-08-01"),
-      amount: 149000,
-      status: "pending",
-      description: "Paket UMKM Pro - Agustus 2024",
+      date: "Jun",
+      chatMessages: 250,
+      documentProcessing: 160,
+      aiAnalysis: 120,
     },
   ];
 
-  // Available plans
-  const plans: Plan[] = [
+  const dailyUsage = [
+    { day: "Mon", usage: 45 },
+    { day: "Tue", usage: 52 },
+    { day: "Wed", usage: 38 },
+    { day: "Thu", usage: 61 },
+    { day: "Fri", usage: 55 },
+    { day: "Sat", usage: 28 },
+    { day: "Sun", usage: 33 },
+  ];
+
+  // Mock credit transaction history
+  const creditTransactions: CreditTransaction[] = [
     {
-      name: "UMKM Starter",
-      price: 0,
-      period: "bulan",
-      features: [
-        "25 dokumen bisnis per bulan",
-        "50 konsultasi AI",
-        "2 GB penyimpanan",
-        "Analisis invoice & laporan dasar",
-        "Template surat bisnis",
-        "Support email",
-      ],
-      limits: {
-        documents: 25,
-        aiChats: 50,
-        storage: 2,
-      },
+      id: "1",
+      date: new Date("2024-11-15"),
+      amount: 29,
+      type: "purchase",
+      description: "Credit Top-up - 1000 Credits",
+      credits: 1000,
     },
     {
-      name: "UMKM Pro",
-      price: 149000,
-      period: "bulan",
+      id: "2",
+      date: new Date("2024-11-14"),
+      amount: 0,
+      type: "usage",
+      description: "Chat conversation with AI",
+      credits: -25,
+    },
+    {
+      id: "3",
+      date: new Date("2024-11-14"),
+      amount: 0,
+      type: "usage",
+      description: "Document analysis",
+      credits: -50,
+    },
+    {
+      id: "4",
+      date: new Date("2024-11-01"),
+      amount: 29,
+      type: "purchase",
+      description: "Pro Plan - Monthly Credits",
+      credits: 5000,
+    },
+  ];
+
+  // Available plans with credit-based pricing
+  const plans: Plan[] = [
+    {
+      name: "Free",
+      price: 0,
+      period: "month",
       features: [
-        "500 dokumen bisnis per bulan",
-        "200 konsultasi AI UMKM",
-        "5 GB penyimpanan",
-        "Analisis keuangan mendalam",
-        "Konsultasi strategi bisnis",
-        "Template kontrak & proposal",
-        "Support prioritas WhatsApp",
+        "100 monthly credits",
+        "Basic AI analysis",
+        "Standard templates",
+        "Email support",
       ],
-      limits: {
-        documents: 500,
-        aiChats: 200,
-        storage: 5,
-      },
+      credits: 100,
+    },
+    {
+      name: "Pro",
+      price: 99000,
+      period: "month",
+      features: [
+        "1,500 credits per month",
+        "Advanced AI analysis",
+        "Premium templates",
+        "AI Chat Assistant",
+        "Priority support",
+      ],
+      credits: 1500,
       popular: true,
     },
     {
-      name: "UMKM Enterprise",
-      price: 399000,
-      period: "bulan",
+      name: "Enterprise",
+      price: 499000,
+      period: "month",
       features: [
-        "Dokumen bisnis unlimited",
-        "Konsultasi AI unlimited",
-        "20 GB penyimpanan",
-        "Analisis bisnis mendalam",
-        "Konsultan bisnis dedicated",
-        "Integrasi sistem akuntansi",
-        "Multi-user untuk tim",
-        "Training bisnis UMKM",
-        "Laporan analitik lengkap",
+        "5,000 credits per month",
+        "Custom AI models",
+        "Custom templates",
+        "API access",
+        "24/7 dedicated support",
       ],
-      limits: {
-        documents: -1,
-        aiChats: -1,
-        storage: 20,
-      },
+      credits: 5000,
     },
   ];
 
@@ -196,44 +202,38 @@ export default function BillingPage() {
     });
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "paid":
+  const getTransactionBadge = (type: string) => {
+    switch (type) {
+      case "purchase":
         return (
           <Badge variant="secondary" className="bg-green-100 text-green-800">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Paid
+            <Plus className="h-3 w-3 mr-1" />
+            Purchase
           </Badge>
         );
-      case "pending":
+      case "usage":
+        return (
+          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+            <MessageSquare className="h-3 w-3 mr-1" />
+            Usage
+          </Badge>
+        );
+      case "refund":
         return (
           <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-            <Clock className="h-3 w-3 mr-1" />
-            Pending
-          </Badge>
-        );
-      case "failed":
-        return (
-          <Badge variant="destructive">
-            <AlertCircle className="h-3 w-3 mr-1" />
-            Failed
+            <DollarSign className="h-3 w-3 mr-1" />
+            Refund
           </Badge>
         );
       default:
-        return <Badge variant="secondary">{status}</Badge>;
+        return <Badge variant="secondary">{type}</Badge>;
     }
   };
 
-  const getUsagePercentage = (used: number, limit: number) => {
-    if (limit === -1) return 0; // Unlimited
-    return Math.min((used / limit) * 100, 100);
-  };
-
-  const getUsageColor = (percentage: number) => {
-    if (percentage >= 90) return "bg-red-500";
-    if (percentage >= 75) return "bg-yellow-500";
-    return "bg-green-500";
-  };
+  const totalUsedCredits = creditUsage.reduce(
+    (sum, usage) => sum + usage.used,
+    0
+  );
 
   return (
     <div className="min-h-screen">
@@ -242,36 +242,60 @@ export default function BillingPage() {
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center space-x-3">
             <div>
-              <h1 className="font-semibold">Billing</h1>
+              <h1 className="font-semibold">Billing & Credits</h1>
               <p className="text-sm text-muted-foreground">
-                Manage your billing and usage
+                Manage your credits and subscription
               </p>
             </div>
           </div>
         </div>
       </div>
-      <div className="p-8">
-        {/* <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">Tagihan & Penggunaan</h1>
-        <p className="text-slate-600">Kelola langganan dan pantau penggunaan layanan UMKM Anda</p>
-      </div> */}
 
-        <Tabs defaultValue="usage" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="usage">Penggunaan</TabsTrigger>
-            <TabsTrigger value="billing">Tagihan</TabsTrigger>
-            <TabsTrigger value="plans">Paket</TabsTrigger>
-          </TabsList>
-
-          {/* Usage Tab */}
-          <TabsContent value="usage" className="space-y-6">
-            {/* Current Plan Overview */}
+      <div className="p-8 space-y-8">
+        {/* Credit Balance Overview */}
+        <section>
+          <h2 className="text-2xl font-bold mb-6">Credit Overview</h2>
+          <div className="grid gap-6 md:grid-cols-2 mb-8">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Crown className="h-5 w-5 mr-2 text-primary" />
-                    Current Plan: {currentPlan}
+                <CardTitle className="flex items-center">
+                  <Coins className="h-5 w-5 mr-2 text-primary" />
+                  Current Balance
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-primary mb-2">
+                  {currentCredits.toLocaleString()} Credits
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {currentPlan === "Free"
+                    ? `Resets daily • ${dailyCredits} credits per day`
+                    : "Monthly subscription credits"}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Crown className="h-5 w-5 mr-2 text-primary" />
+                  Current Plan: {currentPlan}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-2xl font-bold">
+                      Rp
+                      {plans
+                        .find((p) => p.name === currentPlan)
+                        ?.price?.toLocaleString() || 0}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      per{" "}
+                      {plans.find((p) => p.name === currentPlan)?.period ||
+                        "month"}
+                    </p>
                   </div>
                   <Badge
                     variant="secondary"
@@ -279,302 +303,231 @@ export default function BillingPage() {
                   >
                     Active
                   </Badge>
+                </div>
+                <Button variant="outline" className="w-full" size="sm">
+                  Manage Subscription
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Credit Usage Statistics */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Credit Usage This Month</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {creditUsage.map((usage, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        {usage.icon}
+                      </div>
+                      <div>
+                        <p className="font-medium">{usage.category}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {usage.used.toLocaleString()} credits used
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">
+                        {usage.used.toLocaleString()}
+                      </p>
+                      <p className="text-sm text-muted-foreground">credits</p>
+                    </div>
+                  </div>
+                ))}
+                <Separator />
+                <div className="flex items-center justify-between font-medium">
+                  <span>Total Used</span>
+                  <span>{totalUsedCredits.toLocaleString()} credits</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Analytics Section */}
+        <section>
+          <h2 className="text-2xl font-bold mb-6">Usage Analytics</h2>
+
+          {/* Usage Overview Cards */}
+          <div className="grid gap-6 md:grid-cols-3 mb-8">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Total Usage This Month
                 </CardTitle>
+                <BarChart3 className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-2xl font-bold">Rp 149.000</p>
-                    <p className="text-sm text-muted-foreground">per bulan</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground">
-                      Tanggal tagihan berikutnya
-                    </p>
-                    <p className="font-medium">1 Februari 2024</p>
-                  </div>
+                <div className="text-2xl font-bold">
+                  {totalUsedCredits.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  +12% from last month
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Average Daily Usage
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {Math.round(totalUsedCredits / 30).toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">Credits per day</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Most Used Feature
+                </CardTitle>
+                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">Chat Messages</div>
+                <p className="text-xs text-muted-foreground">
+                  {creditUsage[0]?.used.toLocaleString()} credits used
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Usage Charts */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Usage Trends Chart */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Usage Trends (Last 6 Months)</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Track your credit usage patterns over time
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={usageAnalytics}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line
+                        type="monotone"
+                        dataKey="chatMessages"
+                        stroke="#8884d8"
+                        strokeWidth={2}
+                        name="Chat Messages"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="documentProcessing"
+                        stroke="#82ca9d"
+                        strokeWidth={2}
+                        name="Document Processing"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="aiAnalysis"
+                        stroke="#ffc658"
+                        strokeWidth={2}
+                        name="AI Analysis"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Usage Statistics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {usageData.map((item, index) => (
-                <Card key={index}>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center">
-                      {item.icon}
-                      <span className="ml-2">{item.category}</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-2xl font-bold">
-                          {item.used.toLocaleString()}
-                        </span>
-                        <span className="text-sm text-muted-foreground">
-                          {item.limit === -1
-                            ? "Unlimited"
-                            : `of ${item.limit.toLocaleString()}`}{" "}
-                          {item.unit}
-                        </span>
+            {/* Daily Usage Bar Chart */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Daily Usage (This Week)</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Your credit consumption by day of the week
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dailyUsage}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="day" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar
+                        dataKey="usage"
+                        fill="#8884d8"
+                        name="Credits Used"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        {/* Transaction History */}
+        <section>
+          <h2 className="text-2xl font-bold mb-6">Transaction History</h2>
+          <Card>
+            <CardHeader>
+              <CardTitle>Credit Transaction History</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Track all your credit purchases and usage
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {creditTransactions.map((transaction) => (
+                  <div
+                    key={transaction.id}
+                    className="flex items-center justify-between p-4 border rounded-lg"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div>{getTransactionBadge(transaction.type)}</div>
+                      <div>
+                        <p className="font-medium">{transaction.description}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatDate(transaction.date)}
+                        </p>
                       </div>
-                      {item.limit !== -1 && (
-                        <div className="space-y-2">
-                          <Progress
-                            value={getUsagePercentage(item.used, item.limit)}
-                            className="h-2"
-                          />
-                          <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>
-                              {getUsagePercentage(
-                                item.used,
-                                item.limit
-                              ).toFixed(1)}
-                              % used
-                            </span>
-                            <span>
-                              {(item.limit - item.used).toLocaleString()}{" "}
-                              remaining
-                            </span>
-                          </div>
-                        </div>
+                    </div>
+                    <div className="text-right">
+                      <p
+                        className={`font-medium ${
+                          transaction.credits > 0
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }`}
+                      >
+                        {transaction.credits > 0 ? "+" : ""}
+                        {transaction.credits.toLocaleString()} credits
+                      </p>
+                      {transaction.amount > 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          Rp{transaction.amount.toLocaleString()}
+                        </p>
                       )}
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            {/* Usage Alerts */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <AlertCircle className="h-5 w-5 mr-2 text-yellow-500" />
-                  Usage Alerts
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <div className="flex items-center">
-                      <FileText className="h-4 w-4 text-yellow-600 mr-2" />
-                      <span className="text-sm">
-                        You've used 84.7% of your document processing limit
-                      </span>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      Upgrade Plan
-                    </Button>
                   </div>
-                  <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-                    <div className="flex items-center">
-                      <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
-                      <span className="text-sm">
-                        All other services are within normal usage
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Billing Tab */}
-          <TabsContent value="billing" className="space-y-6">
-            {/* Payment Method */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <CreditCard className="h-5 w-5 mr-2" />
-                  Payment Method
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">VISA</span>
-                    </div>
-                    <div>
-                      <p className="font-medium">•••• •••• •••• 4242</p>
-                      <p className="text-sm text-muted-foreground">
-                        Expires 12/25
-                      </p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Update
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Billing History */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Calendar className="h-5 w-5 mr-2" />
-                    Billing History
-                  </div>
-                  <Button variant="outline" size="sm">
-                    <Download className="h-4 w-4 mr-2" />
-                    Export
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {billingHistory.map((bill) => (
-                    <div
-                      key={bill.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center justify-center w-10 h-10 bg-muted rounded-full">
-                          <DollarSign className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{bill.description}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {formatDate(bill.date)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-4">
-                        <div className="text-right">
-                          <p className="font-medium">
-                            Rp {bill.amount.toLocaleString("id-ID")}
-                          </p>
-                          {getStatusBadge(bill.status)}
-                        </div>
-                        {bill.invoiceUrl && (
-                          <Button variant="ghost" size="sm">
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Plans Tab */}
-          <TabsContent value="plans" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {plans.map((plan, index) => (
-                <Card
-                  key={index}
-                  className={`relative ${
-                    plan.popular ? "border-primary shadow-lg" : ""
-                  }`}
-                >
-                  {plan.popular && (
-                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                      <Badge className="bg-primary text-primary-foreground px-3 py-1">
-                        <Star className="h-3 w-3 mr-1" />
-                        Most Popular
-                      </Badge>
-                    </div>
-                  )}
-                  <CardHeader className="text-center">
-                    <CardTitle className="text-xl">{plan.name}</CardTitle>
-                    <div className="mt-4">
-                      <span className="text-3xl font-bold">
-                        Rp {plan.price.toLocaleString("id-ID")}
-                      </span>
-                      <span className="text-muted-foreground">
-                        /{plan.period}
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <ul className="space-y-2">
-                      {plan.features.map((feature, featureIndex) => (
-                        <li
-                          key={featureIndex}
-                          className="flex items-center text-sm"
-                        >
-                          <CheckCircle className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                    <Separator />
-                    <Button
-                      className="w-full"
-                      variant={
-                        currentPlan === plan.name ? "secondary" : "default"
-                      }
-                      disabled={currentPlan === plan.name}
-                    >
-                      {currentPlan === plan.name
-                        ? "Current Plan"
-                        : `Upgrade to ${plan.name}`}
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            {/* Plan Comparison */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Plan Comparison</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2">Feature</th>
-                        {plans.map((plan) => (
-                          <th key={plan.name} className="text-center py-2">
-                            {plan.name}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="space-y-2">
-                      <tr className="border-b">
-                        <td className="py-2">Documents per month</td>
-                        {plans.map((plan) => (
-                          <td key={plan.name} className="text-center py-2">
-                            {plan.limits.documents === -1
-                              ? "Unlimited"
-                              : plan.limits.documents.toLocaleString()}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr className="border-b">
-                        <td className="py-2">AI Chat Messages</td>
-                        {plans.map((plan) => (
-                          <td key={plan.name} className="text-center py-2">
-                            {plan.limits.aiChats === -1
-                              ? "Unlimited"
-                              : plan.limits.aiChats.toLocaleString()}
-                          </td>
-                        ))}
-                      </tr>
-                      <tr className="border-b">
-                        <td className="py-2">Storage</td>
-                        {plans.map((plan) => (
-                          <td key={plan.name} className="text-center py-2">
-                            {plan.limits.storage} GB
-                          </td>
-                        ))}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
       </div>
     </div>
   );

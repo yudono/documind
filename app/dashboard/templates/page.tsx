@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -66,6 +67,7 @@ const formatFileSize = (bytes: number | null) => {
 };
 
 export default function TemplatePage() {
+  const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -99,6 +101,10 @@ export default function TemplatePage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleUseTemplate = (templateId: string) => {
+    router.push(`/dashboard/templates/${templateId}`);
   };
 
   const handleDownload = async (templateId: string, templateName: string) => {
@@ -263,7 +269,7 @@ export default function TemplatePage() {
                   )}
                 </CardHeader>
                 <CardContent className="pt-0">
-                  {template.thumbnail && (
+                  {/** {template.thumbnail && (
                     <div className="mb-3">
                       <img
                         src={
@@ -276,7 +282,7 @@ export default function TemplatePage() {
                         className="w-full h-32 object-cover rounded-md bg-muted"
                       />
                     </div>
-                  )}
+                  )}**/}
                   <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
                     <span>{template.downloadCount} downloads</span>
                     <span>{formatFileSize(template.size)}</span>
@@ -286,14 +292,23 @@ export default function TemplatePage() {
                       {template.category}
                     </Badge>
                   )}
-                  <Button
-                    onClick={() => handleDownload(template.id, template.name)}
-                    className="w-full"
-                    size="sm"
-                  >
-                    {/* <Download className="h-4 w-4 mr-2" /> */}
-                    Use Template
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleUseTemplate(template.id)}
+                      className="flex-1"
+                      size="sm"
+                    >
+                      Use Template
+                    </Button>
+                    <Button
+                      onClick={() => handleDownload(template.id, template.name)}
+                      variant="outline"
+                      size="sm"
+                      className="px-3"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
