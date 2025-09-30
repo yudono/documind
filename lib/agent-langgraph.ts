@@ -4,9 +4,9 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { prisma } from "./prisma";
 import { findSimilarChunks, generateEmbedding } from "./embeddings";
 import {
-  DocumentGenerators,
-  DocumentGenerationResult,
-} from "./document-generators";
+  DocumentGenerator,
+  DocumentGenerationOptions,
+} from "./document-generator";
 
 // Define the state annotation for the graph
 const AgentStateAnnotation = Annotation.Root({
@@ -19,24 +19,14 @@ const AgentStateAnnotation = Annotation.Root({
   context: Annotation<string>,
   referencedDocuments: Annotation<string[]>,
   aiResponse: Annotation<string>,
-  documentFile: Annotation<DocumentGenerationResult | undefined>,
+  documentFile: Annotation<
+    { buffer: Buffer; filename: string; mimeType: string } | undefined
+  >,
   finalResponse: Annotation<string>,
+  shouldGenerateDoc: Annotation<boolean>,
 });
 
-// Define the state interface for type safety
-interface AgentState {
-  query: string;
-  userId: string;
-  sessionId?: string;
-  useSemanticSearch: boolean;
-  documentIds?: string[];
-  conversationContext?: string;
-  context: string;
-  referencedDocuments: string[];
-  aiResponse: string;
-  documentFile?: DocumentGenerationResult;
-  finalResponse: string;
-}
+type AgentState = typeof AgentStateAnnotation.State;
 
 // Input interface for the agent
 interface AgentInput {
@@ -52,7 +42,7 @@ interface AgentInput {
 interface AgentOutput {
   response: string;
   referencedDocuments: string[];
-  documentFile?: DocumentGenerationResult;
+  documentFile?: { buffer: Buffer; filename: string; mimeType: string };
 }
 
 export class LangGraphDocumentAgent {
@@ -66,28 +56,35 @@ export class LangGraphDocumentAgent {
       temperature: 0.7,
     });
 
-    this.graph = this.buildGraph();
+    this.buildGraph();
   }
 
   private buildGraph() {
-    // Create the state graph using the annotation
-    const workflow = new StateGraph(AgentStateAnnotation);
+    const workflow = new StateGraph(AgentStateAnnotation)
+      .addNode("retrieveContext", this.retrieveContextNode.bind(this))
+      .addNode("generateResponse", this.generateResponseNode.bind(this))
+      .addNode(
+        "decideDocumentGeneration",
+        this.decideDocumentGenerationNode.bind(this)
+      )
+      .addNode("generateDocument", this.generateDocumentNode.bind(this))
+      .addNode("saveConversation", this.saveConversationNode.bind(this))
+      .addEdge(START, "retrieveContext")
+      .addEdge("retrieveContext", "generateResponse")
+      .addEdge("generateResponse", "decideDocumentGeneration")
+      .addConditionalEdges(
+        "decideDocumentGeneration",
+        this.shouldGenerateDocument.bind(this),
+        {
+          generateDocument: "generateDocument",
+          saveConversation: "saveConversation",
+        }
+      )
+      .addEdge("generateDocument", "saveConversation")
+      .addEdge("saveConversation", END);
 
-    // Add nodes
-    workflow.addNode("retrieveContext", this.retrieveContextNode.bind(this));
-    workflow.addNode("generateResponse", this.generateResponseNode.bind(this));
-    workflow.addNode("generateDocument", this.generateDocumentNode.bind(this));
-    workflow.addNode("saveConversation", this.saveConversationNode.bind(this));
-
-    // Define the flow using START and END constants
-    // Using type assertions to work around TypeScript limitations
-    workflow.addEdge(START, "retrieveContext" as any);
-    workflow.addEdge("retrieveContext" as any, "generateResponse" as any);
-    workflow.addEdge("generateResponse" as any, "generateDocument" as any);
-    workflow.addEdge("generateDocument" as any, "saveConversation" as any);
-    workflow.addEdge("saveConversation" as any, END);
-
-    return workflow.compile();
+    this.graph = workflow.compile();
+    return this.graph;
   }
 
   /**
@@ -181,6 +178,8 @@ export class LangGraphDocumentAgent {
 
 You can also generate documents when requested. If the user asks you to create, generate, or write a document, report, analysis, or any structured content, please provide the complete content in your response.
 
+IMPORTANT: When generating documents for PDF output, you MUST format your response as HTML with proper structure. Use HTML tags like <h1>, <h2>, <p>, <ul>, <li>, <table>, etc. to structure the content properly. This is required for PDF generation.
+
 ${
   state.context
     ? `Context from documents:
@@ -191,10 +190,11 @@ Please use this context to answer the user's question. If the context doesn't co
 }
 
 When generating documents, please:
-1. Provide complete, well-structured content
-2. Use appropriate formatting and organization
+1. Provide complete, well-structured HTML content
+2. Use appropriate HTML formatting and organization
 3. Include relevant details and information
 4. Make the content professional and comprehensive
+5. Format as HTML for PDF generation compatibility
 `),
         new HumanMessage(state.query),
       ];
@@ -213,21 +213,77 @@ When generating documents, please:
   }
 
   /**
-   * Node: Generate document file if AI response indicates document generation
+   * Node: Decide whether to generate a document based on AI response analysis
+   */
+  private async decideDocumentGenerationNode(
+    state: AgentState
+  ): Promise<Partial<AgentState>> {
+    try {
+      // Use AI to analyze if the response should be converted to a document
+      const decisionMessages = [
+        new SystemMessage(`You are a document generation decision maker. Analyze the AI response and determine if it should be converted to a document file.
+
+Consider generating a document if the response:
+1. Contains structured content like reports, analyses, or formal documents
+2. Has multiple sections, headings, or organized information
+3. Would benefit from being saved as a PDF for reference
+4. Contains tables, lists, or formatted content
+5. Is a comprehensive answer that users might want to save
+
+Respond with ONLY "YES" if a document should be generated, or "NO" if it should remain as a chat response.
+
+AI Response to analyze:
+${state.aiResponse}`),
+        new HumanMessage(
+          "Should this response be converted to a document? Answer YES or NO only."
+        ),
+      ];
+
+      const decisionResponse = await this.llm.invoke(decisionMessages);
+      const decision = (decisionResponse.content as string)
+        .trim()
+        .toUpperCase();
+
+      return {
+        shouldGenerateDoc: decision === "YES",
+      };
+    } catch (error) {
+      console.error("Error in document generation decision:", error);
+      // Default to not generating document on error
+      return {
+        shouldGenerateDoc: false,
+      };
+    }
+  }
+
+  /**
+   * Conditional function to determine next node based on document generation decision
+   */
+  private shouldGenerateDocument(state: AgentState): string {
+    return state.shouldGenerateDoc ? "generateDocument" : "saveConversation";
+  }
+
+  /**
+   * Node: Generate document file based on AI response
    */
   private async generateDocumentNode(
     state: AgentState
   ): Promise<Partial<AgentState>> {
     try {
-      // Check if AI response indicates document generation
-      const documentFile =
-        await DocumentGenerators.generateDocumentFromAIResponse(
-          state.aiResponse,
-          "ai-generated-document"
-        );
+      const documentGenerator = new DocumentGenerator();
+
+      const buffer = await documentGenerator.generatePDF({
+        format: "pdf",
+        content: state.aiResponse,
+        title: "AI Generated Document",
+      });
 
       return {
-        documentFile: documentFile || undefined,
+        documentFile: {
+          buffer,
+          filename: "ai-generated-document.pdf",
+          mimeType: "application/pdf",
+        },
       };
     } catch (error) {
       console.error("Error generating document:", error);
@@ -289,7 +345,9 @@ When generating documents, please:
         context: "",
         referencedDocuments: [],
         aiResponse: "",
+        documentFile: undefined,
         finalResponse: "",
+        shouldGenerateDoc: false,
       };
 
       // Run the graph

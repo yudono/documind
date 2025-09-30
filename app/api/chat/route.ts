@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { generateChatCompletion, generateDocument } from '@/lib/groq'
+import { generateChatCompletion, generateChatCompletionWithAgent, generateDocument } from '@/lib/groq'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
@@ -159,7 +159,20 @@ export async function POST(request: NextRequest) {
         ]
       }
 
-      response = await generateChatCompletion(messages)
+      const agentResponse = await generateChatCompletionWithAgent(messages, {
+        userId: user.id,
+        documentIds: context ? [] : undefined // Pass empty array if context exists, undefined otherwise
+      })
+
+      // Handle different response types from the agent
+      if (typeof agentResponse === 'string') {
+        response = agentResponse
+      } else {
+        response = agentResponse.response
+        if (agentResponse.documentFile) {
+          documentFile = agentResponse.documentFile
+        }
+      }
     }
 
     // Save AI response to session if sessionId is provided

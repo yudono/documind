@@ -1,6 +1,7 @@
-import jsPDF from 'jspdf';
 import ExcelJS from 'exceljs';
-import puppeteer from 'puppeteer';
+import { Document, Page, pdf, renderToBuffer } from '@react-pdf/renderer';
+import Html from 'react-pdf-html';
+import React from 'react';
 
 export interface DocumentGenerationOptions {
   title?: string;
@@ -18,27 +19,49 @@ export class DocumentGenerator {
   async generatePDF(options: DocumentGenerationOptions): Promise<Buffer> {
     const { title = 'Generated Document', author = 'Document Assistant', content } = options;
     
-    const doc = new jsPDF();
+    // Create HTML structure for PDF generation
+    const htmlContent = `
+      <html>
+        <head>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 20px;
+              line-height: 1.6;
+            }
+            h1 {
+              color: #333;
+              font-size: 24px;
+              margin-bottom: 20px;
+            }
+            p {
+              font-size: 12px;
+              margin-bottom: 10px;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>${title}</h1>
+          <div>${content}</div>
+        </body>
+      </html>
+    `;
     
-    // Set document properties
-    doc.setProperties({
+    // Create PDF document using react-pdf-html
+    const MyDocument = React.createElement(Document, {
       title,
       author,
       subject: options.subject || '',
       keywords: options.keywords?.join(', ') || '',
       creator: 'Document Assistant'
-    });
+    }, 
+      React.createElement(Page, { size: 'A4', style: { padding: 30 } },
+        React.createElement(Html, null, htmlContent)
+      )
+    );
     
-    // Add title
-    doc.setFontSize(20);
-    doc.text(title, 20, 30);
-    
-    // Add content
-    doc.setFontSize(12);
-    const lines = doc.splitTextToSize(content, 170);
-    doc.text(lines, 20, 50);
-    
-    return Buffer.from(doc.output('arraybuffer') as ArrayBuffer);
+    const pdfBuffer = await renderToBuffer(MyDocument);
+    return pdfBuffer;
   }
   
   async generateExcel(options: DocumentGenerationOptions): Promise<Buffer> {
@@ -183,32 +206,8 @@ export class DocumentGenerator {
   }
   
   async generateAdvancedPDF(options: DocumentGenerationOptions): Promise<Buffer> {
-    const html = await this.generateHTML(options);
-    
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-    
-    try {
-      const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-      
-      const pdf = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '20mm',
-          right: '20mm',
-          bottom: '20mm',
-          left: '20mm'
-        }
-      });
-      
-      return Buffer.from(pdf);
-    } finally {
-      await browser.close();
-    }
+    // Use the same HTML to PDF conversion as generatePDF
+    return this.generatePDF(options);
   }
   
   async generate(options: DocumentGenerationOptions): Promise<Buffer | string> {

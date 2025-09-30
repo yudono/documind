@@ -7,7 +7,7 @@
 
 import { AIDocumentFormatter } from '@/lib/ai-document-formatter';
 import { DocumentFormatParser } from '@/lib/document-format-parser';
-import { EnhancedPDFGenerator } from '@/lib/enhanced-pdf-generator';
+import { DocumentGenerator } from '@/lib/document-generator';
 
 // Test data constants
 const SAMPLE_CONTENT = `
@@ -170,21 +170,21 @@ function testDocumentFormatParser() {
  * Test the Enhanced PDF Generator
  */
 async function testEnhancedPDFGenerator() {
-  console.log('🧪 Testing Enhanced PDF Generator...');
+  console.log('🧪 Testing Document Generator (PDF)...');
   
   try {
-    const generator = new EnhancedPDFGenerator();
+    const generator = new DocumentGenerator();
     
     // Test basic PDF generation
     console.log('  ✓ Testing basic PDF generation...');
     const basicOptions = {
-      title: 'Test Document',
-      author: 'Test Suite',
       content: SAMPLE_CONTENT,
-      useAIFormatting: false
+      format: 'pdf' as const,
+      title: 'Test Document',
+      author: 'Test Suite'
     };
     
-    const basicPDF = await generator.generatePDF(basicOptions);
+    const basicPDF = await generator.generate(basicOptions);
     
     if (!basicPDF || !Buffer.isBuffer(basicPDF)) {
       throw new Error('PDF generation should return a Buffer');
@@ -192,39 +192,32 @@ async function testEnhancedPDFGenerator() {
     
     console.log(`  ✓ Generated basic PDF (${basicPDF.length} bytes)`);
     
-    // Test AI-formatted PDF generation
-    console.log('  ✓ Testing AI-formatted PDF generation...');
-    const aiOptions = {
-       title: 'AI-Formatted Test Document',
-       author: 'AI Test Suite',
-       content: 'Raw content to be formatted by AI',
-       useAIFormatting: true,
-       fontSize: 12,
-       fontFamily: 'Arial',
-       margins: { top: 20, right: 20, bottom: 20, left: 20 },
-       pageSize: 'a4' as const,
-       orientation: 'portrait' as const,
-       includeHeader: true,
-       headerText: 'AI Document Generation Test'
+    // Test another PDF generation with different content
+    console.log('  ✓ Testing formatted PDF generation...');
+    const formattedOptions = {
+       content: 'Raw content to be formatted for PDF output',
+       format: 'pdf' as const,
+       title: 'Formatted Test Document',
+       author: 'Test Suite'
      };
     
-    const aiPDF = await generator.generatePDF(aiOptions);
+    const formattedPDF = await generator.generate(formattedOptions);
     
-    if (!aiPDF || !Buffer.isBuffer(aiPDF)) {
-      throw new Error('AI PDF generation should return a Buffer');
+    if (!formattedPDF || !Buffer.isBuffer(formattedPDF)) {
+      throw new Error('Formatted PDF generation should return a Buffer');
     }
     
-    console.log(`  ✓ Generated AI-formatted PDF (${aiPDF.length} bytes)`);
+    console.log(`  ✓ Generated formatted PDF (${formattedPDF.length} bytes)`);
     
     return { 
       success: true, 
       results: {
         basicPDF: basicPDF.length,
-        aiPDF: aiPDF.length
+        formattedPDF: formattedPDF.length
       }
     };
   } catch (error) {
-    console.error('  ❌ Enhanced PDF Generator test failed:', error);
+    console.error('  ❌ Document Generator (PDF) test failed:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
@@ -238,7 +231,7 @@ async function testIntegrationWorkflow() {
   try {
     const formatter = new AIDocumentFormatter();
     const parser = new DocumentFormatParser();
-    const generator = new EnhancedPDFGenerator();
+    const generator = new DocumentGenerator();
     
     console.log('  ✓ Step 1: AI formatting...');
     const formattedContent = await formatter.format(SAMPLE_CONTENT);
@@ -247,13 +240,11 @@ async function testIntegrationWorkflow() {
     const parsedDocument = parser.parseMarkdown(formattedContent);
     
     console.log('  ✓ Step 3: PDF generation...');
-    const pdfBuffer = await generator.generatePDF({
-      title: 'Integration Test Document',
-      author: 'Integration Test Suite',
+    const pdfBuffer = await generator.generate({
       content: formattedContent,
-      useAIFormatting: false, // Already formatted
-      fontSize: 11,
-      margins: { top: 25, right: 25, bottom: 25, left: 25 }
+      format: 'pdf',
+      title: 'Integration Test Document',
+      author: 'Integration Test Suite'
     });
     
     console.log('  ✓ Integration workflow completed successfully');

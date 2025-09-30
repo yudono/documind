@@ -26,7 +26,7 @@ export interface ChatCompletionOptions {
 }
 
 /**
- * Generate chat completion using Groq
+ * Generate chat completion using Groq (original function for backward compatibility)
  */
 export async function generateChatCompletion(
   messages: ChatMessage[],
@@ -55,6 +55,50 @@ export async function generateChatCompletion(
     return chatCompletion.choices[0]?.message?.content || 'No response generated'
   } catch (error) {
     console.error('Error generating chat completion:', error)
+    throw new Error('Failed to generate AI response')
+  }
+}
+
+/**
+ * Enhanced chat completion with agent integration for document generation
+ */
+export async function generateChatCompletionWithAgent(
+  messages: ChatMessage[],
+  options: ChatCompletionOptions & {
+    userId?: string;
+    sessionId?: string;
+    useSemanticSearch?: boolean;
+    documentIds?: string[];
+    conversationContext?: string;
+  } = {}
+): Promise<string | { response: string; referencedDocuments: string[]; documentFile?: any }> {
+  try {
+    // Extract the user query from messages (typically the last user message)
+    const userMessage = messages.filter(msg => msg.role === 'user').pop();
+    const query = userMessage && typeof userMessage.content === 'string' 
+      ? userMessage.content 
+      : userMessage && Array.isArray(userMessage.content) 
+        ? userMessage.content.find(c => c.type === 'text')?.text || ''
+        : '';
+
+    // Always use the agent for processing - let the agent decide whether to generate documents
+    if (options.userId) {
+      const agentResult = await documentAgent.processQuery({
+        query,
+        userId: options.userId,
+        sessionId: options.sessionId,
+        useSemanticSearch: options.useSemanticSearch || false,
+        documentIds: options.documentIds,
+        conversationContext: options.conversationContext
+      });
+
+      return agentResult;
+    }
+
+    // Fallback to basic chat completion if no userId provided
+    return await generateChatCompletion(messages, options);
+  } catch (error) {
+    console.error('Error generating enhanced chat completion:', error)
     throw new Error('Failed to generate AI response')
   }
 }
