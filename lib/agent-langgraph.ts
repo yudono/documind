@@ -248,9 +248,11 @@ export class LangGraphDocumentAgent {
 
 You can also generate documents when requested. ${
           isDocumentRequest
-            ? `IMPORTANT: This appears to be a document generation request. Please provide your response in HTML format with proper structure.
+            ? `IMPORTANT: This appears to be a document generation request. 
 
-DOCUMENT FORMATTING REQUIREMENTS:
+For PDF, DOCX, and PPTX documents: Please provide your response in HTML format with proper structure.
+
+DOCUMENT FORMATTING REQUIREMENTS (for PDF, DOCX, PPTX only):
 - Use proper HTML structure with <h1>, <h2>, <h3>, <h4>, <h5> for headings
 - Use <p> tags for paragraphs
 - Use <ul> and <ol> for bullet points and numbered lists
@@ -265,7 +267,9 @@ DOCUMENT FORMATTING REQUIREMENTS:
 - Do NOT add <style> tags or inline CSS styles
 - Provide complete, well-structured HTML content without any CSS
 
-Example HTML structure:
+For Excel (XLSX) documents: Follow the specific JSON format instructions provided in the Excel generation prompt.
+
+Example HTML structure (for PDF, DOCX, PPTX):
 <h1>Document Title</h1>
 <p>Introduction paragraph with <strong>important</strong> information.</p>
 <h2>Section Title</h2>
@@ -277,7 +281,7 @@ Example HTML structure:
 <tr><th>Header 1</th><th>Header 2</th></tr>
 <tr><td>Data 1</td><td>Data 2</td></tr>
 </table>`
-            : `If the user asks you to create, generate, or write a document, report, analysis, or any structured content, please provide the complete content in HTML format with proper structure using HTML tags instead of Markdown. Do NOT include any CSS styling, especially font-family properties.`
+            : `If the user asks you to create, generate, or write a document, report, analysis, or any structured content, please provide the complete content in HTML format with proper structure using HTML tags instead of Markdown. Do NOT include any CSS styling, especially font-family properties. Note: Excel documents have their own specific format requirements.`
         }
 
 ${
@@ -549,61 +553,183 @@ When generating documents, please:
     content: string,
     title: string
   ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
-    const documentGenerator = new DocumentGenerator();
+    const XLSX = await import("xlsx");
 
-    // Enhanced system prompt for Excel generation
-    const excelPrompt = `Transform the following content into structured data suitable for Excel generation:
+    // Enhanced system prompt for Excel generation - JSON format
+    const excelPrompt = `You must return ONLY a valid JSON object. Do not include any explanations, markdown formatting, or code blocks.
+
+Transform the following content into a structured JSON format suitable for Excel generation:
 
 Content: ${content}
 
-Requirements:
-- Extract or create tabular data with clear headers
-- Include calculations, totals, or summaries where appropriate
-- Organize data logically in rows and columns
-- If no tabular data exists, create a structured format
-- Include data analysis or insights
-
-Provide the data in JSON format with this structure:
+Return ONLY this JSON structure (replace with actual data):
 {
-  "title": "Sheet Title",
-  "headers": ["Column1", "Column2", "Column3"],
-  "data": [
-    {"Column1": "value1", "Column2": "value2", "Column3": "value3"},
-    {"Column1": "value4", "Column2": "value5", "Column3": "value6"}
+  "name": "Document Title",
+  "sheets": [
+    {
+      "name": "Sheet1",
+      "columns": [
+        {
+          "name": "Column1",
+          "width": 15,
+          "type": "text"
+        },
+        {
+          "name": "Column2", 
+          "width": 20,
+          "type": "number",
+          "format": "#,##0.00"
+        }
+      ],
+      "data": [
+        {
+          "Column1": "Value1",
+          "Column2": 123.45
+        },
+        {
+          "Column1": "Value2", 
+          "Column2": 678.90
+        }
+      ]
+    }
   ]
 }
 
-Provide only the JSON (no explanations):`;
+Rules:
+- Extract or create tabular data with clear column headers
+- Use "columns" array to define column metadata (name, width, type, format)
+- Use "data" array with objects where keys match column names
+- Column types: "text", "number", "date"
+- For number columns, include format (e.g., "#,##0.00" for currency)
+- For date columns, use format like "mmm dd, yyyy"
+- Multiple tables = multiple sheets
+- If no tabular data exists, create structured format from content
+
+CRITICAL: Return ONLY the JSON object starting with { and ending with }. No explanations, no markdown, no code blocks.`;
 
     const excelResponse = await this.llm.invoke(excelPrompt);
     let excelData;
 
     try {
-      excelData = JSON.parse(excelResponse.content as string);
+      // Clean the response to extract only JSON
+      let jsonString = excelResponse.content as string;
+
+      // Remove markdown code blocks if present
+      jsonString = jsonString.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+
+      // Find the first { and last } to extract only the JSON object
+      const firstBrace = jsonString.indexOf("{");
+      const lastBrace = jsonString.lastIndexOf("}");
+
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        jsonString = jsonString.substring(firstBrace, lastBrace + 1);
+      }
+
+      excelData = JSON.parse(jsonString);
     } catch (error) {
-      // Fallback to simple data structure
+      // Fallback to simple structure if JSON parsing fails
       excelData = {
-        title: title,
-        headers: ["Item", "Description", "Value"],
-        data: [
+        name: title,
+        sheets: [
           {
-            Item: "Generated Content",
-            Description: content.substring(0, 100),
-            Value: "AI Generated",
+            name: "Sheet1",
+            columns: [
+              {
+                name: "Content",
+                width: 50,
+                type: "text",
+              },
+            ],
+            data: [
+              {
+                Content: content,
+              },
+            ],
           },
         ],
       };
     }
 
-    const buffer = await documentGenerator.generateExcel({
-      format: "excel",
-      content: content,
-      title: excelData.title || title,
-      data: excelData.data || [],
+    // Create workbook
+    const workbook = XLSX.utils.book_new();
+
+    // Add sheets to workbook
+    excelData.sheets.forEach((sheetData: any, index: number) => {
+      const worksheetData = [];
+
+      // Extract column names from columns metadata
+      const columnNames = sheetData.columns
+        ? sheetData.columns.map((col: any) => col.name)
+        : [];
+
+      // Add headers if columns are defined
+      if (columnNames.length > 0) {
+        worksheetData.push(columnNames);
+      }
+
+      // Add data rows - convert objects to arrays based on column order
+      if (sheetData.data && sheetData.data.length > 0) {
+        sheetData.data.forEach((rowData: any) => {
+          if (columnNames.length > 0) {
+            // Convert object to array based on column order
+            const rowArray = columnNames.map(
+              (colName: string) => rowData[colName] || ""
+            );
+            worksheetData.push(rowArray);
+          } else {
+            // Fallback: if no columns defined, try to extract values
+            const values = Object.values(rowData);
+            worksheetData.push(values);
+          }
+        });
+      }
+
+      // Create worksheet
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+
+      // Apply column formatting and widths if available
+      if (sheetData.columns) {
+        const colWidths: any[] = [];
+        const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1");
+
+        sheetData.columns.forEach((col: any, colIndex: number) => {
+          // Set column width
+          if (col.width) {
+            colWidths[colIndex] = { wch: col.width };
+          }
+
+          // Apply formatting to data cells (skip header row)
+          if (col.format && col.type === "number") {
+            for (let rowIndex = 1; rowIndex <= range.e.r; rowIndex++) {
+              const cellAddress = XLSX.utils.encode_cell({
+                r: rowIndex,
+                c: colIndex,
+              });
+              if (worksheet[cellAddress]) {
+                worksheet[cellAddress].z = col.format;
+              }
+            }
+          }
+        });
+
+        if (colWidths.length > 0) {
+          worksheet["!cols"] = colWidths;
+        }
+      }
+
+      // Add worksheet to workbook
+      const sheetName = sheetData.name || `Sheet${index + 1}`;
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    });
+
+    // Generate Excel buffer
+    const excelBuffer = XLSX.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
     });
 
     return {
-      buffer,
+      buffer: excelBuffer,
       filename: `${title.replace(/[^a-zA-Z0-9]/g, "_")}.xlsx`,
       mimeType:
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
