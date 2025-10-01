@@ -64,7 +64,11 @@ const nextConfig = {
       "@xenova/transformers",
       "onnxruntime-node",
       "pdf-parse",
-      "md-to-pdf",
+      "react-pdf-html",
+      "@react-pdf/renderer",
+      "html-to-docx",
+      "2pptxgenjs",
+      "html2pptxgenjs",
     ],
   },
 };

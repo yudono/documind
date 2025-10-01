@@ -1,3 +1,4 @@
+import React from "react";
 import { StateGraph, END, START, Annotation } from "@langchain/langgraph";
 import { ChatGroq } from "@langchain/groq";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
@@ -7,7 +8,34 @@ import {
   DocumentGenerator,
   DocumentGenerationOptions,
 } from "./document-generator";
-import { mdToPdf } from "md-to-pdf";
+import ReactPDF from "@react-pdf/renderer";
+import { Document, Page, Font } from "@react-pdf/renderer";
+import Html from "react-pdf-html";
+
+// Register Roboto font family using local TTF files
+Font.register({
+  family: "Roboto",
+  fonts: [
+    {
+      src: `${process.env.NEXTAPP_URL}/fonts/Roboto-Regular.ttf`,
+      fontWeight: "normal",
+    },
+    {
+      src: `${process.env.NEXTAPP_URL}/fonts/Roboto-Bold.ttf`,
+      fontWeight: "bold",
+    },
+    {
+      src: `${process.env.NEXTAPP_URL}/fonts/Roboto-Italic.ttf`,
+      fontWeight: "normal",
+      fontStyle: "italic",
+    },
+    {
+      src: `${process.env.NEXTAPP_URL}/fonts/Roboto-BoldItalic.ttf`,
+      fontWeight: "bold",
+      fontStyle: "italic",
+    },
+  ],
+});
 
 // Define the state annotation for the graph
 const AgentStateAnnotation = Annotation.Root({
@@ -171,22 +199,86 @@ export class LangGraphDocumentAgent {
   }
 
   /**
+   * Helper method to detect if a query is likely a document generation request
+   */
+  private isDocumentGenerationRequest(query: string): boolean {
+    const documentKeywords = [
+      "create",
+      "generate",
+      "make",
+      "write",
+      "build",
+      "produce",
+      "document",
+      "report",
+      "analysis",
+      "presentation",
+      "spreadsheet",
+      "pdf",
+      "docx",
+      "xlsx",
+      "pptx",
+      "word",
+      "excel",
+      "powerpoint",
+      "slide",
+      "chart",
+      "table",
+      "summary",
+      "proposal",
+      "letter",
+    ];
+
+    const lowerQuery = query.toLowerCase();
+    return documentKeywords.some((keyword) => lowerQuery.includes(keyword));
+  }
+
+  /**
    * Node: Generate AI response based on query and context with document type awareness
    */
   private async generateResponseNode(
     state: AgentState
   ): Promise<Partial<AgentState>> {
     try {
+      // Detect if this is likely a document generation request
+      const isDocumentRequest = this.isDocumentGenerationRequest(state.query);
+
       const messages = [
         new SystemMessage(`You are a helpful AI assistant that can analyze documents and answer questions based on the provided context.
 
-You can also generate documents when requested. If the user asks you to create, generate, or write a document, report, analysis, or any structured content, please provide the complete content in your response.
+You can also generate documents when requested. ${
+          isDocumentRequest
+            ? `IMPORTANT: This appears to be a document generation request. Please provide your response in HTML format with proper structure.
 
-IMPORTANT DOCUMENT FORMATTING GUIDELINES:
-- For PDF documents: Format your response in Markdown with proper structure using # ## ### for headings, bullet points, tables, etc.
-- For Excel/XLSX documents: Structure data in tabular format with clear headers, rows, and columns. Include calculations and summaries where appropriate.
-- For Word/DOCX documents: Format your response in Markdown with clear headings, paragraphs, lists, and professional formatting.
-- For PowerPoint/PPTX documents: Format your response in Markdown organized for slide presentation with clear sections and bullet points.
+DOCUMENT FORMATTING REQUIREMENTS:
+- Use proper HTML structure with <h1>, <h2>, <h3>, <h4>, <h5> for headings
+- Use <p> tags for paragraphs
+- Use <ul> and <ol> for bullet points and numbered lists
+- Use <li> for list items
+- Use <table>, <tr>, <th>, <td> for tables
+- Use <strong> for bold text and <em> for italic text
+- Use <blockquote> for important quotes or highlights
+- Use <code> for inline code and <pre><code> for code blocks
+- Ensure proper HTML structure and nesting
+- Do NOT use Markdown formatting (no #, *, -, etc.)
+- Do NOT include any CSS styling, especially font-family properties
+- Do NOT add <style> tags or inline CSS styles
+- Provide complete, well-structured HTML content without any CSS
+
+Example HTML structure:
+<h1>Document Title</h1>
+<p>Introduction paragraph with <strong>important</strong> information.</p>
+<h2>Section Title</h2>
+<ul>
+<li>First bullet point</li>
+<li>Second bullet point</li>
+</ul>
+<table>
+<tr><th>Header 1</th><th>Header 2</th></tr>
+<tr><td>Data 1</td><td>Data 2</td></tr>
+</table>`
+            : `If the user asks you to create, generate, or write a document, report, analysis, or any structured content, please provide the complete content in HTML format with proper structure using HTML tags instead of Markdown. Do NOT include any CSS styling, especially font-family properties.`
+        }
 
 ${
   state.context
@@ -198,11 +290,11 @@ Please use this context to answer the user's question. If the context doesn't co
 }
 
 When generating documents, please:
-1. Provide complete, well-structured content appropriate for the document type
-2. Use proper formatting and organization
+1. Provide complete, well-structured HTML content appropriate for the document type
+2. Use proper HTML formatting and organization
 3. Include relevant details and information
 4. Make the content professional and comprehensive
-5. Consider the specific format requirements for the document type
+5. Use semantic HTML tags for better structure
 `),
         new HumanMessage(state.query),
       ];
@@ -320,54 +412,131 @@ When generating documents, please:
   }
 
   /**
-   * Generate PDF document using @mohtasham/md-to-docx package (as PDF alternative)
+   * Generate PDF document using react-pdf-html
    */
   private async generatePDFDocument(
     content: string,
     title: string
   ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
-    // Enhanced system prompt for PDF generation
-    const pdfPrompt = `Transform the following content into well-structured Markdown suitable for PDF generation:
+    // Create minimal HTML content with basic CSS only
+    const htmlContent = `
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>${title}</title>
+    <style>
+        body {
+            font-family: 'Roboto';
+            font-size: 12px;
+            color: #333;
+            margin: 0px;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 { 
+            font-size: 18px; 
+            font-weight: bold; 
+            margin: 16px 0px 12px 0px; 
+            padding-bottom: 8px;
+            border-bottom: 2px solid #333;
+        }
+        h2 { 
+            font-size: 16px; 
+            font-weight: bold; 
+            margin: 14px 0px 10px 0px; 
+            padding-bottom: 4px;
+            border-bottom: 1px solid #666;
+        }
+        h3 { 
+            font-size: 14px; 
+            font-weight: bold; 
+            margin: 12px 0px 8px 0px; 
+        }
+        h4 { 
+            font-size: 13px; 
+            font-weight: bold; 
+            margin: 10px 0px 6px 0px; 
+        }
+        h5 { 
+            font-size: 12px; 
+            font-weight: bold; 
+            margin: 8px 0px 4px 0px; 
+        }
+        h6 { 
+            font-size: 11px; 
+            font-weight: bold; 
+            margin: 6px 0px 4px 0px; 
+        }
+        p {
+            margin: 8px 0px;
+            text-align: justify;
+        }
+        ul, ol {
+            margin: 8px 0px;
+            padding-left: 20px;
+        }
+        li {
+            margin: 4px 0px;
+        }
+        table {
+            margin: 12px 0px;
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            font-size: 11px;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        blockquote {
+            margin: 12px 0px;
+            padding: 8px 16px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            font-style: italic;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 2px 4px;
+            font-size: 10px;
+            border-radius: 2px;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 12px;
+            margin: 12px 0px;
+            font-size: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    ${content}
+</body>
+</html>`;
 
-Content: ${content}
+    // Generate PDF from HTML using react-pdf-html
+    const pdfDocument = React.createElement(
+      Document,
+      null,
+      React.createElement(
+        Page,
+        null,
+        React.createElement(Html, null, htmlContent)
+      )
+    );
 
-Requirements:
-- Use proper Markdown structure with # ## ### for headings
-- Use bullet points (-) and numbered lists (1.)
-- Use tables with | syntax for tabular data
-- Include proper spacing and formatting
-- Make it professional and readable
-- Ensure content is complete and well-organized
-
-Provide only the Markdown content (no explanations):`;
-
-    const markdownResponse = await this.llm.invoke(pdfPrompt);
-    let markdownContent = markdownResponse.content as string;
-
-    // Configure options for PDF generation
-    const pdf_options = {
-      pdf_options: {
-        format: "A4" as const,
-        margin: {
-          top: "20mm",
-          right: "20mm",
-          bottom: "20mm",
-          left: "20mm",
-        },
-        printBackground: true,
-        displayHeaderFooter: false,
-      },
-      stylesheet: [],
-      marked_options: {
-        highlight: null,
-      },
-    };
-
-    // Convert markdown to PDF
-    const pdf = await mdToPdf({ content: markdownContent }, pdf_options);
+    // Use renderToBuffer from named import instead
+    const { renderToBuffer } = await import("@react-pdf/renderer");
+    const pdfBuffer = await renderToBuffer(pdfDocument);
 
     return {
-      buffer: pdf.content,
+      buffer: pdfBuffer,
       filename: `${title.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`,
       mimeType: "application/pdf",
     };
@@ -448,65 +617,157 @@ Provide only the JSON (no explanations):`;
     content: string,
     title: string
   ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
-    const { convertMarkdownToDocx } = await import("@mohtasham/md-to-docx");
+    const HTMLtoDOCX = (await import("html-to-docx")).default;
 
-    // Enhanced system prompt for DOCX generation with markdown formatting
-    const docxPrompt = `Transform the following content into well-structured Markdown suitable for Word document generation:
+    // Enhanced system prompt for DOCX generation with HTML formatting
+    const docxPrompt = `Transform the following content into well-structured HTML suitable for Word document generation:
 
 Content: ${content}
 
 Requirements:
-- Use proper Markdown structure with # ## ### #### ##### for headings (H1-H5)
-- Use bullet points (-) and numbered lists (1.) where appropriate
-- Include proper paragraph breaks with double line breaks
+- Use proper HTML structure with <h1> <h2> <h3> <h4> <h5> for headings
+- Use <ul> and <ol> for bullet points and numbered lists
+- Include proper paragraph breaks with <p> tags
 - Make it professional and document-style
 - Organize content with clear sections and subsections
-- Use **bold** and *italic* formatting where appropriate
-- Include tables using Markdown table syntax when presenting tabular data
-- Use > for blockquotes when highlighting important information
-- Use \`code\` for inline code or technical terms
-- Use \`\`\`language blocks for code snippets
-- Add [TOC] at the beginning if the document has multiple sections
-- Use \\pagebreak to separate major sections if needed
+- Use <strong> and <em> for bold and italic formatting
+- Include tables using proper HTML table syntax (<table>, <tr>, <td>, <th>)
+- Use <blockquote> for highlighting important information
+- Use <code> for inline code or technical terms
+- Use <pre><code> blocks for code snippets
+- Ensure proper nesting and valid HTML structure
+- Do NOT include any CSS styling or font-family properties
+- Do NOT add <style> tags or inline CSS styles
 
-Provide only the Markdown content (no explanations):`;
+Provide only the HTML content (no explanations):`;
 
-    const markdownResponse = await this.llm.invoke(docxPrompt);
-    let markdownContent = markdownResponse.content as string;
+    const htmlResponse = await this.llm.invoke(docxPrompt);
+    let htmlContent = htmlResponse.content as string;
+
+    // Add comprehensive CSS styling for better document appearance
+    const styledHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>${title}</title>
+          <style>
+            body {
+              font-family: 'Times New Roman', serif;
+              font-size: 12pt;
+              line-height: 1.5;
+              margin: 1in;
+              color: #000;
+            }
+            h1 {
+              font-size: 18pt;
+              font-weight: bold;
+              margin: 24pt 0 12pt 0;
+              page-break-after: avoid;
+            }
+            h2 {
+              font-size: 16pt;
+              font-weight: bold;
+              margin: 18pt 0 10pt 0;
+              page-break-after: avoid;
+            }
+            h3 {
+              font-size: 14pt;
+              font-weight: bold;
+              margin: 14pt 0 8pt 0;
+              page-break-after: avoid;
+            }
+            h4 {
+              font-size: 13pt;
+              font-weight: bold;
+              margin: 12pt 0 6pt 0;
+              page-break-after: avoid;
+            }
+            h5 {
+              font-size: 12pt;
+              font-weight: bold;
+              margin: 10pt 0 6pt 0;
+              page-break-after: avoid;
+            }
+            p {
+              margin: 0 0 12pt 0;
+              text-align: justify;
+            }
+            ul, ol {
+              margin: 12pt 0;
+              padding-left: 36pt;
+            }
+            li {
+              margin: 6pt 0;
+            }
+            table {
+              border-collapse: collapse;
+              width: 100%;
+              margin: 12pt 0;
+            }
+            th, td {
+              border: 1pt solid #000;
+              padding: 6pt;
+              text-align: left;
+            }
+            th {
+              background-color: #f0f0f0;
+              font-weight: bold;
+            }
+            blockquote {
+              margin: 12pt 24pt;
+              padding: 12pt;
+              border-left: 3pt solid #ccc;
+              background-color: #f9f9f9;
+              font-style: italic;
+            }
+            code {
+              font-family: 'Courier New', monospace;
+              font-size: 10pt;
+              background-color: #f5f5f5;
+              padding: 2pt;
+              border: 1pt solid #ddd;
+            }
+            pre {
+              background-color: #f5f5f5;
+              border: 1pt solid #ddd;
+              padding: 12pt;
+              margin: 12pt 0;
+              overflow-x: auto;
+            }
+            pre code {
+              background: none;
+              border: none;
+              padding: 0;
+            }
+          </style>
+        </head>
+        <body>
+          ${htmlContent}
+        </body>
+      </html>
+    `;
 
     // Configure options for professional document styling
     const options = {
-      documentType: "document" as const,
-      style: {
-        titleSize: 32,
-        headingSpacing: 240,
-        paragraphSpacing: 200,
-        lineSpacing: 1.15,
-        heading1Size: 28,
-        heading2Size: 24,
-        heading3Size: 20,
-        heading4Size: 18,
-        heading5Size: 16,
-        paragraphSize: 12,
-        listItemSize: 12,
-        codeBlockSize: 10,
-        blockquoteSize: 12,
-        tocFontSize: 14,
-        paragraphAlignment: "JUSTIFIED" as const,
-        blockquoteAlignment: "LEFT" as const,
-        direction: "LTR" as const,
+      orientation: "portrait" as const,
+      margins: {
+        top: 1440, // 1 inch
+        right: 1440,
+        bottom: 1440,
+        left: 1440,
       },
+      title: title,
+      creator: "Document Assistant",
+      font: "Times New Roman",
+      fontSize: 22, // 11pt in HIP (Half of point)
     };
 
-    // Convert markdown to DOCX
-    const blob = await convertMarkdownToDocx(markdownContent, options);
-
-    // Convert blob to buffer
-    const arrayBuffer = await blob.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // Convert HTML to DOCX
+    const docxBuffer = await HTMLtoDOCX(styledHtml, null, options);
 
     return {
-      buffer,
+      buffer: Buffer.from(docxBuffer),
       filename: `${title.replace(/[^a-zA-Z0-9]/g, "_")}.docx`,
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -520,65 +781,134 @@ Provide only the Markdown content (no explanations):`;
     content: string,
     title: string
   ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
-    const { convertMarkdownToDocx } = await import("@mohtasham/md-to-docx");
+    const pptxgen = await import("pptxgenjs");
+    const html2pptxgenjs = await import("html2pptxgenjs");
 
-    // Enhanced system prompt for PPTX-style content (presentation format)
-    const pptxPrompt = `Transform the following content into well-structured presentation content suitable for slides:
+    // Enhanced system prompt for HTML content suitable for presentations
+    const htmlPrompt = `Transform the following content into well-structured HTML suitable for presentation slides:
 
 Content: ${content}
 
 Requirements:
 - Create clear, concise sections that would work well as slides
-- Use headings for slide titles
-- Use bullet points and numbered lists for key information
+- Use proper HTML headings (h1, h2, h3) for slide titles and sections
+- Use bullet points (<ul>, <ol>) and numbered lists for key information
 - Keep content presentation-friendly and easy to read
-- Include introduction and conclusion sections if appropriate
+- Include proper HTML structure with semantic elements
 - Make it professional and presentation-style
-- Use markdown formatting (headings, lists, emphasis)
+- Use proper HTML formatting (headings, lists, paragraphs, emphasis)
 
-Format the content as structured markdown that would translate well to presentation slides.
+Format the content as clean, semantic HTML that would translate well to presentation slides.
 
-Provide only the Markdown content (no explanations):`;
+Provide only the HTML content (no explanations):`;
 
-    const markdownResponse = await this.llm.invoke(pptxPrompt);
-    let markdownContent = markdownResponse.content as string;
+    const htmlResponse = await this.llm.invoke(htmlPrompt);
+    let htmlContent = htmlResponse.content as string;
 
-    // Configure options for presentation-style document
+    // Clean up the HTML content
+    htmlContent = htmlContent.replace(/```html\n?/g, "").replace(/```\n?/g, "");
+
+    // Create a new presentation
+    const pres = new pptxgen.default();
+
+    // Configure CSS options for proper styling
     const options = {
-      documentType: "document" as const,
-      style: {
-        titleSize: 36,
-        headingSpacing: 300,
-        paragraphSpacing: 240,
-        lineSpacing: 1.5,
-        heading1Size: 32,
-        heading2Size: 28,
-        heading3Size: 24,
-        heading4Size: 20,
-        heading5Size: 18,
-        paragraphSize: 14,
-        listItemSize: 14,
-        codeBlockSize: 12,
-        blockquoteSize: 14,
-        tocFontSize: 16,
-        paragraphAlignment: "LEFT" as const,
-        blockquoteAlignment: "LEFT" as const,
-        direction: "LTR" as const,
-      },
+      css: `
+        h1, h2, h3, h4, h5, h6 {
+          font-family: 'Calibri', Arial, sans-serif;
+          font-weight: bold;
+          margin: 12pt 0 6pt 0;
+          color: #1f4e79;
+        }
+        h1 { font-size: 24pt; }
+        h2 { font-size: 20pt; }
+        h3 { font-size: 18pt; }
+        h4 { font-size: 16pt; }
+        h5 { font-size: 14pt; }
+        h6 { font-size: 12pt; }
+        p {
+          font-family: 'Calibri', Arial, sans-serif;
+          font-size: 12pt;
+          margin: 6pt 0;
+          line-height: 1.4;
+        }
+        ul, ol {
+          font-family: 'Calibri', Arial, sans-serif;
+          font-size: 12pt;
+          margin: 6pt 0;
+          padding-left: 20pt;
+        }
+        li {
+          margin: 3pt 0;
+          line-height: 1.3;
+        }
+        strong, b {
+          font-weight: bold;
+        }
+        em, i {
+          font-style: italic;
+        }
+        table {
+          border-collapse: collapse;
+          width: 100%;
+          margin: 6pt 0;
+        }
+        th, td {
+          border: 1pt solid #000;
+          padding: 4pt;
+          text-align: left;
+          font-size: 11pt;
+        }
+        th {
+          background-color: #f0f0f0;
+          font-weight: bold;
+        }
+      `,
+      fontFace: "Calibri",
+      fontSize: 12,
+      paraSpaceAfter: 6,
+      paraSpaceBefore: 3,
     };
 
-    // Convert markdown to DOCX (presentation-style formatting)
-    const blob = await convertMarkdownToDocx(markdownContent, options);
+    // Convert HTML to PptxGenJS text items
+    const items = html2pptxgenjs.htmlToPptxText(htmlContent, options);
 
-    // Convert blob to buffer
-    const arrayBuffer = await blob.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // Add a slide with the converted content
+    const slide = pres.addSlide();
+
+    // Add title if provided
+    if (title) {
+      slide.addText(title, {
+        x: 0.5,
+        y: 0.2,
+        w: 9,
+        h: 0.8,
+        fontSize: 24,
+        bold: true,
+        color: "1f4e79",
+        align: "center",
+        fontFace: "Calibri",
+      });
+    }
+
+    // Add the main content
+    slide.addText(items as any, {
+      x: 0.5,
+      y: title ? 1.2 : 0.5,
+      w: 9,
+      h: title ? 5.8 : 6.5,
+      valign: "top",
+      fontFace: "Calibri",
+    });
+
+    // Generate the PPTX file as buffer
+    const pptxBuffer = await pres.write({ outputType: "nodebuffer" });
 
     return {
-      buffer,
-      filename: `${title.replace(/[^a-zA-Z0-9]/g, "_")}.docx`,
+      buffer: pptxBuffer as Buffer,
+      filename: `${title.replace(/[^a-zA-Z0-9]/g, "_")}.pptx`,
       mimeType:
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     };
   }
 
