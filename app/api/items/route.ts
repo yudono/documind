@@ -1,0 +1,163 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user || !(session.user as any).id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const parentId = searchParams.get('parentId');
+    const type = searchParams.get('type'); // Optional filter by type
+
+    const whereClause: any = {
+      userId: (session.user as any).id,
+      parentId: parentId || null,
+    };
+
+    if (type && (type === 'folder' || type === 'document')) {
+      whereClause.type = type;
+    }
+
+    const items = await prisma.item.findMany({
+      where: whereClause,
+      include: {
+        parent: true,
+        children: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          }
+        },
+      },
+      orderBy: [
+        { type: 'asc' }, // Folders first
+        { name: 'asc' }  // Then alphabetical
+      ],
+    });
+
+    return NextResponse.json(items);
+  } catch (error) {
+    console.error("Error fetching items:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user || !(session.user as any).id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { name, type, parentId, ...itemData } = body;
+
+    // Validate required fields
+    if (!name || !type) {
+      return NextResponse.json(
+        { error: "Missing required fields: name, type" },
+        { status: 400 }
+      );
+    }
+
+    if (!['folder', 'document'].includes(type)) {
+      return NextResponse.json(
+        { error: "Type must be either 'folder' or 'document'" },
+        { status: 400 }
+      );
+    }
+
+    // For documents, validate required document fields
+    if (type === 'document') {
+      const { fileType, size } = itemData;
+      if (!fileType || !size) {
+        return NextResponse.json(
+          { error: "Missing required document fields: fileType, size" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Check if item with same name exists in the same parent
+    const existingItem = await prisma.item.findFirst({
+      where: {
+        name,
+        parentId: parentId || null,
+        userId: (session.user as any).id,
+        type,
+      },
+    });
+
+    if (existingItem) {
+      return NextResponse.json(
+        { error: `${type === 'folder' ? 'Folder' : 'Document'} with this name already exists` },
+        { status: 409 }
+      );
+    }
+
+    // For documents, generate mock analysis
+    let analysisData = {};
+    if (type === 'document') {
+      analysisData = {
+        summary: `This document appears to be a ${
+          itemData.fileType?.includes("pdf")
+            ? "PDF report"
+            : itemData.fileType?.includes("word")
+            ? "Word document"
+            : "text file"
+        } containing business-related content.`,
+        keyPoints: JSON.stringify([
+          "Strategic business planning and market analysis",
+          "Financial projections and budget considerations",
+          "Operational efficiency recommendations",
+        ]),
+        sentiment: Math.random() > 0.5 ? "positive" : "neutral",
+        topics: JSON.stringify([
+          "Business Strategy",
+          "Financial Planning",
+          "Market Analysis",
+        ]),
+      };
+    }
+
+    const item = await prisma.item.create({
+      data: {
+        name,
+        type,
+        parentId: parentId || null,
+        userId: (session.user as any).id,
+        ...itemData,
+        ...analysisData,
+      },
+      include: {
+        parent: true,
+        children: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          }
+        },
+      },
+    });
+
+    return NextResponse.json(item, { status: 201 });
+  } catch (error) {
+    console.error("Error creating item:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

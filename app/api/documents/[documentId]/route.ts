@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { documentId: string } }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -16,7 +16,7 @@ export async function GET(
 
     const document = await prisma.document.findFirst({
       where: {
-        id: params.id,
+        id: params.documentId,
         userId: (session.user as any).id,
       },
     })
@@ -34,7 +34,7 @@ export async function GET(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { documentId: string } }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -45,7 +45,7 @@ export async function DELETE(
 
     const document = await prisma.document.findFirst({
       where: {
-        id: params.id,
+        id: params.documentId,
         userId: (session.user as any).id,
       },
     })
@@ -56,11 +56,11 @@ export async function DELETE(
 
     await prisma.document.delete({
       where: {
-        id: params.id,
+        id: params.documentId,
       },
     })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ message: 'Document deleted successfully' })
   } catch (error) {
     console.error('Error deleting document:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -69,7 +69,7 @@ export async function DELETE(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { documentId: string } }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -82,7 +82,7 @@ export async function PUT(
 
     const document = await prisma.document.findFirst({
       where: {
-        id: params.id,
+        id: params.documentId,
         userId: (session.user as any).id,
       },
     })
@@ -93,7 +93,7 @@ export async function PUT(
 
     const updatedDocument = await prisma.document.update({
       where: {
-        id: params.id,
+        id: params.documentId,
       },
       data: {
         ...(name && { name }),

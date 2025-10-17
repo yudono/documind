@@ -6,7 +6,7 @@ import { performOCR } from '@/lib/groq';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { documentId: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -23,7 +23,7 @@ export async function POST(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const documentId = params.id;
+    const documentId = params.documentId;
 
     // Get the document from database
     const document = await prisma.document.findFirst({

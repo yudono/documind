@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { message, context, documentRequest, sessionId } = body;
+    const { message, context, documentRequest, sessionId, type } = body;
 
     if (!message) {
       return NextResponse.json(
@@ -124,11 +124,12 @@ export async function POST(request: NextRequest) {
     }> = [
       {
         role: "system" as const,
-        content:
-          "You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.",
+        content: type === "document_assistance" 
+          ? "You are a helpful AI assistant specialized in document editing and writing assistance. You help users improve their writing, provide suggestions, summarize content, and generate text. Focus on being concise and actionable in your responses."
+          : "You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.",
       },
       ...(context
-        ? [{ role: "user" as const, content: `Context: ${context}` }]
+        ? [{ role: "user" as const, content: `Document context: ${context}` }]
         : []),
       { role: "user" as const, content: message },
     ];
@@ -148,11 +149,12 @@ export async function POST(request: NextRequest) {
       messages = [
         {
           role: "system" as const,
-          content:
-            "You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.",
+          content: type === "document_assistance" 
+            ? "You are a helpful AI assistant specialized in document editing and writing assistance. You help users improve their writing, provide suggestions, summarize content, and generate text. Focus on being concise and actionable in your responses."
+            : "You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.",
         },
         ...(context
-          ? [{ role: "user" as const, content: `Context: ${context}` }]
+          ? [{ role: "user" as const, content: `Document context: ${context}` }]
           : []),
         ...previousMessages.slice(-9).map((msg: any) => ({
           role: msg.role as "user" | "assistant",

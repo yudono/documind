@@ -49,6 +49,7 @@ model User {
   sessions      Session[]
   documents     Document[]
   folders       Folder[]
+  items         Item[]    // New unified items relation
   chatSessions  ChatSession[]
   templates     Template[]
   templateGenerations TemplateGeneration[]
@@ -256,4 +257,41 @@ model TemplateGeneration {
   aiEnhanced  Boolean  @default(false) // Whether AI was used to enhance the generation
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// Unified Item model that combines folders and documents
+model Item {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // "folder" or "document"
+  
+  // Common fields
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentId    String?  // For hierarchy (both folders and documents can be in folders)
+  parent      Item?    @relation("ItemHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Item[]   @relation("ItemHierarchy")
+  
+  // Document-specific fields (nullable for folders)
+  fileType    String?  // MIME type for documents
+  size        Int?     // File size in bytes
+  content     String?  // Document content
+  url         String?  // S3 URL
+  key         String?  // S3 key
+  bucket      String?  // S3 bucket
+  summary     String?  // AI-generated summary
+  keyPoints   String?  // AI-generated key points
+  sentiment   String?  // AI sentiment analysis
+  topics      String?  // AI-generated topics
+  milvusCollectionId String? // Reference to Milvus collection
+  
+  // Folder-specific fields (nullable for documents)
+  color       String?  @default("#3B82F6") // Folder color
+  
+  // Common metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([userId, parentId])
+  @@index([type])
 }
