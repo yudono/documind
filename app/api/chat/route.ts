@@ -7,6 +7,7 @@ import {
   generateDocument,
 } from "@/lib/groq";
 import { prisma } from "@/lib/prisma";
+import { getChatContext, generateChatMessageEmbedding } from "@/lib/chat-embeddings";
 
 export async function POST(request: NextRequest) {
   try {
@@ -106,6 +107,11 @@ export async function POST(request: NextRequest) {
           sessionId: sessionId,
         },
       });
+
+      // Generate embedding for user message (async, don't wait)
+      generateChatMessageEmbedding(userMessage.id, message).catch(error => {
+        console.error('Failed to generate embedding for user message:', error);
+      });
     }
 
     let response: string;
@@ -128,7 +134,11 @@ export async function POST(request: NextRequest) {
     ];
 
     // If sessionId is provided, get previous messages for context
+    let conversationContext = '';
     if (sessionId) {
+      // Get embedding-based conversation context
+      conversationContext = await getChatContext(message, sessionId, 3);
+      
       const previousMessages = await prisma.chatMessage.findMany({
         where: { sessionId: sessionId },
         orderBy: { createdAt: "asc" },
@@ -155,9 +165,9 @@ export async function POST(request: NextRequest) {
     const agentResponse = await generateChatCompletionWithAgent(messages, {
       userId: user.id,
       sessionId: sessionId,
-      useSemanticSearch: false,
+      useSemanticSearch: true, // Enable semantic search to retrieve context from vector DB
       documentIds: context ? [] : undefined,
-      conversationContext: context,
+      conversationContext: conversationContext || context,
     });
 
     // Handle different response types from the agent
@@ -219,6 +229,11 @@ export async function POST(request: NextRequest) {
           role: "assistant",
           sessionId: sessionId,
         },
+      });
+
+      // Generate embedding for assistant message (async, don't wait)
+      generateChatMessageEmbedding(assistantMessage.id, response).catch(error => {
+        console.error('Failed to generate embedding for assistant message:', error);
       });
 
       // Update chat session timestamp

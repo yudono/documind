@@ -86,7 +86,7 @@ model Document {
   folder      Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  embeddings  DocumentEmbedding[]
+  milvusCollectionId String? // Reference to Milvus collection for this document's chunks
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -122,27 +122,9 @@ model ChatMessage {
   sessionId     String
   session       ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   referencedDocs String[]   // Array of document IDs
-  embeddings    ChatMessageEmbedding[]
+  milvusId      String?     // Milvus vector ID for semantic search
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
-}
-
-model ChatMessageEmbedding {
-  id         String      @id @default(cuid())
-  messageId  String
-  message    ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  embedding  Float[]     // Vector embedding
-  createdAt  DateTime    @default(now())
-}
-
-model DocumentEmbedding {
-  id         String   @id @default(cuid())
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  chunkText  String
-  embedding  Float[]  // Vector embedding
-  chunkIndex Int
-  createdAt  DateTime @default(now())
 }
 
 model UserSettings {

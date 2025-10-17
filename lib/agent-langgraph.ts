@@ -3,7 +3,7 @@ import { StateGraph, END, START, Annotation } from "@langchain/langgraph";
 import { ChatGroq } from "@langchain/groq";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { prisma } from "./prisma";
-import { findSimilarChunks, generateEmbedding } from "./embeddings";
+import { milvusService } from "./milvus";
 import {
   DocumentGenerator,
   DocumentGenerationOptions,
@@ -93,6 +93,7 @@ export class LangGraphDocumentAgent {
     // Bind methods to preserve 'this' context
     const retrieveContextNode = this.retrieveContextNode.bind(this);
     const generateResponseNode = this.generateResponseNode.bind(this);
+    const generateDocumentResponseNode = this.generateDocumentResponseNode.bind(this);
     const decideDocumentGenerationNode =
       this.decideDocumentGenerationNode.bind(this);
     const generateDocumentNode = this.generateDocumentNode.bind(this);
@@ -102,6 +103,7 @@ export class LangGraphDocumentAgent {
     const workflow = new StateGraph(AgentStateAnnotation)
       .addNode("retrieveContext", retrieveContextNode)
       .addNode("generateResponse", generateResponseNode)
+      .addNode("generateDocumentResponse", generateDocumentResponseNode)
       .addNode("decideDocumentGeneration", decideDocumentGenerationNode)
       .addNode("generateDocument", generateDocumentNode)
       .addNode("saveConversation", saveConversationNode)
@@ -109,9 +111,10 @@ export class LangGraphDocumentAgent {
       .addEdge("retrieveContext", "generateResponse")
       .addEdge("generateResponse", "decideDocumentGeneration")
       .addConditionalEdges("decideDocumentGeneration", shouldGenerateDocument, {
-        generateDocument: "generateDocument",
+        generateDocumentResponse: "generateDocumentResponse",
         saveConversation: "saveConversation",
       })
+      .addEdge("generateDocumentResponse", "generateDocument")
       .addEdge("generateDocument", "saveConversation")
       .addEdge("saveConversation", END);
 
@@ -130,53 +133,21 @@ export class LangGraphDocumentAgent {
 
     if (state.useSemanticSearch) {
       try {
-        // Generate embedding for the query
-        const queryEmbedding = await generateEmbedding(state.query);
-
-        // Get document embeddings from database
-        const whereClause: any = {
-          document: {
-            userId: state.userId,
-          },
-        };
-
-        if (state.documentIds && state.documentIds.length > 0) {
-          whereClause.documentId = {
-            in: state.documentIds,
-          };
+        // Use Milvus for semantic search
+        if (!milvusService) {
+          console.warn('Milvus not configured - skipping context retrieval');
+          return { ...state, context: '', referencedDocuments: [] };
         }
-
-        const documentEmbeddings = await prisma.documentEmbedding.findMany({
-          where: whereClause,
-          include: {
-            document: {
-              select: {
-                id: true,
-                name: true,
-                type: true,
-              },
-            },
-          },
-        });
-
-        // Transform embeddings to match the expected format
-        const formattedEmbeddings = documentEmbeddings.map((embedding) => ({
-          id: embedding.id,
-          embedding: embedding.embedding,
-          text: embedding.chunkText,
-          documentId: embedding.documentId,
-        }));
-
-        // Find similar chunks
-        const similarChunks = findSimilarChunks(
-          queryEmbedding,
-          formattedEmbeddings,
+        
+        const similarChunks = await milvusService.searchSimilarChunksByText(
+          state.query,
+          state.userId,
           5,
-          0.5
+          state.documentIds
         );
 
         // Build context from similar chunks
-        context = similarChunks.map((chunk) => chunk.text).join("\n\n");
+        context = similarChunks.map((chunk) => chunk.chunkText).join("\n\n");
 
         // Get referenced document IDs
         referencedDocuments = Array.from(
@@ -240,49 +211,10 @@ export class LangGraphDocumentAgent {
     state: AgentState
   ): Promise<Partial<AgentState>> {
     try {
-      // Detect if this is likely a document generation request
-      const isDocumentRequest = this.isDocumentGenerationRequest(state.query);
-
       const messages = [
         new SystemMessage(`You are a helpful AI assistant that can analyze documents and answer questions based on the provided context.
 
-You can also generate documents when requested. ${
-          isDocumentRequest
-            ? `IMPORTANT: This appears to be a document generation request. 
-
-For PDF, DOCX, and PPTX documents: Please provide your response in HTML format with proper structure.
-
-DOCUMENT FORMATTING REQUIREMENTS (for PDF, DOCX, PPTX only):
-- Use proper HTML structure with <h1>, <h2>, <h3>, <h4>, <h5> for headings
-- Use <p> tags for paragraphs
-- Use <ul> and <ol> for bullet points and numbered lists
-- Use <li> for list items
-- Use <table>, <tr>, <th>, <td> for tables
-- Use <strong> for bold text and <em> for italic text
-- Use <blockquote> for important quotes or highlights
-- Use <code> for inline code and <pre><code> for code blocks
-- Ensure proper HTML structure and nesting
-- Do NOT use Markdown formatting (no #, *, -, etc.)
-- Do NOT include any CSS styling, especially font-family properties
-- Do NOT add <style> tags or inline CSS styles
-- Provide complete, well-structured HTML content without any CSS
-
-For Excel (XLSX) documents: Follow the specific JSON format instructions provided in the Excel generation prompt.
-
-Example HTML structure (for PDF, DOCX, PPTX):
-<h1>Document Title</h1>
-<p>Introduction paragraph with <strong>important</strong> information.</p>
-<h2>Section Title</h2>
-<ul>
-<li>First bullet point</li>
-<li>Second bullet point</li>
-</ul>
-<table>
-<tr><th>Header 1</th><th>Header 2</th></tr>
-<tr><td>Data 1</td><td>Data 2</td></tr>
-</table>`
-            : `If the user asks you to create, generate, or write a document, report, analysis, or any structured content, please provide the complete content in HTML format with proper structure using HTML tags instead of Markdown. Do NOT include any CSS styling, especially font-family properties. Note: Excel documents have their own specific format requirements.`
-        }
+Please provide clear, conversational responses in plain text format. Do not use HTML formatting or special markup unless specifically requested.
 
 ${
   state.context
@@ -293,13 +225,7 @@ Please use this context to answer the user's question. If the context doesn't co
     : "No document context available. Please provide a helpful general response."
 }
 
-When generating documents, please:
-1. Provide complete, well-structured HTML content appropriate for the document type
-2. Use proper HTML formatting and organization
-3. Include relevant details and information
-4. Make the content professional and comprehensive
-5. Use semantic HTML tags for better structure
-`),
+Provide helpful, informative responses that directly address the user's question.`),
         new HumanMessage(state.query),
       ];
 
@@ -412,7 +338,81 @@ When generating documents, please:
    * Conditional function to determine next node based on document generation decision
    */
   private shouldGenerateDocument(state: AgentState): string {
-    return state.shouldGenerateDoc ? "generateDocument" : "saveConversation";
+    return state.shouldGenerateDoc ? "generateDocumentResponse" : "saveConversation";
+  }
+
+  /**
+   * Generate HTML-formatted response for document creation
+   */
+  private async generateDocumentResponseNode(
+    state: AgentState
+  ): Promise<Partial<AgentState>> {
+    try {
+      const messages = [
+        new SystemMessage(`You are a helpful AI assistant that generates structured content for document creation.
+
+IMPORTANT: This is a document generation request. Please provide your response in HTML format with proper structure.
+
+DOCUMENT FORMATTING REQUIREMENTS:
+- Use proper HTML structure with <h1>, <h2>, <h3>, <h4>, <h5> for headings
+- Use <p> tags for paragraphs
+- Use <ul> and <ol> for bullet points and numbered lists
+- Use <li> for list items
+- Use <table>, <tr>, <th>, <td> for tables
+- Use <strong> for bold text and <em> for italic text
+- Use <blockquote> for important quotes or highlights
+- Use <code> for inline code and <pre><code> for code blocks
+- Ensure proper HTML structure and nesting
+- Do NOT use Markdown formatting (no #, *, -, etc.)
+- Do NOT include any CSS styling, especially font-family properties
+- Do NOT add <style> tags or inline CSS styles
+- Provide complete, well-structured HTML content without any CSS
+
+For Excel (XLSX) documents: Follow the specific JSON format instructions provided in the Excel generation prompt.
+
+Example HTML structure (for PDF, DOCX, PPTX):
+<h1>Document Title</h1>
+<p>Introduction paragraph with <strong>important</strong> information.</p>
+<h2>Section Title</h2>
+<ul>
+<li>First bullet point</li>
+<li>Second bullet point</li>
+</ul>
+<table>
+<tr><th>Header 1</th><th>Header 2</th></tr>
+<tr><td>Data 1</td><td>Data 2</td></tr>
+</table>
+
+${
+  state.context
+    ? `Context from documents:
+${state.context}
+
+Please use this context to create the document content. If the context doesn't contain relevant information, you can provide general content but mention that you don't have specific information from the documents.`
+    : "No document context available. Please create comprehensive document content based on the user's request."
+}
+
+When generating documents, please:
+1. Provide complete, well-structured HTML content appropriate for the document type
+2. Use proper HTML formatting and organization
+3. Include relevant details and information
+4. Make the content professional and comprehensive
+5. Use semantic HTML tags for better structure
+`),
+        new HumanMessage(state.query),
+      ];
+
+      const response = await this.llm.invoke(messages);
+      const aiResponse = response.content as string;
+
+      return {
+        aiResponse,
+        finalResponse: aiResponse,
+      };
+    } catch (error) {
+      console.error("Error generating document response:", error);
+      throw new Error("Failed to generate document response");
+    }
   }
 
   /**

@@ -5,7 +5,7 @@ env.allowLocalModels = false;
 
 let embeddingPipeline: any = null;
 
-// Initialize the embedding pipeline
+// Initialize the embedding pipeline with a self-hosted model
 async function getEmbeddingPipeline() {
   if (!embeddingPipeline) {
     try {
@@ -25,7 +25,7 @@ async function getEmbeddingPipeline() {
   return embeddingPipeline;
 }
 
-// Generate embeddings for text
+// Generate embeddings for text using self-hosted model
 export async function generateEmbedding(text: string): Promise<number[]> {
   try {
     if (!text || text.trim().length === 0) {
@@ -47,49 +47,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   }
 }
 
-// Split text into chunks for embedding
-export function splitTextIntoChunks(text: string, maxChunkSize: number = 500, overlap: number = 50): string[] {
-  if (!text || text.trim().length === 0) {
-    return [];
-  }
-
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
-  const chunks: string[] = [];
-  let currentChunk = '';
-
-  for (const sentence of sentences) {
-    const trimmedSentence = sentence.trim();
-    
-    if (currentChunk.length + trimmedSentence.length + 1 <= maxChunkSize) {
-      currentChunk += (currentChunk ? '. ' : '') + trimmedSentence;
-    } else {
-      if (currentChunk) {
-        chunks.push(currentChunk + '.');
-        
-        // Create overlap by taking the last few words
-        const words = currentChunk.split(' ');
-        const overlapWords = words.slice(-Math.min(overlap, words.length));
-        currentChunk = overlapWords.join(' ') + '. ' + trimmedSentence;
-      } else {
-        // If single sentence is too long, split by words
-        const words = trimmedSentence.split(' ');
-        for (let i = 0; i < words.length; i += maxChunkSize) {
-          const chunk = words.slice(i, i + maxChunkSize).join(' ');
-          chunks.push(chunk);
-        }
-        currentChunk = '';
-      }
-    }
-  }
-
-  if (currentChunk) {
-    chunks.push(currentChunk + '.');
-  }
-
-  return chunks.filter(chunk => chunk.trim().length > 0);
-}
-
-// Calculate cosine similarity between two embeddings
+// Calculate cosine similarity between two embeddings (kept for chat embeddings functionality)
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) {
     throw new Error('Embeddings must have the same length');
@@ -113,24 +71,4 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   }
 
   return dotProduct / (normA * normB);
-}
-
-// Find most similar chunks to a query
-export function findSimilarChunks(
-  queryEmbedding: number[],
-  documentEmbeddings: { id: string; embedding: number[]; text: string; documentId: string }[],
-  topK: number = 5,
-  threshold: number = 0.5
-): { id: string; text: string; documentId: string; similarity: number }[] {
-  const similarities = documentEmbeddings.map(doc => ({
-    id: doc.id,
-    text: doc.text,
-    documentId: doc.documentId,
-    similarity: cosineSimilarity(queryEmbedding, doc.embedding),
-  }));
-
-  return similarities
-    .filter(item => item.similarity >= threshold)
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, topK);
 }

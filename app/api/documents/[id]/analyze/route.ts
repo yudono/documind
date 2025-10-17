@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { parseDocument } from '@/lib/document-parser';
+import { performOCR } from '@/lib/groq';
 
 export async function POST(
   request: NextRequest,
@@ -37,35 +37,30 @@ export async function POST(
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
-    // If document has a URL (S3), fetch and parse it
+    // If document has a URL (S3), fetch and analyze it
     if (document.url) {
       try {
-        const response = await fetch(document.url);
-        if (!response.ok) {
-          throw new Error('Failed to fetch document from storage');
-        }
+        // Use Groq OCR to extract text from document image
+        const extractedText = await performOCR(
+          document.url,
+          "Extract all text from this document image. Provide the text content in a clear, structured format, maintaining the original layout and formatting as much as possible."
+        );
 
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-
-        // Parse the document
-        const parsedDocument = await parseDocument(buffer, document.type, document.name);
-
-        // Update document with parsed content and analysis
+        // Create analysis based on extracted text
         const analysis = {
-          summary: `Analysis of ${document.name}: This document contains ${parsedDocument.metadata?.wordCount || 'unknown'} words${parsedDocument.metadata?.pages ? ` across ${parsedDocument.metadata.pages} pages` : ''}. The content appears to be ${getDocumentCategory(document.type, parsedDocument.text)}.`,
-          keyPoints: extractKeyPoints(parsedDocument.text),
-          sentiment: analyzeSentiment(parsedDocument.text),
-          topics: extractTopics(parsedDocument.text),
-          wordCount: parsedDocument.metadata?.wordCount || 0,
-          pages: parsedDocument.metadata?.pages || 1,
+          summary: `Analysis of ${document.name}: This document contains approximately ${extractedText.split(/\s+/).length} words. The content appears to be ${getDocumentCategory(document.type, extractedText)}.`,
+          keyPoints: extractKeyPoints(extractedText),
+          sentiment: analyzeSentiment(extractedText),
+          topics: extractTopics(extractedText),
+          wordCount: extractedText.split(/\s+/).length,
+          pages: 1, // OCR doesn't provide page count
         };
 
         // Update document in database with analysis
         await prisma.document.update({
           where: { id: documentId },
           data: {
-            content: parsedDocument.text,
+            content: extractedText,
             summary: analysis.summary,
             keyPoints: JSON.stringify(analysis.keyPoints),
             sentiment: analysis.sentiment,
@@ -76,13 +71,13 @@ export async function POST(
         return NextResponse.json({
           success: true,
           analysis,
-          extractedText: parsedDocument.text,
+          extractedText,
         });
 
-      } catch (parseError) {
-        console.error('Document parsing error:', parseError);
+      } catch (ocrError) {
+        console.error('OCR processing error:', ocrError);
         return NextResponse.json(
-          { error: 'Failed to parse document' },
+          { error: 'Failed to process document with OCR' },
           { status: 500 }
         );
       }

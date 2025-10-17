@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { parseDocument } from '@/lib/document-parser'
+import { performOCR } from '@/lib/groq'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
@@ -20,52 +20,55 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const formData = await request.formData()
-    const file = formData.get('file') as File
-    
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+    const body = await request.json()
+    const { imageUrl, prompt } = body
+
+    if (!imageUrl) {
+      return NextResponse.json({ error: 'Image URL is required' }, { status: 400 })
     }
 
-    // Convert file to buffer
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer as ArrayBuffer)
-    
-    // Parse the document
-    const parsedDocument = await parseDocument(buffer, file.type, file.name)
+    // Validate URL format
+    try {
+      new URL(imageUrl)
+    } catch {
+      return NextResponse.json({ error: 'Invalid image URL format' }, { status: 400 })
+    }
+
+    // Use Groq OCR to extract text from document image
+    const extractedText = await performOCR(
+      imageUrl,
+      prompt || "Extract all text from this document image. Provide the text content in a clear, structured format, maintaining the original layout and formatting as much as possible."
+    )
 
     return NextResponse.json({
       success: true,
-      fileName: file.name,
-      fileType: file.type,
-      fileSize: file.size,
-      extractedText: parsedDocument.text,
-      metadata: parsedDocument.metadata,
+      imageUrl,
+      extractedText,
       processedAt: new Date().toISOString(),
       processedBy: user.id,
     })
 
   } catch (error) {
-    console.error('Document parsing error:', error)
+    console.error('OCR processing error:', error)
     
-    // Handle specific parsing errors
+    // Handle specific Groq API errors
     if (error instanceof Error) {
-      if (error.message.includes('Unsupported document type')) {
+      if (error.message.includes('rate limit')) {
         return NextResponse.json(
-          { error: 'Unsupported document type. Please upload PDF, DOCX, XLSX, or PPTX files.' },
-          { status: 400 }
+          { error: 'Rate limit exceeded. Please try again later.' },
+          { status: 429 }
         )
       }
-      if (error.message.includes('Failed to parse')) {
+      if (error.message.includes('invalid image')) {
         return NextResponse.json(
-          { error: 'Failed to parse document. The file may be corrupted or password-protected.' },
+          { error: 'Invalid image format or corrupted image.' },
           { status: 400 }
         )
       }
     }
 
     return NextResponse.json(
-      { error: 'Failed to process document' },
+      { error: 'Failed to process document image for OCR' },
       { status: 500 }
     )
   }

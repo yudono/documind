@@ -1,7 +1,7 @@
 import { ChatGroq } from '@langchain/groq';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 import { prisma } from './prisma';
-import { findSimilarChunks, generateEmbedding } from './embeddings';
+import { milvusService } from './milvus';
 import { generateDocument } from './groq';
 
 interface AgentInput {
@@ -74,48 +74,21 @@ export class DocumentAgent {
     referencedDocuments: string[];
   }> {
     try {
-      // Generate embedding for the query
-      const queryEmbedding = await generateEmbedding(query);
-
-      // Get document embeddings from database
-      const whereClause: any = {
-        document: {
-          userId: userId
-        }
-      };
-
-      if (documentIds && documentIds.length > 0) {
-        whereClause.documentId = {
-          in: documentIds
-        };
+      if (!milvusService) {
+        console.warn('Milvus not configured - skipping context retrieval');
+        return { context: '', referencedDocuments: [] };
       }
-
-      const documentEmbeddings = await prisma.documentEmbedding.findMany({
-        where: whereClause,
-        include: {
-          document: {
-            select: {
-              id: true,
-              name: true,
-              type: true
-            }
-          }
-        }
-      });
-
-      // Transform embeddings to match the expected format
-      const formattedEmbeddings = documentEmbeddings.map(embedding => ({
-        id: embedding.id,
-        embedding: embedding.embedding,
-        text: embedding.chunkText,
-        documentId: embedding.documentId
-      }));
-
-      // Find similar chunks
-      const similarChunks = findSimilarChunks(queryEmbedding, formattedEmbeddings, 5, 0.5);
+      
+      // Use Milvus for semantic search
+      const similarChunks = await milvusService.searchSimilarChunksByText(
+        query,
+        userId,
+        5,
+        documentIds
+      );
 
       // Build context from similar chunks
-      const context = similarChunks.map(chunk => chunk.text).join('\n\n');
+      const context = similarChunks.map(chunk => chunk.chunkText).join('\n\n');
 
       // Get referenced document IDs
       const referencedDocumentIds = Array.from(new Set(similarChunks.map(chunk => chunk.documentId)));
