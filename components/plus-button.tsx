@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Type, Image, Link, Table, Bot, List, ListOrdered, Quote, Code, Heading1, Heading2, Heading3 } from 'lucide-react';
+import { Plus, Type, Image, Link, Table, Bot, List, ListOrdered, Quote, Code, Heading1, Heading2, Heading3, Sparkles, FileText, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -169,25 +169,58 @@ export default function PlusButton({ editor, position, visible, onClose }: PlusB
         onClose();
       }
     },
+    // AI Functionality Section
     {
       id: 'ai-continue',
-      title: 'AI Continue',
-      description: 'Continue writing with AI',
-      icon: <Bot className="h-4 w-4" />,
+      title: 'AI Continue Writing',
+      description: 'Let AI continue your thoughts',
+      icon: <Bot className="h-4 w-4 text-purple-600" />,
       action: () => {
-        // This will be handled by the parent component
-        editor?.chain().focus().insertContent('/ai-continue ').run();
+        editor?.chain().focus().insertContent('<p class="ai-placeholder" data-type="continue">✨ AI will continue writing from here...</p>').run();
         setShowMenu(false);
         onClose();
       }
     },
     {
       id: 'ai-improve',
-      title: 'AI Improve',
-      description: 'Improve selected text with AI',
-      icon: <Bot className="h-4 w-4" />,
+      title: 'AI Improve Text',
+      description: 'Enhance and refine your writing',
+      icon: <Sparkles className="h-4 w-4 text-blue-600" />,
       action: () => {
-        editor?.chain().focus().insertContent('/ai-improve ').run();
+        editor?.chain().focus().insertContent('<p class="ai-placeholder" data-type="improve">✨ Select text above to improve with AI...</p>').run();
+        setShowMenu(false);
+        onClose();
+      }
+    },
+    {
+      id: 'ai-summarize',
+      title: 'AI Summarize',
+      description: 'Create a summary of your content',
+      icon: <FileText className="h-4 w-4 text-green-600" />,
+      action: () => {
+        editor?.chain().focus().insertContent('<p class="ai-placeholder" data-type="summarize">📝 AI will generate a summary here...</p>').run();
+        setShowMenu(false);
+        onClose();
+      }
+    },
+    {
+      id: 'ai-brainstorm',
+      title: 'AI Brainstorm',
+      description: 'Generate ideas and suggestions',
+      icon: <Lightbulb className="h-4 w-4 text-yellow-600" />,
+      action: () => {
+        editor?.chain().focus().insertContent('<p class="ai-placeholder" data-type="brainstorm">💡 AI will brainstorm ideas about your topic...</p>').run();
+        setShowMenu(false);
+        onClose();
+      }
+    },
+    {
+      id: 'ai-explain',
+      title: 'AI Explain',
+      description: 'Get detailed explanations',
+      icon: <Bot className="h-4 w-4 text-indigo-600" />,
+      action: () => {
+        editor?.chain().focus().insertContent('<p class="ai-placeholder" data-type="explain">🤖 AI will explain the concept above...</p>').run();
         setShowMenu(false);
         onClose();
       }

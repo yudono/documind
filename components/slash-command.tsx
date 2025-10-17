@@ -4,7 +4,7 @@ import { Extension } from "@tiptap/core";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
 import { PluginKey } from "@tiptap/pm/state";
-import tippy from "tippy.js";
+import { computePosition, flip, shift, autoUpdate, offset } from "@floating-ui/dom";
 import React, {
   useState,
   useEffect,
@@ -252,48 +252,95 @@ export const getSuggestionItems = ({ query }: { query: string }) => {
 
 export const renderItems = () => {
   let component: ReactRenderer | null = null;
-  let popup: any = null;
+  let popup: HTMLElement | null = null;
+  let cleanup: (() => void) | null = null;
 
   return {
     onStart: (props: any) => {
       component = new ReactRenderer(SlashCommandsList, {
+        editor: props.editor,
         props: {
           items: props.items,
           command: props.command,
         },
-        editor: props.editor,
       });
 
       if (!props.clientRect) {
         return;
       }
 
-      popup = tippy("body", {
-        getReferenceClientRect: props.clientRect,
-        appendTo: () => document.body,
-        content: component.element,
-        showOnCreate: true,
-        interactive: true,
-        trigger: "manual",
-        placement: "bottom-start",
-      });
+      // Create popup element
+      popup = document.createElement('div');
+      popup.style.position = 'absolute';
+      popup.style.zIndex = '1000';
+      popup.style.visibility = 'hidden';
+      popup.appendChild(component.element);
+      document.body.appendChild(popup);
+
+      // Create virtual reference element
+      const virtualElement = {
+        getBoundingClientRect: props.clientRect,
+      };
+
+      // Position the popup using floating-ui
+      const updatePosition = () => {
+        if (!popup) return;
+        
+        computePosition(virtualElement, popup, {
+          placement: 'bottom-start',
+          middleware: [
+            offset(8),
+            flip(),
+            shift({ padding: 8 })
+          ],
+        }).then(({ x, y }) => {
+          if (popup) {
+            popup.style.left = `${x}px`;
+            popup.style.top = `${y}px`;
+            popup.style.visibility = 'visible';
+          }
+        });
+      };
+
+      updatePosition();
+
+      // Set up auto-update
+      cleanup = autoUpdate(virtualElement, popup, updatePosition);
     },
 
     onUpdate(props: any) {
       component?.updateProps(props);
 
-      if (!props.clientRect) {
+      if (!props.clientRect || !popup) {
         return;
       }
 
-      popup?.[0]?.setProps({
-        getReferenceClientRect: props.clientRect,
+      // Update virtual element reference
+      const virtualElement = {
+        getBoundingClientRect: props.clientRect,
+      };
+
+      // Update position
+      computePosition(virtualElement, popup, {
+        placement: 'bottom-start',
+        middleware: [
+          offset(8),
+          flip(),
+          shift({ padding: 8 })
+        ],
+      }).then(({ x, y }) => {
+        if (popup) {
+          popup.style.left = `${x}px`;
+          popup.style.top = `${y}px`;
+        }
       });
     },
 
     onKeyDown(props: any) {
       if (props.event.key === "Escape") {
-        popup?.[0]?.hide();
+        if (popup) {
+          popup.style.visibility = 'hidden';
+        }
         return true;
       }
 
@@ -301,7 +348,14 @@ export const renderItems = () => {
     },
 
     onExit() {
-      popup?.[0]?.destroy();
+      if (cleanup) {
+        cleanup();
+        cleanup = null;
+      }
+      if (popup) {
+        document.body.removeChild(popup);
+        popup = null;
+      }
       component?.destroy();
     },
   };

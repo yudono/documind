@@ -14,10 +14,11 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const document = await prisma.document.findFirst({
+    const document = await prisma.item.findFirst({
       where: {
         id: params.documentId,
         userId: (session.user as any).id,
+        type: "document",
       },
     })
 
@@ -43,10 +44,11 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const document = await prisma.document.findFirst({
+    const document = await prisma.item.findFirst({
       where: {
         id: params.documentId,
         userId: (session.user as any).id,
+        type: "document",
       },
     })
 
@@ -54,7 +56,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-    await prisma.document.delete({
+    await prisma.item.delete({
       where: {
         id: params.documentId,
       },
@@ -80,10 +82,11 @@ export async function PUT(
 
     const { name, folderId } = await request.json()
 
-    const document = await prisma.document.findFirst({
+    const document = await prisma.item.findFirst({
       where: {
         id: params.documentId,
         userId: (session.user as any).id,
+        type: "document",
       },
     })
 
@@ -91,13 +94,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-    const updatedDocument = await prisma.document.update({
+    const updatedDocument = await prisma.item.update({
       where: {
         id: params.documentId,
       },
       data: {
         ...(name && { name }),
-        ...(folderId !== undefined && { folderId: folderId || null }),
+        ...(folderId !== undefined && { parentId: folderId || null }),
       },
     })
 

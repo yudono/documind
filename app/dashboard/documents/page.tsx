@@ -488,7 +488,9 @@ export default function MyDocumentsPage() {
               variant="outline"
               size="sm"
               className="flex items-center gap-3"
-              onClick={() => router.push('/dashboard/documents/create?type=document')}
+              onClick={() =>
+                router.push("/dashboard/documents/create?type=document")
+              }
             >
               <FileText size={20} />
               Document
@@ -536,10 +538,16 @@ export default function MyDocumentsPage() {
               )}
             >
               {isLoading ? (
-                <div className="col-span-full text-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <p className="text-muted-foreground mt-2">Loading...</p>
-                </div>
+                <>
+                  {Array(12)
+                    .fill("")
+                    .map((_, index) => (
+                      <div
+                        className="animate-pulse w-full h-40 bg-muted rounded-lg"
+                        key={index}
+                      ></div>
+                    ))}
+                </>
               ) : filteredItems.length === 0 ? (
                 <div className="col-span-full text-center py-12">
                   <FileSearch className="w-12 h-12 text-slate-300 mx-auto mb-4" />

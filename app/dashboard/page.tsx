@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -26,6 +27,8 @@ import {
   Activity,
   ArrowUpRight,
   ArrowDownRight,
+  CreditCard,
+  Coins,
 } from "lucide-react";
 import {
   LineChart,
@@ -38,58 +41,123 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+interface DashboardStats {
+  summaryStats: {
+    totalDocuments: number;
+    documentsChange: string;
+    totalConsultations: number;
+    consultationsChange: string;
+    creditBalance: number;
+    creditUsage: string;
+    totalSpent: number;
+  };
+  monthlyData: Array<{
+    month: string;
+    documents: number;
+    consultations: number;
+    creditsSpent: number;
+  }>;
+  documentTypes: Array<{
+    type: string;
+    count: number;
+  }>;
+  userCredit: {
+    balance: number;
+    dailyLimit: number;
+    totalEarned: number;
+    totalSpent: number;
+    lastResetDate: string;
+  };
+}
+
 export default function Dashboard() {
   const { data: session } = useSession();
+  const [dashboardData, setDashboardData] = useState<DashboardStats | null>(
+    null
+  );
+  const [loading, setLoading] = useState(true);
 
-  // Summary statistics
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const response = await fetch("/api/dashboard/stats");
+        if (response.ok) {
+          const data = await response.json();
+          setDashboardData(data);
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (session) {
+      fetchDashboardData();
+    }
+  }, [session]);
+
+  if (!loading) {
+    return (
+      <div className="w-full min-h-screen bg-white p-6">
+        <div className="grid grid-cols-4 animate-pulse gap-6">
+          <div className="w-full h-64 bg-muted rounded"></div>
+          <div className="w-full h-64 bg-muted rounded"></div>
+          <div className="w-full h-64 bg-muted rounded"></div>
+          <div className="w-full h-64 bg-muted rounded"></div>
+          <div className="col-span-2 w-full h-80 bg-muted rounded"></div>
+          <div className="col-span-2 w-full h-80 bg-muted rounded"></div>
+          <div className="col-span-2 w-full h-80 bg-muted rounded"></div>
+          <div className="col-span-2 w-full h-80 bg-muted rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!dashboardData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Failed to load dashboard data</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Summary statistics with real data
   const summaryStats = [
     {
       label: "Total Documents",
-      value: "1,247",
-      change: "+12.5%",
-      trend: "up",
+      value: dashboardData.summaryStats.totalDocuments.toString(),
+      change: dashboardData.summaryStats.documentsChange,
+      trend: dashboardData.summaryStats.documentsChange.startsWith("+")
+        ? "up"
+        : "down",
       icon: FileText,
     },
     {
       label: "AI Consultations",
-      value: "342",
-      change: "+23.1%",
-      trend: "up",
+      value: dashboardData.summaryStats.totalConsultations.toString(),
+      change: dashboardData.summaryStats.consultationsChange,
+      trend: dashboardData.summaryStats.consultationsChange.startsWith("+")
+        ? "up"
+        : "down",
       icon: MessageSquare,
     },
     {
-      label: "Revenue Growth",
-      value: "18.7%",
-      change: "+5.2%",
-      trend: "up",
-      icon: TrendingUp,
+      label: "Credit Balance",
+      value: dashboardData.summaryStats.creditBalance.toString(),
+      change: dashboardData.summaryStats.creditUsage + " used",
+      trend: "neutral",
+      icon: Coins,
     },
     {
-      label: "Active Users",
-      value: "89",
-      change: "+8.3%",
-      trend: "up",
-      icon: Activity,
+      label: "Credits Spent",
+      value: dashboardData.summaryStats.totalSpent.toString(),
+      change: "Total usage",
+      trend: "neutral",
+      icon: CreditCard,
     },
-  ];
-
-  // Monthly data for line chart
-  const monthlyData = [
-    { month: "Jan", documents: 65, consultations: 28, revenue: 12.5 },
-    { month: "Feb", documents: 78, consultations: 35, revenue: 14.2 },
-    { month: "Mar", documents: 92, consultations: 42, revenue: 15.8 },
-    { month: "Apr", documents: 108, consultations: 48, revenue: 16.9 },
-    { month: "May", documents: 125, consultations: 55, revenue: 17.5 },
-    { month: "Jun", documents: 142, consultations: 62, revenue: 18.7 },
-  ];
-
-  // Document types data for bar chart
-  const documentTypesData = [
-    { type: "PDF", count: 456, percentage: 36.6 },
-    { type: "DOCX", count: 342, percentage: 27.4 },
-    { type: "XLSX", count: 289, percentage: 23.2 },
-    { type: "TXT", count: 98, percentage: 7.9 },
-    { type: "Others", count: 62, percentage: 4.9 },
   ];
 
   const chartConfig = {
@@ -101,8 +169,8 @@ export default function Dashboard() {
       label: "Consultations",
       color: "hsl(var(--chart-2))",
     },
-    revenue: {
-      label: "Revenue Growth %",
+    creditsSpent: {
+      label: "Credits Spent",
       color: "hsl(var(--chart-3))",
     },
     count: {
@@ -168,15 +236,15 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <TrendingUp className="h-5 w-5 mr-2" />
-                Monthly Trends
+                Monthly Activity
               </CardTitle>
               <CardDescription>
-                Documents, consultations, and revenue growth over time
+                Documents created, consultations, and credits spent over time
               </CardDescription>
             </CardHeader>
             <CardContent>
               <ChartContainer config={chartConfig} className="h-[300px]">
-                <LineChart data={monthlyData}>
+                <LineChart data={dashboardData.monthlyData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
@@ -198,8 +266,8 @@ export default function Dashboard() {
                   />
                   <Line
                     type="monotone"
-                    dataKey="revenue"
-                    stroke="var(--color-revenue)"
+                    dataKey="creditsSpent"
+                    stroke="var(--color-creditsSpent)"
                     strokeWidth={2}
                     dot={{ r: 4 }}
                   />
@@ -216,12 +284,12 @@ export default function Dashboard() {
                 Document Types Distribution
               </CardTitle>
               <CardDescription>
-                Breakdown of documents by file type
+                Breakdown of your documents by type
               </CardDescription>
             </CardHeader>
             <CardContent>
               <ChartContainer config={chartConfig} className="h-[300px]">
-                <BarChart data={documentTypesData}>
+                <BarChart data={dashboardData.documentTypes}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="type" />
                   <YAxis />
@@ -236,6 +304,53 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Credit Usage Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Coins className="h-5 w-5 mr-2" />
+              Credit Usage Overview
+            </CardTitle>
+            <CardDescription>
+              Your current credit status and usage
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">Current Balance</span>
+                <span className="text-2xl font-bold text-green-600">
+                  {dashboardData.userCredit.balance}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">Daily Limit</span>
+                <span className="text-lg font-semibold">
+                  {dashboardData.userCredit.dailyLimit}
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full"
+                  style={{
+                    width: `${
+                      (dashboardData.userCredit.balance /
+                        dashboardData.userCredit.dailyLimit) *
+                      100
+                    }%`,
+                  }}
+                ></div>
+              </div>
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>
+                  Total Earned: {dashboardData.userCredit.totalEarned}
+                </span>
+                <span>Total Spent: {dashboardData.userCredit.totalSpent}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Quick Actions */}
         <Card>

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { uploadToS3, generateFileKey } from "@/lib/s3";
+import HTMLtoDOCX from "html-to-docx";
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,6 +28,22 @@ export async function POST(request: NextRequest) {
     }
 
     let document;
+    let docxBuffer: Buffer | null = null;
+    let docxUploadResult = null;
+
+    // Generate DOCX from HTML content
+    try {
+      docxBuffer = await HTMLtoDOCX(content);
+      
+      // Upload DOCX to S3
+      if (docxBuffer) {
+        const docxKey = generateFileKey(`${title}.docx`, 'documents/docx');
+        docxUploadResult = await uploadToS3(docxBuffer, docxKey, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      }
+    } catch (error) {
+      console.error("Error generating DOCX:", error);
+      // Continue without DOCX if generation fails
+    }
 
     if (id) {
       // Check if document exists and belongs to user
@@ -56,6 +74,8 @@ export async function POST(request: NextRequest) {
             isDraft,
             lastModified: new Date().toISOString(),
           }),
+          url: docxUploadResult?.url || existingDocument.url,
+          key: docxUploadResult?.key || existingDocument.key,
           updatedAt: new Date(),
         },
       });
@@ -90,6 +110,8 @@ export async function POST(request: NextRequest) {
             createdAt: new Date().toISOString(),
             lastModified: new Date().toISOString(),
           }),
+          url: docxUploadResult?.url,
+          key: docxUploadResult?.key,
         },
       });
 

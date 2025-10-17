@@ -1,4 +1,5 @@
 import './globals.css';
+import '../styles/ai-placeholders.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Providers } from '@/components/providers';
