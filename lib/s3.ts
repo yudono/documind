@@ -37,6 +37,18 @@ export interface UploadResult {
   bucket: string;
 }
 
+function getBaseAppUrl(): string | undefined {
+  const candidates = [
+    process.env.NEXTAPP_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.NEXTAUTH_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+    process.env.S3_ENDPOINT, // fallback to direct S3 endpoint if app URL is not set
+  ];
+  const base = candidates.find((v) => !!v);
+  return base ? String(base).replace(/\/$/, "") : undefined;
+}
+
 /**
  * Upload a file to S3 or local storage
  */
@@ -57,10 +69,11 @@ export async function uploadToS3(
 
       await s3Client.send(command);
 
-      // Generate public URL designed to be proxied by Next.js rewrites
-      // If you want direct MinIO URL, uncomment the line below
-      // const url = `${process.env.S3_ENDPOINT}/${BUCKET_NAME}/${key}`;
-      const url = `${process.env.NEXTAPP_URL}/${BUCKET_NAME}/${key}`; // e.g. /documind/uploads/<file>
+      // Build absolute URL with robust fallbacks
+      const baseUrl = getBaseAppUrl();
+      const url = baseUrl
+        ? `${baseUrl}/${BUCKET_NAME}/${key}`
+        : `/${BUCKET_NAME}/${key}`; // relative fallback
 
       return {
         key,

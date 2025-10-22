@@ -113,14 +113,81 @@ export async function generateChatCompletionWithAgent(
   }
 }
 
+function resolveAbsoluteUrl(inputUrl: string): string {
+  try {
+    // If already absolute and valid
+    const u = new URL(inputUrl);
+    if (u.protocol === "http:" || u.protocol === "https:") {
+      return u.toString();
+    }
+  } catch {}
+  // Try to resolve against environment base URLs
+  const bases = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.NEXTAUTH_URL,
+    process.env.NEXTAPP_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+  ].filter(Boolean) as string[];
+  for (const base of bases) {
+    try {
+      const u = new URL(inputUrl, base);
+      if (u.protocol === "http:" || u.protocol === "https:") {
+        return u.toString();
+      }
+    } catch {}
+  }
+  throw new Error("Invalid URL: must be absolute http/https");
+}
+
 /**
- * Perform OCR on an image using Groq's vision model
+ * Perform OCR on an image or PDF
  */
 export async function performOCR(
   imageUrl: string,
   prompt: string = "Extract all text from this image. Provide the text content in a clear, structured format."
 ): Promise<string> {
   try {
+    const url = resolveAbsoluteUrl(imageUrl);
+    const pathname = new URL(url).pathname;
+
+    // Try to detect content type via HEAD; fall back to extension
+    let contentType: string | null = null;
+    try {
+      const head = await fetch(url, { method: "HEAD" });
+      if (head.ok) {
+        contentType = head.headers.get("content-type");
+      }
+    } catch {}
+
+    const isPdfByPath = /\.pdf($|\?)/i.test(pathname);
+    const isPdfByType = contentType ? /pdf/i.test(contentType) : false;
+
+    // If the URL points to a PDF, parse with pdf-parse instead of vision model
+    if (isPdfByPath || isPdfByType) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(
+            `Failed to fetch PDF: ${res.status} ${res.statusText}`
+          );
+        }
+        const arrayBuffer = await res.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const pdfParse = (await import("pdf-parse")).default;
+        const parsed = await pdfParse(buffer);
+        const text = parsed?.text || "";
+        return text.trim() || "No text extracted";
+      } catch (err) {
+        console.error("PDF parse error:", err);
+        throw new Error("Failed to extract text from PDF");
+      }
+    }
+
+    // If content-type exists and is not image, bail
+    if (contentType && !/^image\//i.test(contentType)) {
+      throw new Error(`Unsupported content-type for OCR: ${contentType}`);
+    }
+
     const messages: ChatMessage[] = [
       {
         role: "user",
@@ -132,7 +199,7 @@ export async function performOCR(
           {
             type: "image_url",
             image_url: {
-              url: imageUrl,
+              url,
             },
           },
         ],

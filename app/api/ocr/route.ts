@@ -18,23 +18,51 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Image URL is required' }, { status: 400 })
     }
 
-    // Validate URL format
+    // Validate URL format, allow relative by resolving against base candidates
+    let normalizedUrl: string
     try {
-      new URL(imageUrl)
+      const u = new URL(imageUrl)
+      if (u.protocol === 'http:' || u.protocol === 'https:') {
+        normalizedUrl = u.toString()
+      } else {
+        throw new Error('Unsupported protocol')
+      }
     } catch {
-      return NextResponse.json({ error: 'Invalid image URL format' }, { status: 400 })
+      try {
+        const bases = [
+          process.env.NEXT_PUBLIC_APP_URL,
+          process.env.NEXTAUTH_URL,
+          process.env.NEXTAPP_URL,
+          process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+          request.url,
+        ].filter(Boolean) as string[]
+        let resolved: string | undefined
+        for (const base of bases) {
+          try {
+            const u2 = new URL(imageUrl, base)
+            if (u2.protocol === 'http:' || u2.protocol === 'https:') {
+              resolved = u2.toString()
+              break
+            }
+          } catch {}
+        }
+        if (!resolved) throw new Error('Unable to resolve absolute URL')
+        normalizedUrl = resolved
+      } catch {
+        return NextResponse.json({ error: 'Invalid image URL; must be http/https' }, { status: 400 })
+      }
     }
 
-    // Perform OCR using Groq's vision model
+    // Perform OCR using Groq's vision model (performOCR will also normalize)
     const extractedText = await performOCR(
-      imageUrl,
+      normalizedUrl,
       prompt || "Extract all text from this image. Provide the text content in a clear, structured format."
     )
 
     return NextResponse.json({
       success: true,
       extractedText,
-      imageUrl,
+      imageUrl: normalizedUrl,
       processedAt: new Date().toISOString(),
       processedBy: (session.user as any).id,
     })
