@@ -573,13 +573,6 @@ export default function MyDocumentsPage() {
                           ? "bg-blue-50 border-blue-200"
                           : "bg-gray-50 hover:bg-blue-100 border-transparent hover:border-gray-200"
                       }`}
-                      onClick={() => {
-                        if (item.type === "folder") {
-                          navigateToFolder(item.id);
-                        } else {
-                          router.push(`/dashboard/documents/${item.id}`);
-                        }
-                      }}
                     >
                       {/* Dropdown menu */}
                       <DropdownMenu>
@@ -645,30 +638,41 @@ export default function MyDocumentsPage() {
                         </DropdownMenuContent>
                       </DropdownMenu>
 
-                      {item.type === "folder" ? (
-                        <>
-                          <Folder className="w-12 h-12 text-blue-600" />
-                          <div className="text-center text-sm text-slate-600 line-clamp-2">
-                            {item.name}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <img
-                            src={fileToIcon(
-                              item.fileType?.split("/").pop() || "unknown"
-                            )}
-                            alt={item.name}
-                            className="w-12"
-                          />
-                          <div className="text-center text-sm text-slate-600 break-all hyphens-auto line-clamp-2">
-                            {item.name}
-                          </div>
-                          <div className="text-center text-xs text-slate-800 font-semibold">
-                            {fileSize(item.size || 0)}
-                          </div>
-                        </>
-                      )}
+                      <div
+                        className=" flex flex-col items-center justify-center"
+                        onClick={() => {
+                          if (item.type === "folder") {
+                            navigateToFolder(item.id);
+                          } else {
+                            router.push(`/dashboard/documents/${item.id}`);
+                          }
+                        }}
+                      >
+                        {item.type === "folder" ? (
+                          <>
+                            <Folder className="w-12 h-12 text-blue-600" />
+                            <div className="text-center text-sm text-slate-600 line-clamp-2">
+                              {item.name}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <img
+                              src={fileToIcon(
+                                item.fileType?.split("/").pop() || "unknown"
+                              )}
+                              alt={item.name}
+                              className="w-12"
+                            />
+                            <div className="text-center text-sm text-slate-600 break-all hyphens-auto line-clamp-2">
+                              {item.name}
+                            </div>
+                            <div className="text-center text-xs text-slate-800 font-semibold">
+                              {fileSize(item.size || 0)}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </>

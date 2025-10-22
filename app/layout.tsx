@@ -1,5 +1,7 @@
 import './globals.css';
 import '../styles/ai-placeholders.css';
+import '../styles/_variables.scss';
+import '../styles/_keyframe-animations.scss';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Providers } from '@/components/providers';

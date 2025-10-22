@@ -1,0 +1,29 @@
+.simple-editor-content .ProseMirror table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.simple-editor-content .ProseMirror th,
+.simple-editor-content .ProseMirror td {
+  border: 1px solid var(--tt-border-color, #e5e7eb); /* default: gray-200 */
+  padding: 8px;
+  vertical-align: top;
+}
+
+.simple-editor-content .ProseMirror th {
+  background-color: var(--tt-table-header-bg, #f9fafb); /* default: gray-50 */
+  font-weight: 600;
+}
+
+/* Selected cell highlight (ProseMirror tables plugin) */
+.simple-editor-content .ProseMirror .selectedCell {
+  outline: 2px solid var(--tt-outline-color, #3b82f6); /* default: blue-500 */
+  outline-offset: -2px;
+}
+
+/* Optional: hovered cell subtle background */
+.simple-editor-content .ProseMirror td:hover,
+.simple-editor-content .ProseMirror th:hover {
+  background-color: var(--tt-table-hover-bg, #f3f4f6); /* default: gray-100 */
+}

@@ -6,13 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import {
-  Bot,
-  Send,
-  MessageSquare,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { Bot, Send, MessageSquare, Eye, EyeOff } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Message {
   id: string;
@@ -26,12 +21,14 @@ interface AIChatSidebarProps {
   isVisible: boolean;
   onToggleVisibility: () => void;
   documentContent?: string;
+  inline?: boolean;
 }
 
-export default function AIChatSidebar({ 
-  isVisible, 
-  onToggleVisibility, 
-  documentContent = "" 
+export default function AIChatSidebar({
+  isVisible,
+  onToggleVisibility,
+  documentContent = "",
+  inline = false,
 }: AIChatSidebarProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -90,37 +87,23 @@ export default function AIChatSidebar({
 
   return (
     <>
-      {/* Toggle Button */}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onToggleVisibility}
-        className="fixed top-4 right-4 z-50"
-      >
-        {isVisible ? (
-          <EyeOff className="h-4 w-4 mr-2" />
-        ) : (
-          <Eye className="h-4 w-4 mr-2" />
-        )}
-        {isVisible ? "Hide" : "Show"} AI
-      </Button>
-
       {/* AI Chatbot Sidebar */}
       {isVisible && (
-        <Card className="fixed right-0 top-0 h-full w-80 border-l shadow-lg z-40">
+        <Card
+          className={cn(
+            inline ? "h-full w-full" : "w-80 border-l shadow-lg z-40"
+          )}
+        >
           {/* Chatbot Header */}
-          <CardHeader className="pb-3">
+          <CardHeader className="py-4">
             <CardTitle className="flex items-center text-lg">
               <Bot className="h-5 w-5 mr-2 text-blue-600" />
               AI Assistant
-              <Badge variant="secondary" className="ml-auto">
-                Beta
-              </Badge>
             </CardTitle>
           </CardHeader>
 
           {/* Messages */}
-          <CardContent className="flex flex-col h-full p-0">
+          <CardContent className="flex flex-col p-0 h-[calc(100vh-134px)]">
             <ScrollArea className="flex-1 px-4">
               {messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full text-center p-6">
@@ -129,8 +112,8 @@ export default function AIChatSidebar({
                     AI Assistant Ready
                   </h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Ask me anything about your document or get help with writing,
-                    editing, and formatting.
+                    Ask me anything about your document or get help with
+                    writing, editing, and formatting.
                   </p>
                   <div className="space-y-2 text-xs text-muted-foreground">
                     <p>• "Help me improve this paragraph"</p>
