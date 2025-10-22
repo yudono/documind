@@ -1,27 +1,22 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { Bot, Send, MessageSquare, Eye, EyeOff } from "lucide-react";
+import { Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
-interface Message {
-  id: string;
-  content: string;
-  role: "user" | "assistant";
-  timestamp: Date;
-  isTyping?: boolean;
-}
+import type { ChatMessage } from "@/components/chat/types";
+import { ChatMessageList } from "@/components/chat/ChatMessageList";
+import { ChatInput } from "@/components/chat/ChatInput";
 
 interface AIChatSidebarProps {
   isVisible: boolean;
   onToggleVisibility: () => void;
   documentContent?: string;
   inline?: boolean;
+  onApplyHtml?: (html: string) => void;
+  documentId?: string;
 }
 
 export default function AIChatSidebar({
@@ -29,72 +24,204 @@ export default function AIChatSidebar({
   onToggleVisibility,
   documentContent = "",
   inline = false,
+  onApplyHtml,
+  documentId,
 }: AIChatSidebarProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const sessionStorageKey = documentId
+    ? `chatSession:${documentId}`
+    : "chatSession:sidebar";
 
-  // Scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Send message to AI chatbot
+  // Create a dedicated chat session for the sidebar on mount
+  const createSession = useCallback(async () => {
+    try {
+      const response = await fetch("/api/chat-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "AI Assistant Sidebar",
+          documentId,
+          type: "document_sidebar",
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to create chat session");
+      const data = await response.json();
+      const id = data.chatSession?.id || data.id;
+      setSessionId(id);
+      try {
+        localStorage.setItem(sessionStorageKey, id);
+      } catch {}
+      return id;
+    } catch (error) {
+      console.error("Failed to create session:", error);
+      return null;
+    }
+  }, [documentId, sessionStorageKey]);
+
+  // Load messages for the current session
+  const loadSessionMessages = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/chat-messages?sessionId=${id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const loaded: ChatMessage[] = (data.messages || []).map((msg: any) => ({
+        id: msg.id,
+        content: msg.content,
+        role: msg.role,
+        timestamp: new Date(msg.createdAt),
+      }));
+      setMessages(loaded);
+    } catch (error) {
+      console.error("Failed to load session messages:", error);
+    }
+  }, []);
+
+  async function restoreOrCreateSession(): Promise<string | null> {
+    // Try localStorage first
+    try {
+      const stored = localStorage.getItem(sessionStorageKey);
+      if (stored) {
+        setSessionId(stored);
+        await loadSessionMessages(stored);
+        return stored;
+      }
+    } catch {}
+
+    // Try to fetch existing session by documentId if available
+    if (documentId) {
+      try {
+        const res = await fetch(
+          `/api/chat-sessions?documentId=${documentId}&type=document_sidebar`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const existing =
+            data.chatSessions?.[0]?.id || data.chatSession?.id || data.id;
+          if (existing) {
+            setSessionId(existing);
+            try {
+              localStorage.setItem(sessionStorageKey, existing);
+            } catch {}
+            await loadSessionMessages(existing);
+            return existing;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to restore existing session:", err);
+      }
+    }
+
+    // Create new if none found
+    const created = await createSession();
+    if (created) {
+      await loadSessionMessages(created);
+      return created;
+    }
+    return null;
+  }
+
+  // Initialize session and history
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const id = await restoreOrCreateSession();
+      if (!mounted) return;
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [restoreOrCreateSession]);
+
+  const extractHtmlFromResponse = (text: string): string | null => {
+    if (!text) return null;
+    // Remove code fences if present
+    const cleaned = text.replace(/^```[a-zA-Z]*\n?|```$/g, "").trim();
+    // Detect basic HTML presence
+    const hasHtml =
+      /<\s*(p|h1|h2|h3|h4|h5|div|ul|ol|li|table|thead|tbody|tr|td|th|blockquote|pre|code)[^>]*>/i.test(
+        cleaned
+      );
+    return hasHtml ? cleaned : null;
+  };
+
   const sendMessage = async () => {
     if (!inputMessage.trim() || isTyping) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: inputMessage,
-      role: "user",
-      timestamp: new Date(),
-    };
+    // Ensure we have a session
+    let currentSessionId = sessionId;
+    if (!currentSessionId) {
+      currentSessionId = await restoreOrCreateSession();
+      if (!currentSessionId) return; // cannot proceed without session
+      setSessionId(currentSessionId);
+    }
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInputMessage("");
     setIsTyping(true);
+    setPreviewHtml(null);
 
     try {
+      // Send via unified chat API (handles credits, embeddings, session history)
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: inputMessage,
-          context: documentContent,
-          history: messages.slice(-5), // Send last 5 messages for context
+          context: documentContent || undefined,
+          documentRequest: false,
+          sessionId: currentSessionId,
+          type: "document_assistance",
         }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          content: data.message,
-          role: "assistant",
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
+      if (!response.ok) {
+        throw new Error("Failed to send message to AI");
       }
+
+      const data = await response.json();
+
+      // Try to extract HTML preview from AI response
+      const html = extractHtmlFromResponse(data.response || data.message || "");
+      if (html) {
+        setPreviewHtml(html);
+      }
+
+      // Refresh messages from server to avoid duplicates
+      await loadSessionMessages(currentSessionId);
     } catch (error) {
       console.error("Failed to send message:", error);
     } finally {
       setIsTyping(false);
+      setInputMessage("");
     }
+  };
+
+  const applyPreview = () => {
+    if (previewHtml && onApplyHtml) {
+      onApplyHtml(previewHtml);
+      setPreviewHtml(null);
+    }
+  };
+
+  const cancelPreview = () => {
+    setPreviewHtml(null);
   };
 
   return (
     <>
-      {/* AI Chatbot Sidebar */}
       {isVisible && (
         <Card
           className={cn(
             inline ? "h-full w-full" : "w-80 border-l shadow-lg z-40"
           )}
         >
-          {/* Chatbot Header */}
           <CardHeader className="py-4">
             <CardTitle className="flex items-center text-lg">
               <Bot className="h-5 w-5 mr-2 text-blue-600" />
@@ -102,87 +229,57 @@ export default function AIChatSidebar({
             </CardTitle>
           </CardHeader>
 
-          {/* Messages */}
           <CardContent className="flex flex-col p-0 h-[calc(100vh-134px)]">
-            <ScrollArea className="flex-1 px-4">
-              {messages.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full text-center p-6">
-                  <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="font-semibold text-lg mb-2">
-                    AI Assistant Ready
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Ask me anything about your document or get help with
-                    writing, editing, and formatting.
-                  </p>
-                  <div className="space-y-2 text-xs text-muted-foreground">
-                    <p>• "Help me improve this paragraph"</p>
-                    <p>• "Summarize the main points"</p>
-                    <p>• "Check grammar and style"</p>
-                    <p>• "Generate an outline"</p>
+            <ChatMessageList messages={messages} />
+
+            {/* Typing indicator */}
+            {isTyping && (
+              <div className="mb-4 text-left px-4">
+                <div className="inline-block max-w-[80%] p-3 rounded-lg bg-muted">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></div>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`mb-4 ${
-                    message.role === "user" ? "text-right" : "text-left"
-                  }`}
-                >
-                  <div
-                    className={`inline-block max-w-[80%] p-3 rounded-lg ${
-                      message.role === "user"
-                        ? "bg-blue-600 text-white"
-                        : "bg-muted"
-                    }`}
-                  >
-                    <p className="text-sm">{message.content}</p>
-                    <p className="text-xs opacity-70 mt-1">
-                      {message.timestamp.toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
+            {/* HTML generation preview */}
+            {previewHtml && (
+              <div className="px-4 mb-3">
+                <div className="border rounded-md overflow-hidden">
+                  <div className="px-3 py-2 border-b bg-muted/50 text-sm font-medium">
+                    Preview Generasi
                   </div>
-                </div>
-              ))}
-
-              {isTyping && (
-                <div className="mb-4 text-left">
-                  <div className="inline-block max-w-[80%] p-3 rounded-lg bg-muted">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100"></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></div>
+                  <div className="p-3">
+                    <div className="prose prose-sm max-w-none max-h-64 overflow-auto rounded border bg-background/30 p-2">
+                      <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
                     </div>
                   </div>
+                  <div className="px-3 py-2 border-t flex items-center gap-2">
+                    <Button size="sm" onClick={applyPreview} className="">
+                      Apply
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={cancelPreview}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
-              )}
-
-              <div ref={messagesEndRef} />
-            </ScrollArea>
-
-            {/* Input Area */}
-            <div className="p-4 border-t">
-              <div className="flex space-x-2">
-                <Input
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  placeholder="Ask AI assistant..."
-                  onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                  disabled={isTyping}
-                />
-                <Button
-                  onClick={sendMessage}
-                  disabled={!inputMessage.trim() || isTyping}
-                  size="sm"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
               </div>
-            </div>
+            )}
+
+            <div ref={messagesEndRef} />
+            <ChatInput
+              value={inputMessage}
+              disabled={isTyping}
+              onChange={setInputMessage}
+              onSend={sendMessage}
+            />
           </CardContent>
         </Card>
       )}

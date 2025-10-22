@@ -93,7 +93,8 @@ export class LangGraphDocumentAgent {
     // Bind methods to preserve 'this' context
     const retrieveContextNode = this.retrieveContextNode.bind(this);
     const generateResponseNode = this.generateResponseNode.bind(this);
-    const generateDocumentResponseNode = this.generateDocumentResponseNode.bind(this);
+    const generateDocumentResponseNode =
+      this.generateDocumentResponseNode.bind(this);
     const decideDocumentGenerationNode =
       this.decideDocumentGenerationNode.bind(this);
     const generateDocumentNode = this.generateDocumentNode.bind(this);
@@ -135,10 +136,10 @@ export class LangGraphDocumentAgent {
       try {
         // Use Milvus for semantic search
         if (!milvusService) {
-          console.warn('Milvus not configured - skipping context retrieval');
-          return { ...state, context: '', referencedDocuments: [] };
+          console.warn("Milvus not configured - skipping context retrieval");
+          return { ...state, context: "", referencedDocuments: [] };
         }
-        
+
         const similarChunks = await milvusService.searchSimilarChunksByText(
           state.query,
           state.userId,
@@ -338,7 +339,9 @@ Provide helpful, informative responses that directly address the user's question
    * Conditional function to determine next node based on document generation decision
    */
   private shouldGenerateDocument(state: AgentState): string {
-    return state.shouldGenerateDoc ? "generateDocumentResponse" : "saveConversation";
+    return state.shouldGenerateDoc
+      ? "generateDocumentResponse"
+      : "saveConversation";
   }
 
   /**
@@ -438,40 +441,42 @@ When generating documents, please:
             line-height: 1.6;
         }
         h1 { 
-            font-size: 18px; 
-            font-weight: bold; 
+            font-size: 24px; 
+            font-weight: 700; 
             margin: 16px 0px 12px 0px; 
             padding-bottom: 8px;
             border-bottom: 2px solid #333;
         }
         h2 { 
-            font-size: 16px; 
-            font-weight: bold; 
+            font-size: 20px; 
+            font-weight: 700; 
             margin: 14px 0px 10px 0px; 
             padding-bottom: 4px;
             border-bottom: 1px solid #666;
         }
         h3 { 
-            font-size: 14px; 
-            font-weight: bold; 
+            font-size: 18px; 
+            font-weight: 700; 
             margin: 12px 0px 8px 0px; 
         }
         h4 { 
-            font-size: 13px; 
-            font-weight: bold; 
+            font-size: 16px; 
+            font-weight: 700; 
             margin: 10px 0px 6px 0px; 
         }
         h5 { 
-            font-size: 12px; 
-            font-weight: bold; 
+            font-size: 15.2px; 
+            font-weight: 700; 
             margin: 8px 0px 4px 0px; 
         }
         h6 { 
-            font-size: 11px; 
-            font-weight: bold; 
+            font-size: 14.4px; 
+            font-weight: 700; 
             margin: 6px 0px 4px 0px; 
         }
         p {
+            font-size: 16px;
+            font-weight: normal;
             margin: 8px 0px;
             text-align: justify;
         }
@@ -786,36 +791,44 @@ Provide only the HTML content (no explanations):`;
               color: #000;
             }
             h1 {
-              font-size: 18pt;
-              font-weight: bold;
+              font-size: 24px;
+              font-weight: 700;
               margin: 24pt 0 12pt 0;
               page-break-after: avoid;
             }
             h2 {
-              font-size: 16pt;
-              font-weight: bold;
+              font-size: 20px;
+              font-weight: 700;
               margin: 18pt 0 10pt 0;
               page-break-after: avoid;
             }
             h3 {
-              font-size: 14pt;
-              font-weight: bold;
+              font-size: 18px;
+              font-weight: 700;
               margin: 14pt 0 8pt 0;
               page-break-after: avoid;
             }
             h4 {
-              font-size: 13pt;
-              font-weight: bold;
+              font-size: 16px;
+              font-weight: 700;
               margin: 12pt 0 6pt 0;
               page-break-after: avoid;
             }
             h5 {
-              font-size: 12pt;
-              font-weight: bold;
+              font-size: 15.2px;
+              font-weight: 700;
               margin: 10pt 0 6pt 0;
               page-break-after: avoid;
             }
+            h6 {
+              font-size: 14.4px;
+              font-weight: 700;
+              margin: 8pt 0 6pt 0;
+              page-break-after: avoid;
+            }
             p {
+              font-size: 16px;
+              font-weight: normal;
               margin: 0 0 12pt 0;
               text-align: justify;
             }

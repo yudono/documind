@@ -6,6 +6,31 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Proxy MinIO/S3 bucket paths through authenticated API to avoid AccessDenied
+  async rewrites() {
+    const bucket = process.env.S3_BUCKET_NAME || "document-assistant";
+    return [
+      // Mirror full bucket under `/${bucket}/...` via API proxy
+      {
+        source: `/${bucket}/:path*`,
+        destination: `/api/proxy/${bucket}/:path*`,
+      },
+      // Convenience path for `/uploads/...` used by app
+      {
+        source: "/uploads/:path*",
+        destination: `/api/proxy/${bucket}/uploads/:path*`,
+      },
+      // Explicit mapping for 'documind' bucket if used
+      {
+        source: "/documind/:path*",
+        destination: "/api/proxy/documind/:path*",
+      },
+      {
+        source: "/documind/uploads/:path*",
+        destination: "/api/proxy/documind/uploads/:path*",
+      },
+    ];
+  },
   webpack: (config, { isServer }) => {
     // Handle binary files (.node files) - use file-loader for server, ignore for client
     config.module.rules.push({

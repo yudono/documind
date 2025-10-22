@@ -93,7 +93,6 @@ import { TableIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import "@/components/tiptap-node/table-node/table-node.scss";
 
-
 // --- Custom Extension: Font Size mapped to textStyle ---
 const FontSize = Extension.create({
   name: "fontSize",
@@ -263,42 +262,49 @@ const TableDropdownMenu = ({ editor }: { editor: Editor | null }) => {
 
   const hasInsertTable = !!(editor && (editor as any).commands?.insertTable);
   const hasAddRowAfter = !!(editor && (editor as any).commands?.addRowAfter);
-  const hasAddColumnAfter = !!(editor && (editor as any).commands?.addColumnAfter);
+  const hasAddColumnAfter = !!(
+    editor && (editor as any).commands?.addColumnAfter
+  );
   const hasDeleteTable = !!(editor && (editor as any).commands?.deleteTable);
 
   const [rows, setRows] = React.useState<number>(3);
   const [cols, setCols] = React.useState<number>(3);
 
-  const fallbackInsertTable = React.useCallback((r: number, c: number) => {
-    if (!editor) return false;
+  const fallbackInsertTable = React.useCallback(
+    (r: number, c: number) => {
+      if (!editor) return false;
 
-    // Build a basic table JSON structure with a header row
-    const cols = Math.max(1, Math.min(20, c));
-    const rows = Math.max(1, Math.min(20, r));
+      // Build a basic table JSON structure with a header row
+      const cols = Math.max(1, Math.min(20, c));
+      const rows = Math.max(1, Math.min(20, r));
 
-    const headerCells = Array.from({ length: cols }).map(() => ({
-      type: "tableHeader",
-      content: [{ type: "paragraph", content: [{ type: "text", text: "" }] }],
-    }));
-
-    const bodyRow = () => ({
-      type: "tableRow",
-      content: Array.from({ length: cols }).map(() => ({
-        type: "tableCell",
+      const headerCells = Array.from({ length: cols }).map(() => ({
+        type: "tableHeader",
         content: [{ type: "paragraph", content: [{ type: "text", text: "" }] }],
-      })),
-    });
+      }));
 
-    const tableNode = {
-      type: "table",
-      content: [
-        { type: "tableRow", content: headerCells },
-        ...Array.from({ length: Math.max(0, rows - 1) }).map(() => bodyRow()),
-      ],
-    };
+      const bodyRow = () => ({
+        type: "tableRow",
+        content: Array.from({ length: cols }).map(() => ({
+          type: "tableCell",
+          content: [
+            { type: "paragraph", content: [{ type: "text", text: "" }] },
+          ],
+        })),
+      });
 
-    return editor.commands.insertContent(tableNode);
-  }, [editor]);
+      const tableNode = {
+        type: "table",
+        content: [
+          { type: "tableRow", content: headerCells },
+          ...Array.from({ length: Math.max(0, rows - 1) }).map(() => bodyRow()),
+        ],
+      };
+
+      return editor.commands.insertContent(tableNode);
+    },
+    [editor]
+  );
 
   return (
     <DropdownMenu>

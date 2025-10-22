@@ -23,6 +23,68 @@ const toArrayBuffer = (view: {
   return ab;
 };
 
+// Normalize HTML to inline styles so exports match editor rendering more closely
+const normalizeHtmlForExport = (html: string): string => {
+  const rules: { tag: string; style: string }[] = [
+    {
+      tag: "h1",
+      style: "font-size:18pt;font-weight:bold;margin:24pt 0 12pt 0;",
+    },
+    {
+      tag: "h2",
+      style: "font-size:16pt;font-weight:bold;margin:18pt 0 10pt 0;",
+    },
+    {
+      tag: "h3",
+      style: "font-size:14pt;font-weight:bold;margin:14pt 0 8pt 0;",
+    },
+    {
+      tag: "h4",
+      style: "font-size:13pt;font-weight:bold;margin:12pt 0 6pt 0;",
+    },
+    {
+      tag: "h5",
+      style: "font-size:12pt;font-weight:bold;margin:10pt 0 6pt 0;",
+    },
+    { tag: "p", style: "margin:0 0 12pt 0;line-height:1.5;" },
+    { tag: "ul", style: "margin:12pt 0;padding-left:36pt;" },
+    { tag: "ol", style: "margin:12pt 0;padding-left:36pt;" },
+    { tag: "li", style: "margin:6pt 0;" },
+    {
+      tag: "blockquote",
+      style:
+        "margin:12pt 24pt;padding:12pt;border-left:3pt solid #ccc;background-color:#f9f9f9;font-style:italic;",
+    },
+    {
+      tag: "table",
+      style: "border-collapse:collapse;width:100%;margin:12pt 0;",
+    },
+    {
+      tag: "th",
+      style:
+        "border:1pt solid #000;padding:6pt;text-align:left;background-color:#f0f0f0;font-weight:bold;",
+    },
+    { tag: "td", style: "border:1pt solid #000;padding:6pt;text-align:left;" },
+    {
+      tag: "code",
+      style:
+        "font-family:'Courier New',monospace;font-size:10pt;background-color:#f5f5f5;padding:2pt;border:1pt solid #ddd;",
+    },
+    {
+      tag: "pre",
+      style:
+        "background-color:#f5f5f5;border:1pt solid #ddd;padding:12pt;margin:12pt 0;overflow-x:auto;",
+    },
+  ];
+
+  let out = html;
+  for (const { tag, style } of rules) {
+    const openTagRegex = new RegExp(`<${tag}(?![^>]*style=)([^>]*)>`, "gi");
+    out = out.replace(openTagRegex, `<${tag} style="${style}"$1>`);
+  }
+  return out;
+};
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { documentId: string } }
@@ -127,31 +189,57 @@ export async function GET(
       );
     }
 
+    const exportHtml = normalizeHtmlForExport(html);
+
     if (targetType === "pdf") {
-      const { Document, Page, renderToBuffer } = await import(
-        "@react-pdf/renderer"
-      );
+      const { pdf, Document, Page } = await import("@react-pdf/renderer");
       const { Html } = await import("react-pdf-html");
+
+      const pdfStylesheet = `
+       body {
+          font-family: 'DM Sans', sans-serif;
+          font-feature-settings: "liga" 0;
+          font-optical-sizing: auto;
+          font-style: normal;
+          font-variant-ligatures: none;
+          font-variation-settings: normal;
+          color: #000;
+        }
+        p { font-size: 16px; font-weight: normal; line-height: 1.6; margin-top: 20px; }
+        p:first-child { margin-top: 0; }
+        li { font-size: 1rem; line-height: 1.6; }
+        h1 { font-size: 24px; font-weight: 700; margin-top: 3em; margin-bottom: 0.6em; }
+        h2 { font-size: 20px; font-weight: 700; margin-top: 2.5em; margin-bottom: 0.6em; }
+        h3 { font-size: 18px; font-weight: 700; margin-top: 2em; margin-bottom: 0.6em; }
+        h4 { font-size: 16px; font-weight: 700; margin-top: 2em; margin-bottom: 0.6em; }
+        h5 { font-size: 15.2px; font-weight: 700; margin-top: 1.75em; margin-bottom: 0.6em; }
+        h6 { font-size: 14.4px; font-weight: 700; margin-top: 1.5em; margin-bottom: 0.6em; }
+        table { border-collapse: collapse; width: 100%; margin: 12pt 0; }
+        th { border: 1pt solid #000; padding: 6pt; text-align: left; background-color: #f0f0f0; font-weight: bold; }
+        td { border: 1pt solid #000; padding: 6pt; text-align: left; }
+        blockquote { margin:12pt 24pt; padding:12pt; border-left:3pt solid #ccc; background-color:#f9f9f9; font-style:italic; }
+        code { font-family: 'Courier New', monospace; font-size: 10pt; background-color: #f5f5f5; padding: 2pt; border: 1pt solid #ddd; }
+        pre { background-color:#f5f5f5; border:1pt solid #ddd; padding:12pt; margin:12pt 0; }
+      `;
 
       const pdfDocument = React.createElement(
         Document,
         null,
         React.createElement(
           Page,
-          null,
-          React.createElement(Html as any, null, html)
+          { size: "A4", style: { padding: 48 } } as any,
+          React.createElement(
+            Html as any,
+            { stylesheet: pdfStylesheet },
+            exportHtml
+          )
         )
       );
 
-      const pdfBuf: any = await renderToBuffer(pdfDocument);
-      const pdfU8: Uint8Array =
-        pdfBuf instanceof Uint8Array ? pdfBuf : new Uint8Array(pdfBuf);
-      const pdfAb = toArrayBuffer({
-        buffer: pdfU8.buffer,
-        byteOffset: pdfU8.byteOffset,
-        byteLength: pdfU8.byteLength,
-      });
-      return new Response(pdfAb, {
+      // Render PDF to Buffer in Node, then convert to ArrayBuffer
+      const { renderToBuffer } = await import("@react-pdf/renderer");
+      const pdfBuffer = await renderToBuffer(pdfDocument);
+      return new Response(pdfBuffer as any, {
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": `attachment; filename="${safeName}.pdf"`,
@@ -162,101 +250,39 @@ export async function GET(
         <!DOCTYPE html>
         <html>
           <head>
-            <meta charset="UTF-8">
+            <meta charset=\"UTF-8\">
             <title>${safeName}</title>
             <style>
               body {
-                font-family: 'Times New Roman', serif;
-                font-size: 12pt;
+                font-family: 'DM Sans', sans-serif;
+                font-feature-settings: \"liga\" 0;
+                font-optical-sizing: auto;
+                font-style: normal;
+                font-variant-ligatures: none;
+                font-variation-settings: normal;
                 line-height: 1.5;
                 margin: 1in;
                 color: #000;
               }
-              h1 {
-                font-size: 18pt;
-                font-weight: bold;
-                margin: 24pt 0 12pt 0;
-                page-break-after: avoid;
-              }
-              h2 {
-                font-size: 16pt;
-                font-weight: bold;
-                margin: 18pt 0 10pt 0;
-                page-break-after: avoid;
-              }
-              h3 {
-                font-size: 14pt;
-                font-weight: bold;
-                margin: 14pt 0 8pt 0;
-                page-break-after: avoid;
-              }
-              h4 {
-                font-size: 13pt;
-                font-weight: bold;
-                margin: 12pt 0 6pt 0;
-                page-break-after: avoid;
-              }
-              h5 {
-                font-size: 12pt;
-                font-weight: bold;
-                margin: 10pt 0 6pt 0;
-                page-break-after: avoid;
-              }
-              p {
-                margin: 0 0 12pt 0;
-                text-align: justify;
-              }
-              ul, ol {
-                margin: 12pt 0;
-                padding-left: 36pt;
-              }
-              li {
-                margin: 6pt 0;
-              }
-              table {
-                border-collapse: collapse;
-                width: 100%;
-                margin: 12pt 0;
-              }
-              th, td {
-                border: 1pt solid #000;
-                padding: 6pt;
-                text-align: left;
-              }
-              th {
-                background-color: #f0f0f0;
-                font-weight: bold;
-              }
-              blockquote {
-                margin: 12pt 24pt;
-                padding: 12pt;
-                border-left: 3pt solid #ccc;
-                background-color: #f9f9f9;
-                font-style: italic;
-              }
-              code {
-                font-family: 'Courier New', monospace;
-                font-size: 10pt;
-                background-color: #f5f5f5;
-                padding: 2pt;
-                border: 1pt solid #ddd;
-              }
-              pre {
-                background-color: #f5f5f5;
-                border: 1pt solid #ddd;
-                padding: 12pt;
-                margin: 12pt 0;
-                overflow-x: auto;
-              }
-              pre code {
-                background: none;
-                border: none;
-                padding: 0;
-              }
+              p { font-size: 16px; font-weight: normal; line-height: 1.6; margin-top: 20px; }
+              p:first-child { margin-top: 0; }
+              li { font-size: 1rem; line-height: 1.6; }
+              h1 { font-size: 24px; font-weight: 700; margin-top: 3em; margin-bottom: 0.6em; }
+              h2 { font-size: 20px; font-weight: 700; margin-top: 2.5em; margin-bottom: 0.6em; }
+              h3 { font-size: 18px; font-weight: 700; margin-top: 2em; margin-bottom: 0.6em; }
+              h4 { font-size: 16px; font-weight: 700; margin-top: 2em; margin-bottom: 0.6em; }
+              h5 { font-size: 15.2px; font-weight: 700; margin-top: 1.75em; margin-bottom: 0.6em; }
+              h6 { font-size: 14.4px; font-weight: 700; margin-top: 1.5em; margin-bottom: 0.6em; }
+              table { border-collapse: collapse; width: 100%; margin: 12pt 0; }
+              th { border: 1pt solid #000; padding: 6pt; text-align: left; background-color: #f0f0f0; font-weight: bold; }
+              td { border: 1pt solid #000; padding: 6pt; text-align: left; }
+              blockquote { margin:12pt 24pt; padding:12pt; border-left:3pt solid #ccc; background-color:#f9f9f9; font-style:italic; }
+              code { font-family: 'Courier New', monospace; font-size: 10pt; background-color: #f5f5f5; padding: 2pt; border: 1pt solid #ddd; }
+              pre { background-color:#f5f5f5; border:1pt solid #ddd; padding:12pt; margin:12pt 0; }
             </style>
           </head>
           <body>
-            ${html}
+            ${exportHtml}
           </body>
         </html>
       `;
@@ -282,7 +308,7 @@ export async function GET(
         headers: {
           "Content-Type":
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          "Content-Disposition": `attachment; filename="${safeName}.docx"`,
+          "Content-Disposition": `attachment; filename=\"${safeName}.docx\"`,
         },
       });
     }

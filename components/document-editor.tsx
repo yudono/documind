@@ -79,6 +79,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 interface Message {
   id: string;
   content: string;
@@ -121,6 +128,7 @@ export default function DocumentEditor({
   const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(
     documentId || null
   );
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
 
   // AI Generation Modal state
   const [showAIModal, setShowAIModal] = useState(false);
@@ -141,6 +149,14 @@ export default function DocumentEditor({
   const editorRef = useRef<TiptapEditor | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Clear pending autosave when disabling
+    if (!autoSaveEnabled && autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+      autoSaveTimeoutRef.current = null;
+    }
+  }, [autoSaveEnabled]);
 
   // Load document data for edit mode
   useEffect(() => {
@@ -187,15 +203,28 @@ export default function DocumentEditor({
   }, [documentId, mode, router]);
 
   // Handle editor updates (auto-save)
-  const handleEditorUpdate = useCallback((content: string) => {
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current);
-    }
+  const handleEditorUpdate = useCallback(
+    (content: string) => {
+      // Disable autosave if not enabled
+      if (!autoSaveEnabled) {
+        // Clear any pending autosave to prevent late triggers
+        if (autoSaveTimeoutRef.current) {
+          clearTimeout(autoSaveTimeoutRef.current);
+          autoSaveTimeoutRef.current = null;
+        }
+        return;
+      }
 
-    autoSaveTimeoutRef.current = setTimeout(() => {
-      handleAutoSave();
-    }, 2000);
-  }, []);
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+
+      autoSaveTimeoutRef.current = setTimeout(() => {
+        handleAutoSave();
+      }, 2000);
+    },
+    [autoSaveEnabled]
+  );
 
   // Handle editor selection updates
   const handleSelectionUpdate = useCallback(
@@ -208,6 +237,27 @@ export default function DocumentEditor({
     },
     []
   );
+
+  // Stabilize onEditorReady to avoid repeated resets
+  const onEditorReady = useCallback((editorInstance: TiptapEditor) => {
+    editorRef.current = editorInstance;
+
+    const onUpdate = () => {
+      const html = editorInstance.getHTML();
+      handleEditorUpdate(html);
+    };
+
+    const onSelection = () => {
+      const { from, to } = editorInstance.state.selection;
+      const selected = editorInstance.state.doc.textBetween(from, to, "\n");
+      setSelectedText(selected);
+      setSelectedRange(from !== to ? { from, to } : undefined);
+    };
+
+    editorInstance.on("update", onUpdate);
+    editorInstance.on("selectionUpdate", onSelection);
+    // Do NOT reset content here; SimpleEditor initializes and loadDocument sets content.
+  }, [handleEditorUpdate]);
 
   // Comment handlers
   const handleAddComment = useCallback(
@@ -362,12 +412,12 @@ export default function DocumentEditor({
   };
 
   // Download functionality
-  const handleDownload = async () => {
+  const handleExport = async (type: "docx" | "pdf") => {
     if (!currentDocumentId) return;
 
     try {
       const response = await fetch(
-        `/api/documents/${currentDocumentId}/download`
+        `/api/documents/${currentDocumentId}/download?type=${type}`
       );
       if (response.ok) {
         const blob = await response.blob();
@@ -375,7 +425,7 @@ export default function DocumentEditor({
         const a = document.createElement("a");
         a.style.display = "none";
         a.href = url;
-        a.download = `${documentTitle}.docx`;
+        a.download = `${documentTitle}.${type}`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -446,6 +496,13 @@ export default function DocumentEditor({
     }
   };
 
+  // Apply generated HTML into the editor (used by AIChatSidebar)
+  const applyGeneratedHtml = useCallback((html: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.chain().focus().insertContent(html).run();
+  }, []);
+
   // Navigation handler
   const handleBack = () => {
     if (mode === "create") {
@@ -465,6 +522,8 @@ export default function DocumentEditor({
 
   // Get editor instance for toolbar functionality
   const editor = editorRef.current;
+
+  // console.log("rerender");
 
   return (
     <TooltipProvider>
@@ -530,10 +589,22 @@ export default function DocumentEditor({
                   <Sparkles className="h-4 w-4" />
                 </Button>
                 {mode === "edit" && (
-                  <Button variant="outline" size="sm" onClick={handleDownload}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Download
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Download className="h-4 w-4 mr-2" />
+                        Export
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleExport("docx")}>
+                        DOCX
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExport("pdf")}>
+                        PDF
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
                 <Button
                   variant="outline"
@@ -551,35 +622,10 @@ export default function DocumentEditor({
           {/* Main Content: Editor + Sidebars */}
           <div className="flex flex-row">
             {/* Editor column */}
-            <div className="flex-1 min-h-[calc(100vh-74px)]">
+            <div className="flex-1 h-[calc(100vh-74px)] overflow-auto">
               <SimpleEditor
                 initialHTML={initialHTML}
-                onEditorReady={(editorInstance) => {
-                  editorRef.current = editorInstance;
-
-                  const onUpdate = () => {
-                    const html = editorInstance.getHTML();
-                    handleEditorUpdate(html);
-                  };
-
-                  const onSelection = () => {
-                    const { from, to } = editorInstance.state.selection;
-                    const selected = editorInstance.state.doc.textBetween(
-                      from,
-                      to,
-                      "\n"
-                    );
-                    setSelectedText(selected);
-                    setSelectedRange(from !== to ? { from, to } : undefined);
-                  };
-
-                  editorInstance.on("update", onUpdate);
-                  editorInstance.on("selectionUpdate", onSelection);
-
-                  if (initialHTML) {
-                    editorInstance.commands.setContent(initialHTML);
-                  }
-                }}
+                onEditorReady={onEditorReady}
               />
             </div>
 
@@ -611,6 +657,8 @@ export default function DocumentEditor({
                   onToggleVisibility={() => setShowChatbot(false)}
                   documentContent={editorRef.current?.getHTML() || ""}
                   inline={true}
+                  onApplyHtml={applyGeneratedHtml}
+                  documentId={documentId}
                 />
               ) : null}
             </div>
