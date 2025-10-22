@@ -6,7 +6,7 @@ import { uploadToS3, generateFileKey } from "@/lib/s3";
 // import sharp from "sharp";
 
 // Force Node.js runtime; sharp is unsupported on Edge
-export const runtime = "nodejs";
+// export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
@@ -60,33 +60,33 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     let buffer: any = Buffer.from(new Uint8Array(bytes));
 
-    // Attempt dynamic import of sharp to avoid cross-platform build/runtime issues
-    let sharpLib: any = null;
-    try {
-      const mod = await import("sharp");
-      sharpLib = (mod as any).default || mod;
-    } catch (err) {
-      console.warn("Sharp not available; skipping image compression.", err);
-    }
-
-    // Process images - compress if needed (only if sharp is available)
-    if (sharpLib && file.type.startsWith("image/")) {
-      try {
-        // Compress image if larger than 2MB
-        if (buffer.length > 2 * 1024 * 1024) {
-          buffer = await sharpLib(buffer)
-            .resize(1920, 1920, {
-              fit: "inside",
-              withoutEnlargement: true,
-            })
-            .jpeg({ quality: 85 })
-            .toBuffer();
-        }
-      } catch (error) {
-        console.error("Error processing image:", error);
-        // Continue with original buffer if processing fails
-      }
-    }
+    // =====================
+    // Image compression disabled per request
+    // =====================
+    // let sharpLib: any = null;
+    // try {
+    //   const mod = await import("sharp");
+    //   sharpLib = (mod as any).default || mod;
+    // } catch (err) {
+    //   console.warn("Sharp not available; skipping image compression.", err);
+    // }
+    // if (sharpLib && file.type.startsWith("image/")) {
+    //   try {
+    //     // Compress image if larger than 2MB
+    //     if (buffer.length > 2 * 1024 * 1024) {
+    //       buffer = await sharpLib(buffer)
+    //         .resize(1920, 1920, {
+    //           fit: "inside",
+    //           withoutEnlargement: true,
+    //         })
+    //         .jpeg({ quality: 85 })
+    //         .toBuffer();
+    //     }
+    //   } catch (error) {
+    //     console.error("Error processing image:", error);
+    //     // Continue with original buffer if processing fails
+    //   }
+    // }
 
     // Generate unique file key
     const fileKey = generateFileKey(file.name, "uploads");
