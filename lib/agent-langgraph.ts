@@ -11,6 +11,7 @@ import {
 import ReactPDF from "@react-pdf/renderer";
 import { Document, Page, Font } from "@react-pdf/renderer";
 import Html from "react-pdf-html";
+import { performOCR } from "./groq";
 
 // Register Roboto font family using local TTF files
 Font.register({
@@ -54,6 +55,8 @@ const AgentStateAnnotation = Annotation.Root({
   finalResponse: Annotation<string>,
   shouldGenerateDoc: Annotation<boolean>,
   documentType: Annotation<"pdf" | "xlsx" | "docx" | "pptx" | undefined>,
+  // Add document URLs for OCR
+  documentUrls: Annotation<string[] | undefined>,
 });
 
 type AgentState = typeof AgentStateAnnotation.State;
@@ -66,6 +69,7 @@ interface AgentInput {
   useSemanticSearch: boolean;
   documentIds?: string[];
   conversationContext?: string;
+  documentUrls?: string[];
 }
 
 // Output interface for the agent
@@ -100,16 +104,20 @@ export class LangGraphDocumentAgent {
     const generateDocumentNode = this.generateDocumentNode.bind(this);
     const saveConversationNode = this.saveConversationNode.bind(this);
     const shouldGenerateDocument = this.shouldGenerateDocument.bind(this);
+    // OCR node
+    const ocrDocumentsNode = this.ocrDocumentsNode.bind(this);
 
     const workflow = new StateGraph(AgentStateAnnotation)
       .addNode("retrieveContext", retrieveContextNode)
+      .addNode("ocrDocuments", ocrDocumentsNode)
       .addNode("generateResponse", generateResponseNode)
       .addNode("generateDocumentResponse", generateDocumentResponseNode)
       .addNode("decideDocumentGeneration", decideDocumentGenerationNode)
       .addNode("generateDocument", generateDocumentNode)
       .addNode("saveConversation", saveConversationNode)
       .addEdge(START, "retrieveContext")
-      .addEdge("retrieveContext", "generateResponse")
+      .addEdge("retrieveContext", "ocrDocuments")
+      .addEdge("ocrDocuments", "generateResponse")
       .addEdge("generateResponse", "decideDocumentGeneration")
       .addConditionalEdges("decideDocumentGeneration", shouldGenerateDocument, {
         generateDocumentResponse: "generateDocumentResponse",
@@ -168,6 +176,53 @@ export class LangGraphDocumentAgent {
       context,
       referencedDocuments,
     };
+  }
+
+  // New node: OCR selected documents and append extracted text to context
+  private async ocrDocumentsNode(
+    state: AgentState
+  ): Promise<Partial<AgentState>> {
+    try {
+      const urls = state.documentUrls || [];
+      if (!urls.length) {
+        return {};
+      }
+
+      const ocrPrompt =
+        "Extract clear, accurate text from this document image. Preserve headings, tables, and lists in plain text form. Return only text usable for QA and summarization.";
+
+      const results: { url: string; text: string }[] = [];
+      for (const url of urls) {
+        try {
+          const text = await performOCR(url, ocrPrompt);
+          results.push({ url, text });
+        } catch (err) {
+          console.error("OCR failed for", url, err);
+        }
+      }
+
+      if (!results.length) {
+        return {};
+      }
+
+      // Build OCR context block
+      const ocrContext = results
+        .map((r, idx) => `Document ${idx + 1} (${r.url}):\n${r.text}`)
+        .join("\n\n");
+
+      const combinedContext = state.context
+        ? `${state.context}\n\n${ocrContext}`
+        : ocrContext;
+
+      const referenced = Array.from(
+        new Set([...(state.referencedDocuments || []), ...urls])
+      );
+
+      return { context: combinedContext, referencedDocuments: referenced };
+    } catch (error) {
+      console.error("Error in OCR node:", error);
+      return {};
+    }
   }
 
   /**
@@ -1169,6 +1224,7 @@ Provide only the HTML content (no explanations):`;
         finalResponse: "",
         shouldGenerateDoc: false,
         documentType: undefined,
+        documentUrls: input.documentUrls,
       };
 
       // Run the graph

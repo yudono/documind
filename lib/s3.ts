@@ -60,7 +60,7 @@ export async function uploadToS3(
       // Generate public URL designed to be proxied by Next.js rewrites
       // If you want direct MinIO URL, uncomment the line below
       // const url = `${process.env.S3_ENDPOINT}/${BUCKET_NAME}/${key}`;
-      const url = `/${BUCKET_NAME}/${key}`; // e.g. /documind/uploads/<file>
+      const url = `${process.env.NEXTAPP_URL}/${BUCKET_NAME}/${key}`; // e.g. /documind/uploads/<file>
 
       return {
         key,

@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { message, context, documentRequest, sessionId, type } = body;
+    const { message, context, documentRequest, sessionId, type, documentUrls } = body;
 
     if (!message) {
       return NextResponse.json(
@@ -170,6 +170,7 @@ export async function POST(request: NextRequest) {
       useSemanticSearch: true, // Enable semantic search to retrieve context from vector DB
       documentIds: context ? [] : undefined,
       conversationContext: conversationContext || context,
+      documentUrls,
     });
 
     // Handle different response types from the agent

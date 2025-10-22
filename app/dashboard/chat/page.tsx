@@ -15,6 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { FilesDocumentsDialog } from "@/components/file-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -91,11 +92,11 @@ export default function ChatPage() {
   const router = useRouter();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  
+
   // Template mode state
   const [isTemplateMode, setIsTemplateMode] = useState(false);
   const [templateData, setTemplateData] = useState<any>(null);
-  
+
   // Chat state
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -105,17 +106,22 @@ export default function ChatPage() {
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [useSemanticSearch, setUseSemanticSearch] = useState(true);
   const [aiFormattingEnabled, setAiFormattingEnabled] = useState(true);
-  
+  const [selectedDocumentUrls, setSelectedDocumentUrls] = useState<string[]>(
+    []
+  );
+
   // Session state
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [selectedSession, setSelectedSession] = useState<string>("current");
-  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
-  
+  const [currentSession, setCurrentSession] = useState<ChatSession | null>(
+    null
+  );
+
   // Documents state
   const [documents, setDocuments] = useState<Document[]>([]);
   const [availableDocuments] = useState<Document[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
-  
+
   // Credit balance state
   const [creditBalance, setCreditBalance] = useState<number>(0);
   const [isLoadingCredits, setIsLoadingCredits] = useState(false);
@@ -124,12 +130,12 @@ export default function ChatPage() {
   const sessions = chatSessions;
 
   // Get sessionId from URL parameters
-  const sessionId = searchParams.get('sessionId');
+  const sessionId = searchParams.get("sessionId");
 
   // Function to update URL with sessionId
   const updateUrlWithSessionId = (newSessionId: string) => {
     const url = new URL(window.location.href);
-    url.searchParams.set('sessionId', newSessionId);
+    url.searchParams.set("sessionId", newSessionId);
     router.replace(url.pathname + url.search);
   };
 
@@ -137,21 +143,24 @@ export default function ChatPage() {
   useEffect(() => {
     const loadChatSessions = async () => {
       try {
-        const response = await fetch('/api/chat-sessions');
+        const response = await fetch("/api/chat-sessions");
         if (response.ok) {
           const data = await response.json();
           const sessions = data.chatSessions.map((session: any) => ({
             id: session.id,
             title: session.title,
-            lastMessage: session.messages[session.messages.length - 1]?.content || '',
+            lastMessage:
+              session.messages[session.messages.length - 1]?.content || "",
             timestamp: new Date(session.updatedAt),
             messageCount: session.messages.length,
           }));
           setChatSessions(sessions);
-          
+
           // Handle sessionId from URL
           if (sessionId) {
-            const foundSession = sessions.find((s: ChatSession) => s.id === sessionId);
+            const foundSession = sessions.find(
+              (s: ChatSession) => s.id === sessionId
+            );
             if (foundSession) {
               setCurrentSession(foundSession);
               setSelectedSession(foundSession.id);
@@ -173,7 +182,7 @@ export default function ChatPage() {
           }
         }
       } catch (error) {
-        console.error('Error loading chat sessions:', error);
+        console.error("Error loading chat sessions:", error);
         // Create new session on error
         if (!currentSession) {
           await createNewSession();
@@ -187,21 +196,25 @@ export default function ChatPage() {
   // Load messages for current session
   useEffect(() => {
     const loadSessionMessages = async () => {
-      if (currentSession && currentSession.id !== 'current') {
+      if (currentSession && currentSession.id !== "current") {
         try {
-          const response = await fetch(`/api/chat-messages?sessionId=${currentSession.id}`);
+          const response = await fetch(
+            `/api/chat-messages?sessionId=${currentSession.id}`
+          );
           if (response.ok) {
             const data = await response.json();
-            setMessages(data.messages.map((msg: any) => ({
-              id: msg.id,
-              content: msg.content,
-              role: msg.role,
-              timestamp: new Date(msg.createdAt),
-              referencedDocuments: msg.referencedDocs || [],
-            })));
+            setMessages(
+              data.messages.map((msg: any) => ({
+                id: msg.id,
+                content: msg.content,
+                role: msg.role,
+                timestamp: new Date(msg.createdAt),
+                referencedDocuments: msg.referencedDocs || [],
+              }))
+            );
           }
         } catch (error) {
-          console.error('Error loading session messages:', error);
+          console.error("Error loading session messages:", error);
         }
       }
     };
@@ -211,13 +224,13 @@ export default function ChatPage() {
 
   const createNewSession = async () => {
     try {
-      const response = await fetch('/api/chat-sessions', {
-        method: 'POST',
+      const response = await fetch("/api/chat-sessions", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          title: 'New Chat',
+          title: "New Chat",
         }),
       });
 
@@ -226,28 +239,28 @@ export default function ChatPage() {
         const newSession: ChatSession = {
           id: data.chatSession.id,
           title: data.chatSession.title,
-          lastMessage: '',
+          lastMessage: "",
           timestamp: new Date(data.chatSession.createdAt),
           messageCount: 0,
         };
-        
-        setChatSessions(prev => [newSession, ...prev]);
+
+        setChatSessions((prev) => [newSession, ...prev]);
         setCurrentSession(newSession);
         setSelectedSession(newSession.id);
         setMessages([]);
         updateUrlWithSessionId(newSession.id);
       }
     } catch (error) {
-      console.error('Error creating new session:', error);
+      console.error("Error creating new session:", error);
       // Fallback to local session
       const newSession: ChatSession = {
         id: `session-${Date.now()}`,
-        title: 'New Chat',
-        lastMessage: '',
+        title: "New Chat",
+        lastMessage: "",
         timestamp: new Date(),
         messageCount: 0,
       };
-      setChatSessions(prev => [newSession, ...prev]);
+      setChatSessions((prev) => [newSession, ...prev]);
       setCurrentSession(newSession);
       setSelectedSession(newSession.id);
       setMessages([]);
@@ -303,7 +316,7 @@ export default function ChatPage() {
       const mode = searchParams.get("mode");
       const data = searchParams.get("data");
       const templateId = searchParams.get("template");
-      
+
       // Handle new template context from sessionId parameter
       if (templateId && sessionId) {
         try {
@@ -314,40 +327,45 @@ export default function ChatPage() {
             const session = {
               id: sessionData.chatSession.id,
               title: sessionData.chatSession.title,
-              lastMessage: sessionData.chatSession.messages[sessionData.chatSession.messages.length - 1]?.content || '',
+              lastMessage:
+                sessionData.chatSession.messages[
+                  sessionData.chatSession.messages.length - 1
+                ]?.content || "",
               timestamp: new Date(sessionData.chatSession.updatedAt),
               messageCount: sessionData.chatSession.messages.length,
             };
-            
+
             setCurrentSession(session);
             setSelectedSession(session.id);
             setIsTemplateMode(true);
-            
+
             // Load messages for this session
-            const messages = sessionData.chatSession.messages.map((msg: any) => ({
-              id: msg.id,
-              content: msg.content,
-              role: msg.role,
-              timestamp: new Date(msg.createdAt),
-              referencedDocuments: msg.referencedDocs || [],
-            }));
+            const messages = sessionData.chatSession.messages.map(
+              (msg: any) => ({
+                id: msg.id,
+                content: msg.content,
+                role: msg.role,
+                timestamp: new Date(msg.createdAt),
+                referencedDocuments: msg.referencedDocs || [],
+              })
+            );
             setMessages(messages);
-            
+
             // Update chat sessions list
-            setChatSessions(prev => {
-              const exists = prev.find(s => s.id === session.id);
+            setChatSessions((prev) => {
+              const exists = prev.find((s) => s.id === session.id);
               if (!exists) {
                 return [session, ...prev];
               }
-              return prev.map(s => s.id === session.id ? session : s);
+              return prev.map((s) => (s.id === session.id ? session : s));
             });
           }
         } catch (error) {
-          console.error('Error loading template session:', error);
+          console.error("Error loading template session:", error);
         }
         return;
       }
-      
+
       // Handle legacy template mode
       if (mode === "template" && data) {
         try {
@@ -434,16 +452,16 @@ export default function ChatPage() {
   // Add function to fetch credit balance
   const fetchCreditBalance = useCallback(async () => {
     if (!session?.user?.email) return;
-    
+
     try {
       setIsLoadingCredits(true);
-      const response = await fetch('/api/credits');
+      const response = await fetch("/api/credits");
       if (response.ok) {
         const data = await response.json();
         setCreditBalance(data.balance || 0);
       }
     } catch (error) {
-      console.error('Failed to fetch credit balance:', error);
+      console.error("Failed to fetch credit balance:", error);
     } finally {
       setIsLoadingCredits(false);
     }
@@ -458,11 +476,14 @@ export default function ChatPage() {
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
+    setSelectedDocuments([]);
+
     // Check if user has enough credits
     if (creditBalance <= 0) {
       const errorMessage: Message = {
         id: `credit-error-${Date.now()}`,
-        content: "❌ Insufficient credits. Please top up your credits in the billing dashboard to continue chatting.",
+        content:
+          "❌ Insufficient credits. Please top up your credits in the billing dashboard to continue chatting.",
         role: "assistant",
         timestamp: new Date(),
       };
@@ -494,35 +515,39 @@ export default function ChatPage() {
 
     try {
       // Prepare context from selected documents
-      const context = selectedDocuments.length > 0 
-        ? `Referenced documents: ${selectedDocuments.map(doc => doc.name).join(', ')}`
-        : undefined;
+      const context =
+        selectedDocuments.length > 0
+          ? `Referenced documents: ${selectedDocuments
+              .map((doc) => doc.name)
+              .join(", ")}`
+          : undefined;
 
       // Make API call to the main chat endpoint (which handles credit consumption internally)
-      const messageResponse = await fetch('/api/chat', {
-        method: 'POST',
+      const messageResponse = await fetch("/api/chat", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           message: userMessage.content,
           context: context,
           documentRequest: false,
           sessionId: currentSession?.id, // Pass the current session ID
+          documentUrls: selectedDocumentUrls,
         }),
       });
 
       if (!messageResponse.ok) {
-        throw new Error('Failed to send message to AI');
+        throw new Error("Failed to send message to AI");
       }
 
       const aiResponse = await messageResponse.json();
-      
+
       // Update credit balance from the response
       if (aiResponse.creditBalance !== undefined) {
         setCreditBalance(aiResponse.creditBalance);
       }
-      
+
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
         content: aiResponse.response,
@@ -535,10 +560,9 @@ export default function ChatPage() {
         prev.filter((msg) => msg.id !== "typing").concat(assistantMessage)
       );
       setIsLoading(false);
-
     } catch (error) {
-      console.error('Error sending message:', error);
-      
+      console.error("Error sending message:", error);
+
       // Remove typing indicator and show error
       const errorMessage: Message = {
         id: `error-${Date.now()}`,
@@ -794,7 +818,9 @@ export default function ChatPage() {
 
       const successMessage: Message = {
         id: `generate-success-${Date.now()}`,
-        content: `✅ ${useAIFormatting ? 'AI-Enhanced' : 'Standard'} document generated successfully as ${format.toUpperCase()} and downloaded.`,
+        content: `✅ ${
+          useAIFormatting ? "AI-Enhanced" : "Standard"
+        } document generated successfully as ${format.toUpperCase()} and downloaded.`,
         role: "assistant",
         timestamp: new Date(),
       };
@@ -833,18 +859,29 @@ export default function ChatPage() {
       if (data.success) {
         const analysisMessage: Message = {
           id: `analysis-${Date.now()}`,
-          content: `📊 Document Analysis Complete:\n\n**Summary:** ${data.analysis.summary}\n\n**Key Points:**\n${data.analysis.keyPoints?.map((point: string) => `• ${point}`).join("\n") || "No key points found"}\n\n**Sentiment:** ${data.analysis.sentiment}\n**Topics:** ${data.analysis.topics?.join(", ") || "None identified"}`,
+          content: `📊 Document Analysis Complete:\n\n**Summary:** ${
+            data.analysis.summary
+          }\n\n**Key Points:**\n${
+            data.analysis.keyPoints
+              ?.map((point: string) => `• ${point}`)
+              .join("\n") || "No key points found"
+          }\n\n**Sentiment:** ${data.analysis.sentiment}\n**Topics:** ${
+            data.analysis.topics?.join(", ") || "None identified"
+          }`,
           role: "assistant",
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, analysisMessage]);
-        
+
         // Store extracted text for future queries
         if (data.extractedText) {
-          console.log('Document text extracted:', data.extractedText.substring(0, 200) + '...');
+          console.log(
+            "Document text extracted:",
+            data.extractedText.substring(0, 200) + "..."
+          );
         }
       } else {
-        throw new Error(data.error || 'Analysis failed');
+        throw new Error(data.error || "Analysis failed");
       }
     } catch (error) {
       console.error("Document analysis error:", error);
@@ -961,7 +998,7 @@ export default function ChatPage() {
                     {isTemplateMode ? "Template Generator" : "AI Assistant"}
                   </h1>
                   <p className="text-sm text-muted-foreground">
-                    {isTemplateMode 
+                    {isTemplateMode
                       ? `Generating document from template`
                       : session?.user?.name
                       ? `Chatting with ${session.user.name}`
@@ -973,17 +1010,25 @@ export default function ChatPage() {
                 {/* Credit Balance Display */}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge variant="outline" className="px-3 py-1 cursor-pointer">
+                    <Badge
+                      variant="outline"
+                      className="px-3 py-1 cursor-pointer"
+                    >
                       <Coins className="h-3 w-3 mr-1" />
-                      {isLoadingCredits ? "..." : creditBalance.toLocaleString()} credits
+                      {isLoadingCredits
+                        ? "..."
+                        : creditBalance.toLocaleString()}{" "}
+                      credits
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Your current credit balance</p>
-                    <p className="text-xs text-muted-foreground">1 credit per message</p>
+                    <p className="text-xs text-muted-foreground">
+                      1 credit per message
+                    </p>
                   </TooltipContent>
                 </Tooltip>
-                
+
                 <Badge variant="outline" className="px-3 py-1">
                   <div className="h-2 w-2 bg-green-500 rounded-full mr-2"></div>
                   Online
@@ -1099,35 +1144,69 @@ export default function ChatPage() {
                                         onClick={() => {
                                           if (message.documentFile?.error) {
                                             // Show error message if PDF processing failed
-                                            alert(`Download failed: ${message.documentFile.error}`);
+                                            alert(
+                                              `Download failed: ${message.documentFile.error}`
+                                            );
                                             return;
                                           }
-                                          
-                                          if (message.documentFile?.url && message.documentFile.url !== "#" && !message.documentFile.url.startsWith('data:')) {
+
+                                          if (
+                                            message.documentFile?.url &&
+                                            message.documentFile.url !== "#" &&
+                                            !message.documentFile.url.startsWith(
+                                              "data:"
+                                            )
+                                          ) {
                                             // For real URLs, open in new tab
-                                            window.open(message.documentFile.url, '_blank');
-                                          } else if (message.documentFile?.url && message.documentFile.url.startsWith('data:')) {
+                                            window.open(
+                                              message.documentFile.url,
+                                              "_blank"
+                                            );
+                                          } else if (
+                                            message.documentFile?.url &&
+                                            message.documentFile.url.startsWith(
+                                              "data:"
+                                            )
+                                          ) {
                                             try {
                                               // For data URLs, create download link with better error handling
-                                              const a = document.createElement('a');
+                                              const a =
+                                                document.createElement("a");
                                               a.href = message.documentFile.url;
-                                              a.download = message.documentFile.name || 'document.pdf';
-                                              a.style.display = 'none';
+                                              a.download =
+                                                message.documentFile.name ||
+                                                "document.pdf";
+                                              a.style.display = "none";
                                               document.body.appendChild(a);
                                               a.click();
                                               document.body.removeChild(a);
                                             } catch (error) {
-                                              console.error('Download failed:', error);
-                                              alert('Download failed. The file may be too large or corrupted.');
+                                              console.error(
+                                                "Download failed:",
+                                                error
+                                              );
+                                              alert(
+                                                "Download failed. The file may be too large or corrupted."
+                                              );
                                             }
                                           } else {
                                             // For mock documents, create a downloadable blob
-                                            const content = `Mock Document: ${message.documentFile?.name}\nType: ${message.documentFile?.type}\nGenerated at: ${new Date().toISOString()}`;
-                                            const blob = new Blob([content], { type: 'text/plain' });
-                                            const url = URL.createObjectURL(blob);
-                                            const a = document.createElement('a');
+                                            const content = `Mock Document: ${
+                                              message.documentFile?.name
+                                            }\nType: ${
+                                              message.documentFile?.type
+                                            }\nGenerated at: ${new Date().toISOString()}`;
+                                            const blob = new Blob([content], {
+                                              type: "text/plain",
+                                            });
+                                            const url =
+                                              URL.createObjectURL(blob);
+                                            const a =
+                                              document.createElement("a");
                                             a.href = url;
-                                            a.download = message.documentFile?.name || 'document.txt';
+                                            a.download =
+                                              message.documentFile?.name ||
+                                              "document.txt";
                                             document.body.appendChild(a);
                                             a.click();
                                             document.body.removeChild(a);
@@ -1241,7 +1320,9 @@ export default function ChatPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Generate Document</DropdownMenuLabel>
+                              <DropdownMenuLabel>
+                                Generate Document
+                              </DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onClick={() =>
@@ -1334,88 +1415,33 @@ export default function ChatPage() {
 
               <div className="flex items-end space-x-2">
                 <div className="flex space-x-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setShowDocumentPicker(!showDocumentPicker)
-                        }
-                        className={showDocumentPicker ? "bg-muted" : ""}
-                      >
-                        <Paperclip className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Attach documents</TooltipContent>
-                  </Tooltip>
-
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowFileUpload(!showFileUpload)}
-                        className={showFileUpload ? "bg-muted" : ""}
-                      >
-                        <FileText className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Upload files</TooltipContent>
-                  </Tooltip>
-
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleAtSymbol}
-                      >
-                        <AtSign className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Reference documents</TooltipContent>
-                  </Tooltip>
-
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setUseSemanticSearch(!useSemanticSearch)}
-                        className={
-                          useSemanticSearch ? "bg-primary/10 text-primary" : ""
-                        }
-                      >
-                        <Search className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {useSemanticSearch
-                        ? "Disable semantic search"
-                        : "Enable semantic search"}
-                    </TooltipContent>
-                  </Tooltip>
-
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setAiFormattingEnabled(!aiFormattingEnabled)}
-                        className={
-                          aiFormattingEnabled ? "bg-primary/10 text-primary" : ""
-                        }
-                      >
-                        <Sparkles className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {aiFormattingEnabled
-                        ? "Disable AI formatting for documents"
-                        : "Enable AI formatting for documents"}
-                    </TooltipContent>
-                  </Tooltip>
+                  <FilesDocumentsDialog
+                    documents={documents}
+                    selectedDocuments={selectedDocuments as any}
+                    onSubmit={(urls, docs) => {
+                      setSelectedDocumentUrls(urls);
+                      // Mirror selection for UI badges (name display)
+                      try {
+                        const mapped = docs.map((d: any) => ({
+                          id: d.id,
+                          name: d.name,
+                          type:
+                            typeof d.fileType === "string"
+                              ? d.fileType
+                              : d.type || "document",
+                          uploadDate: new Date(
+                            d.updatedAt || d.createdAt || Date.now()
+                          ),
+                        }));
+                        setSelectedDocuments(mapped);
+                      } catch (e) {
+                        console.warn(
+                          "Failed to map selected docs for UI display:",
+                          e
+                        );
+                      }
+                    }}
+                  />
                 </div>
 
                 <div className="flex-1 relative">
@@ -1446,97 +1472,6 @@ export default function ChatPage() {
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
-
-              {/* File Upload */}
-              {showFileUpload && (
-                <Card className="mt-3">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center justify-between">
-                      Upload Files
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowFileUpload(false)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <FileUpload
-                      onFileUpload={(file, result) => {
-                        // Handle individual file upload completion
-                        console.log("File uploaded:", file.name, result);
-                        uploadDocument(file);
-                      }}
-                      onAllUploadsComplete={(results) => {
-                        // Handle all uploads completion
-                        handleFileUpload(results);
-                      }}
-                      onError={(error) => {
-                        console.error("Upload error:", error);
-                      }}
-                      maxSize={10 * 1024 * 1024} // 10MB
-                      acceptedTypes={[
-                        "image/jpeg",
-                        "image/png",
-                        "image/gif",
-                        "image/webp",
-                        "application/pdf",
-                        "application/msword",
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        "application/vnd.ms-excel",
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        "text/plain",
-                      ]}
-                      multiple={true}
-                    />
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Document Picker */}
-              {showDocumentPicker && (
-                <Card className="mt-3">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center justify-between">
-                      Reference Documents
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowDocumentPicker(false)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {documents.map((doc) => (
-                        <div
-                          key={doc.id}
-                          className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${
-                            selectedDocuments.some((d) => d.id === doc.id)
-                              ? "bg-primary/10 border border-primary"
-                              : "hover:bg-muted"
-                          }`}
-                          onClick={() => toggleDocumentSelection(doc)}
-                        >
-                          <File className="h-4 w-4 text-muted-foreground" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">
-                              {doc.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {doc.type} • {formatDate(doc.uploadDate)}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
 
               <p className="text-xs text-muted-foreground mt-2 text-center">
                 Press Enter to send • Shift+Enter for new line • Use @ to
