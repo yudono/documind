@@ -158,7 +158,37 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'asc' },
     });
 
-    return NextResponse.json({ messages });
+    // Attach documentFile metadata for assistant messages referencing generated documents
+    const messagesWithFiles = await Promise.all(
+      messages.map(async (msg) => {
+        if (msg.role === 'assistant' && Array.isArray(msg.referencedDocs) && msg.referencedDocs.length > 0) {
+          const docId = msg.referencedDocs[0];
+          try {
+            const item = await prisma.item.findFirst({
+              where: { id: docId, userId: user.id, type: 'document' },
+            });
+            if (item) {
+              const isPdfDefault = true; // default to pdf
+              const url = `/api/documents/${item.id}/download?type=${isPdfDefault ? 'pdf' : 'docx'}`;
+              return {
+                ...msg,
+                documentFile: {
+                  name: `${item.name}.pdf`,
+                  type: item.fileType || 'application/pdf',
+                  downloadUrl: url,
+                  url,
+                },
+              };
+            }
+          } catch (e) {
+            console.warn('Failed to attach document to message', e);
+          }
+        }
+        return msg;
+      })
+    );
+
+    return NextResponse.json({ messages: messagesWithFiles });
   } catch (error) {
     console.error('Error fetching chat messages:', error);
     return NextResponse.json(

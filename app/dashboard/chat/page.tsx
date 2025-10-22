@@ -210,6 +210,7 @@ export default function ChatPage() {
                 role: msg.role,
                 timestamp: new Date(msg.createdAt),
                 referencedDocuments: msg.referencedDocs || [],
+                documentFile: msg.documentFile,
               }))
             );
           }
@@ -1100,7 +1101,15 @@ export default function ChatPage() {
                       ) : (
                         <>
                           <div className="text-sm whitespace-pre-wrap leading-relaxed">
-                            {message.content}
+                            {(() => {
+                              const containsHtml =
+                                typeof message.content === "string" &&
+                                /<\/?[a-z][\s\S]*>/i.test(message.content);
+                              if (message.role === "assistant" && containsHtml) {
+                                return "📄 Dokumen telah dibuat. Gunakan tombol download di bawah untuk mengunduh.";
+                              }
+                              return message.content;
+                            })()}
                           </div>
 
                           {/* Document File Display */}

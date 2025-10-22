@@ -192,7 +192,9 @@ export async function GET(
     const exportHtml = normalizeHtmlForExport(html);
 
     if (targetType === "pdf") {
-      const { pdf, Document, Page } = await import("@react-pdf/renderer");
+      const { Document, Page, renderToBuffer } = await import(
+        "@react-pdf/renderer"
+      );
       const { Html } = await import("react-pdf-html");
 
       const pdfStylesheet = `
@@ -222,22 +224,29 @@ export async function GET(
         pre { background-color:#f5f5f5; border:1pt solid #ddd; padding:12pt; margin:12pt 0; }
       `;
 
+      const htmlContent = `
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+${pdfStylesheet}
+  </style>
+</head>
+<body>
+  ${exportHtml}
+</body>
+</html>`;
+
       const pdfDocument = React.createElement(
         Document,
         null,
         React.createElement(
           Page,
-          { size: "A4", style: { padding: 48 } } as any,
-          React.createElement(
-            Html as any,
-            { stylesheet: pdfStylesheet },
-            exportHtml
-          )
+          null,
+          React.createElement(Html, null, htmlContent)
         )
       );
 
-      // Render PDF to Buffer in Node, then convert to ArrayBuffer
-      const { renderToBuffer } = await import("@react-pdf/renderer");
       const pdfBuffer = await renderToBuffer(pdfDocument);
       return new Response(pdfBuffer as any, {
         headers: {

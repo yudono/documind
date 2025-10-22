@@ -22,7 +22,7 @@ import { useEffect, useState } from "react";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "My Documents", href: "/dashboard/documents", icon: FileText },
-  { name: "Templates", href: "/dashboard/templates", icon: Layout },
+  // { name: "Templates", href: "/dashboard/templates", icon: Layout },
   { name: "Chat AI", href: "/dashboard/chat", icon: MessageSquare },
   { name: "Billing & Usage", href: "/dashboard/billing", icon: CreditCard },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
@@ -38,13 +38,13 @@ export function DashboardSidebar() {
     const checkAdminRole = async () => {
       if (session?.user?.email) {
         try {
-          const response = await fetch('/api/user/profile');
+          const response = await fetch("/api/user/profile");
           if (response.ok) {
             const userData = await response.json();
-            setIsAdmin(userData.role === 'admin');
+            setIsAdmin(userData.role === "admin");
           }
         } catch (error) {
-          console.error('Error checking admin role:', error);
+          console.error("Error checking admin role:", error);
         }
       }
     };
@@ -56,7 +56,9 @@ export function DashboardSidebar() {
     { name: "Admin Panel", href: "/admin/credits", icon: Shield },
   ];
 
-  const allNavigation = isAdmin ? [...navigation, ...adminNavigation] : navigation;
+  const allNavigation = isAdmin
+    ? [...navigation, ...adminNavigation]
+    : navigation;
 
   return (
     <div className="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200">

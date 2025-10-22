@@ -7,7 +7,10 @@ import {
   generateDocument,
 } from "@/lib/groq";
 import { prisma } from "@/lib/prisma";
-import { getChatContext, generateChatMessageEmbedding } from "@/lib/chat-embeddings";
+import {
+  getChatContext,
+  generateChatMessageEmbedding,
+} from "@/lib/chat-embeddings";
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,7 +32,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { message, context, documentRequest, sessionId, type, documentUrls } = body;
+    const { message, context, documentRequest, sessionId, type, documentUrls } =
+      body;
 
     if (!message) {
       return NextResponse.json(
@@ -109,8 +113,8 @@ export async function POST(request: NextRequest) {
       });
 
       // Generate embedding for user message (async, don't wait)
-      generateChatMessageEmbedding(userMessage.id, message).catch(error => {
-        console.error('Failed to generate embedding for user message:', error);
+      generateChatMessageEmbedding(userMessage.id, message).catch((error) => {
+        console.error("Failed to generate embedding for user message:", error);
       });
     }
 
@@ -124,9 +128,10 @@ export async function POST(request: NextRequest) {
     }> = [
       {
         role: "system" as const,
-        content: type === "document_assistance" 
-          ? "You are a helpful AI assistant specialized in document editing and writing assistance. You help users improve their writing, provide suggestions, summarize content, and generate text. Focus on being concise and actionable in your responses."
-          : "You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.",
+        content:
+          type === "document_assistance"
+            ? "You are a helpful AI assistant specialized in document editing and writing assistance. You help users improve their writing, provide suggestions, summarize content, and generate text. Focus on being concise and actionable in your responses."
+            : "You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.",
       },
       ...(context
         ? [{ role: "user" as const, content: `Document context: ${context}` }]
@@ -135,11 +140,11 @@ export async function POST(request: NextRequest) {
     ];
 
     // If sessionId is provided, get previous messages for context
-    let conversationContext = '';
+    let conversationContext = "";
     if (sessionId) {
       // Get embedding-based conversation context
       conversationContext = await getChatContext(message, sessionId, 3);
-      
+
       const previousMessages = await prisma.chatMessage.findMany({
         where: { sessionId: sessionId },
         orderBy: { createdAt: "asc" },
@@ -149,9 +154,10 @@ export async function POST(request: NextRequest) {
       messages = [
         {
           role: "system" as const,
-          content: type === "document_assistance" 
-            ? "You are a helpful AI assistant specialized in document editing and writing assistance. You help users improve their writing, provide suggestions, summarize content, and generate text. Focus on being concise and actionable in your responses."
-            : "You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.",
+          content:
+            type === "document_assistance"
+              ? "You are a helpful AI assistant specialized in document editing and writing assistance. You help users improve their writing, provide suggestions, summarize content, and generate text. Focus on being concise and actionable in your responses."
+              : "You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.",
         },
         ...(context
           ? [{ role: "user" as const, content: `Document context: ${context}` }]
@@ -197,28 +203,61 @@ export async function POST(request: NextRequest) {
             throw new Error("Failed to encode PDF to base64");
           }
 
+          // Persist generated document content as Item so download link remains stable
+          const safeName = (
+            agentResponse.documentFile.filename || "AI_Generated_Document"
+          ).replace(/\.pdf$|\.docx$/i, "");
+          const createdItem = await prisma.item.create({
+            data: {
+              name: safeName,
+              type: "document",
+              userId: user.id,
+              fileType: agentResponse.documentFile.mimeType,
+              size: bufferSize,
+              content: JSON.stringify({ html: response }),
+            },
+          });
+
+          // Build stable download URL via documents download route
+          const isPdf =
+            agentResponse.documentFile.mimeType === "application/pdf";
+          const downloadUrl = `/api/documents/${createdItem.id}/download?type=${
+            isPdf ? "pdf" : "docx"
+          }`;
+
           documentFile = {
-            name: agentResponse.documentFile.filename,
+            name: `${safeName}.${isPdf ? "pdf" : "docx"}`,
             type: agentResponse.documentFile.mimeType,
             size: bufferSize,
-            url: `data:${agentResponse.documentFile.mimeType};base64,${base64Data}`,
+            url: downloadUrl,
             generatedAt: new Date().toISOString(),
           };
 
+          // Replace assistant response with a friendly, non-HTML status message
+          response = `✅ Dokumen berhasil dibuat. Gunakan tombol download untuk mengunduh.`;
+
           console.log(
-            `PDF document created: ${agentResponse.documentFile.filename}, size: ${bufferSize} bytes`
+            `Document persisted: ${safeName} (Item ID: ${createdItem.id}), size: ${bufferSize} bytes`
           );
+
+          // If we have a session, also attach referenced doc to assistant message later
+          if (sessionId) {
+            // We'll include this in referencedDocs when saving assistant message
+            // Attach created item id to a local variable
+            (request as any).__generatedItemId = createdItem.id;
+          }
         } catch (error) {
-          console.error("Error processing PDF document:", error);
-          // Return error information instead of failing silently
+          console.error("Error processing generated document:", error);
           documentFile = {
             name: agentResponse.documentFile.filename,
             type: agentResponse.documentFile.mimeType,
             size: agentResponse.documentFile.buffer.length,
             url: null,
-            error: "Failed to process PDF for download",
+            error: "Failed to persist document for download",
             generatedAt: new Date().toISOString(),
           };
+          // Fallback text response
+          response = `❌ Gagal menyimpan dokumen untuk diunduh. Coba lagi.`;
         }
       }
     }
@@ -226,18 +265,33 @@ export async function POST(request: NextRequest) {
     // Save AI response to session if sessionId is provided
     let assistantMessage = null;
     if (sessionId) {
+      // If a document was created, attach its ID in referencedDocs and avoid saving raw HTML
+      const referencedDocs: string[] = [];
+      const generatedItemId = (request as any).__generatedItemId as
+        | string
+        | undefined;
+      if (generatedItemId) {
+        referencedDocs.push(generatedItemId);
+      }
+
       assistantMessage = await prisma.chatMessage.create({
         data: {
           content: response,
           role: "assistant",
           sessionId: sessionId,
+          referencedDocs,
         },
       });
 
       // Generate embedding for assistant message (async, don't wait)
-      generateChatMessageEmbedding(assistantMessage.id, response).catch(error => {
-        console.error('Failed to generate embedding for assistant message:', error);
-      });
+      generateChatMessageEmbedding(assistantMessage.id, response).catch(
+        (error) => {
+          console.error(
+            "Failed to generate embedding for assistant message:",
+            error
+          );
+        }
+      );
 
       // Update chat session timestamp
       await prisma.chatSession.update({
