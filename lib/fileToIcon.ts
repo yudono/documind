@@ -42,6 +42,7 @@ const availableIcons = [
   "WMA",
   "XML",
   "XSL",
+  "XLSX",
   "ZIP",
 ];
 

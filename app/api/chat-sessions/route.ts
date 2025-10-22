@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 // GET /api/chat-sessions - Get all chat sessions for the user
+// Supports query params: ?documentId=xxx&type=xxx
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -20,8 +21,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const documentId = searchParams.get('documentId');
+    const type = searchParams.get('type');
+
+    // Build where clause based on query params
+    const whereClause: any = { userId: user.id };
+    if (documentId) {
+      whereClause.documentId = documentId;
+    }
+    if (type) {
+      whereClause.type = type;
+    }
+
     const chatSessions = await prisma.chatSession.findMany({
-      where: { userId: user.id },
+      where: whereClause,
       include: {
         messages: {
           orderBy: { createdAt: 'asc' },
@@ -41,6 +55,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/chat-sessions - Create a new chat session
+// Supports documentId and type for document-specific sessions
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -57,7 +72,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const { title } = await request.json();
+    const { title, documentId, type } = await request.json();
 
     if (!title || typeof title !== 'string') {
       return NextResponse.json(
@@ -66,19 +81,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // If documentId is provided, verify it exists and belongs to the user
+    if (documentId) {
+      const document = await prisma.item.findFirst({
+        where: {
+          id: documentId,
+          userId: user.id,
+          type: 'document',
+        },
+      });
+
+      if (!document) {
+        return NextResponse.json(
+          { error: 'Document not found or access denied' },
+          { status: 404 }
+        );
+      }
+    }
+
+    // Build data object conditionally to avoid passing unknown fields as null
+    const data: any = {
+      title,
+      userId: user.id,
+    };
+    if (typeof type === 'string' && type.trim()) {
+      data.type = type;
+    }
+    if (typeof documentId === 'string' && documentId.trim()) {
+      data.documentId = documentId;
+    }
+
     const chatSession = await prisma.chatSession.create({
-      data: {
-        title,
-        userId: user.id,
-      },
+      data,
       include: {
         messages: true,
       },
     });
 
     return NextResponse.json({ chatSession });
-  } catch (error) {
-    console.error('Error creating chat session:', error);
+  } catch (error: any) {
+    console.error('Error creating chat session:', error?.message || error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

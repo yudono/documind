@@ -112,6 +112,9 @@ model ChatSession {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages    ChatMessage[]
+  documentId  String?  // Link to document/item for document-specific sessions
+  document    Item?    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  type        String?  // Type of session: "document_sidebar", "tables_sidebar", "general", etc.
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -297,6 +300,9 @@ model Item {
   
   // Folder-specific fields (nullable for documents)
   color       String?  @default("#3B82F6") // Folder color
+  
+  // Relations
+  chatSessions ChatSession[] // AI chat sessions for this document
   
   // Common metadata
   createdAt   DateTime @default(now())

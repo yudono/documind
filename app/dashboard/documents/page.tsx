@@ -122,7 +122,7 @@ interface AnalysisResult {
 interface Item {
   id: string;
   name: string;
-  type: "folder" | "document";
+  type: "folder" | "document" | "table";
   userId: string;
   parentId: string | null;
   createdAt: string;
@@ -499,6 +499,7 @@ export default function MyDocumentsPage() {
               variant="outline"
               size="sm"
               className="flex items-center gap-3"
+              onClick={() => router.push("/dashboard/documents/tables")}
             >
               <TableProperties size={20} />
               Table
@@ -506,7 +507,7 @@ export default function MyDocumentsPage() {
             <Button
               variant="outline"
               size="sm"
-              className="flex items-center gap-3"
+              className="flex items-center gap-3 relative"
             >
               <Presentation size={20} />
               Presentation
@@ -643,6 +644,10 @@ export default function MyDocumentsPage() {
                         onClick={() => {
                           if (item.type === "folder") {
                             navigateToFolder(item.id);
+                          } else if (item.type === "table") {
+                            router.push(
+                              `/dashboard/documents/tables?id=${item.id}`
+                            );
                           } else {
                             router.push(`/dashboard/documents/${item.id}`);
                           }
@@ -659,7 +664,7 @@ export default function MyDocumentsPage() {
                           <>
                             <img
                               src={fileToIcon(
-                                item.fileType?.split("/").pop() || "unknown"
+                                item.url?.split(".").pop() || "unknown"
                               )}
                               alt={item.name}
                               className="w-12"

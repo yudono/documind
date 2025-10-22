@@ -37,19 +37,25 @@ export function FilesDocumentsDialog({
   onSubmit,
 }: FilesDocumentsDialogProps) {
   const [items, setItems] = useState<DocumentItem[]>(documents || []);
-  const [selected, setSelected] = useState<DocumentItem[]>(selectedDocuments || []);
+  const [selected, setSelected] = useState<DocumentItem[]>(
+    selectedDocuments || []
+  );
 
+  const loadItems = async () => {
+    try {
+      const response = await fetch(`/api/items?parentId=`);
+      if (!response.ok) throw new Error("Failed to fetch items");
+      const data = await response.json();
+      setItems(
+        (Array.isArray(data) ? data : []).filter(
+          (i: any) => i.type === "document"
+        )
+      );
+    } catch (error) {
+      console.error("Error loading items:", error);
+    }
+  };
   useEffect(() => {
-    const loadItems = async () => {
-      try {
-        const response = await fetch(`/api/items?parentId=`);
-        if (!response.ok) throw new Error("Failed to fetch items");
-        const data = await response.json();
-        setItems((Array.isArray(data) ? data : []).filter((i: any) => i.type === "document"));
-      } catch (error) {
-        console.error("Error loading items:", error);
-      }
-    };
     loadItems();
   }, []);
 
@@ -120,8 +126,13 @@ export function FilesDocumentsDialog({
                   });
 
                   if (!itemResponse.ok) {
-                    console.error("Failed to create item record for", file.name);
+                    console.error(
+                      "Failed to create item record for",
+                      file.name
+                    );
                   }
+
+                  loadItems();
                 } catch (err) {
                   console.error("Upload record error:", err);
                 }
@@ -131,7 +142,11 @@ export function FilesDocumentsDialog({
                   const response = await fetch(`/api/items?parentId=`);
                   if (response.ok) {
                     const data = await response.json();
-                    setItems((Array.isArray(data) ? data : []).filter((i: any) => i.type === "document"));
+                    setItems(
+                      (Array.isArray(data) ? data : []).filter(
+                        (i: any) => i.type === "document"
+                      )
+                    );
                   }
                 } catch (err) {
                   console.error("Error refreshing items:", err);
@@ -155,7 +170,8 @@ export function FilesDocumentsDialog({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{doc.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {(doc.fileType || doc.type)} • {formatDate(doc?.updatedAt || doc?.createdAt)}
+                      {doc.fileType || doc.type} •{" "}
+                      {formatDate(doc?.updatedAt || doc?.createdAt)}
                     </p>
                   </div>
                 </div>
@@ -179,10 +195,18 @@ export function FilesDocumentsDialog({
         </Tabs>
         <div className="flex justify-end gap-2 mt-4">
           <DialogClose asChild>
-            <Button variant="outline" size="sm">Cancel</Button>
+            <Button variant="outline" size="sm">
+              Cancel
+            </Button>
           </DialogClose>
           <DialogClose asChild>
-            <Button size="sm" disabled={selected.length === 0} onClick={handleSubmit}>Submit</Button>
+            <Button
+              size="sm"
+              disabled={selected.length === 0}
+              onClick={handleSubmit}
+            >
+              Submit
+            </Button>
           </DialogClose>
         </div>
       </DialogContent>
