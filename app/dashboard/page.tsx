@@ -97,7 +97,7 @@ export default function Dashboard() {
     }
   }, [session]);
 
-  if (!loading) {
+  if (loading) {
     return (
       <div className="w-full min-h-screen bg-white p-6">
         <div className="grid grid-cols-4 animate-pulse gap-6">

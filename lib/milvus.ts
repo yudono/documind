@@ -384,9 +384,9 @@ const milvusConfig: MilvusConfig = {
   database: process.env.MILVUS_DATABASE || "default",
 };
 
-// Only create the service if Milvus is configured
+// Only create the service if Milvus is configured and we're not in build mode
 export const milvusService =
-  milvusConfig.address && milvusConfig.token
+  milvusConfig.address && milvusConfig.token && process.env.NODE_ENV !== 'production'
     ? new MilvusService(milvusConfig)
     : null;
 

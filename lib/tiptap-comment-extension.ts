@@ -1,7 +1,7 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
-import type { Command } from '@tiptap/core';
+import type { Command, RawCommands } from '@tiptap/core';
 
 export interface Comment {
   id: string;
@@ -49,8 +49,8 @@ export const CommentExtension = Extension.create<CommentOptions>({
   addCommands() {
     return {
       addComment:
-        (content: string, author: string, authorId: string): Command =>
-        ({ state, dispatch }) => {
+        (content: string, author: string, authorId: string) =>
+        ({ state, dispatch }: any) => {
           const { from, to } = state.selection;
           
           if (from === to) {
@@ -71,26 +71,26 @@ export const CommentExtension = Extension.create<CommentOptions>({
         },
 
       resolveComment:
-        (commentId: string): Command =>
-        ({ dispatch }) => {
+        (commentId: string) =>
+        ({ dispatch }: any) => {
           this.options.onCommentResolve?.(commentId);
           return true;
         },
 
       deleteComment:
-        (commentId: string): Command =>
-        ({ dispatch }) => {
+        (commentId: string) =>
+        ({ dispatch }: any) => {
           this.options.onCommentDelete?.(commentId);
           return true;
         },
 
       setActiveComment:
-        (commentId: string | null): Command =>
-        ({ dispatch }) => {
+        (commentId: string | null) =>
+        ({ dispatch }: any) => {
           this.storage.activeCommentId = commentId;
           return true;
         },
-    };
+    } as any;
   },
 
   addProseMirrorPlugins() {
