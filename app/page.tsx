@@ -21,6 +21,8 @@ import {
   FileSearch,
   PenTool
 } from 'lucide-react';
+import { Spotlight } from '@/components/ui/spotlight';
+import { BentoGrid, BentoGridItem } from '@/components/ui/bento-grid';
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -54,72 +56,80 @@ export default function Home() {
               <img src="/logo/logo.svg" alt="DocuMind AI Logo" className="h-8 w-8" />
               <span className="text-xl font-bold text-slate-900">DocuMind AI</span>
             </div>
-            <Button 
-              onClick={() => window.location.href = '/auth/signin'}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-            >
-              Get Started
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+            <div className="flex gap-3">
+              <Button 
+                variant="ghost"
+                onClick={() => window.location.href = '/auth/signin'}
+                className="hover:bg-slate-100"
+              >Sign In</Button>
+              <Button 
+                onClick={() => window.location.href = '/auth/signin'}
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+              >
+                Get Started
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="py-20 px-4">
-        <div className="container mx-auto text-center">
-          <div className="max-w-4xl mx-auto">
-            <Badge variant="secondary" className="mb-6 px-4 py-2 text-sm font-medium">
-              <Sparkles className="h-4 w-4 mr-2" />
-              Powered by Advanced AI Technology
-            </Badge>
-            
-            <h1 className="text-5xl md:text-7xl font-bold text-slate-900 mb-6 leading-tight">
-              Transform Your
-              <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent"> Document </span>
-              Workflow
-            </h1>
-            
-            <p className="text-xl md:text-2xl text-slate-600 mb-8 leading-relaxed max-w-3xl mx-auto">
-              Upload, analyze, and generate professional documents with the power of AI. 
-              Streamline your workflow with intelligent document management.
-            </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-              <Button 
-                size="lg" 
-                className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
-                onClick={() => window.location.href = '/auth/signin'}
-              >
-                Start Free Today
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-              <Button 
-                variant="outline" 
-                size="lg" 
-                className="px-8 py-4 text-lg font-semibold border-2 hover:bg-slate-50"
-              >
-                Watch Demo
-              </Button>
-            </div>
+      <section className="relative">
+        <Spotlight className="">
+          <div className="container mx-auto px-4 py-20">
+            <div className="max-w-4xl mx-auto text-center">
+              <Badge variant="secondary" className="mb-6 px-4 py-2 text-sm font-medium inline-flex items-center justify-center">
+                <Sparkles className="h-4 w-4 mr-2" />
+                Powered by Advanced AI Technology
+              </Badge>
 
-            {/* Trust Indicators */}
-            <div className="flex items-center justify-center space-x-8 text-slate-500 text-sm">
-              <div className="flex items-center">
-                <Shield className="h-4 w-4 mr-2" />
-                Enterprise Security
+              <h1 className="text-5xl md:text-7xl font-bold text-slate-900 mb-6 leading-tight">
+                Transform Your
+                <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent"> Document </span>
+                Workflow
+              </h1>
+
+              <p className="text-xl md:text-2xl text-slate-600 mb-8 leading-relaxed max-w-3xl mx-auto">
+                Upload, analyze, and generate professional documents with the power of AI. 
+                Streamline your workflow with intelligent document management.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
+                <Button 
+                  size="lg" 
+                  className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                  onClick={() => window.location.href = '/auth/signin'}
+                >
+                  Start Free Today
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="lg" 
+                  className="px-8 py-4 text-lg font-semibold border-2 hover:bg-slate-50"
+                >
+                  Watch Demo
+                </Button>
               </div>
-              <div className="flex items-center">
-                <Clock className="h-4 w-4 mr-2" />
-                24/7 Support
-              </div>
-              <div className="flex items-center">
-                <Users className="h-4 w-4 mr-2" />
-                10k+ Users
+
+              <div className="flex items-center justify-center space-x-8 text-slate-500 text-sm">
+                <div className="flex items-center">
+                  <Shield className="h-4 w-4 mr-2" />
+                  Enterprise Security
+                </div>
+                <div className="flex items-center">
+                  <Clock className="h-4 w-4 mr-2" />
+                  24/7 Support
+                </div>
+                <div className="flex items-center">
+                  <Users className="h-4 w-4 mr-2" />
+                  10k+ Users
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </Spotlight>
       </section>
 
       {/* Features Section */}
@@ -135,66 +145,31 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <Card className="group hover:shadow-xl transition-all duration-300 border-0 shadow-lg hover:-translate-y-2">
-              <CardHeader className="text-center pb-4">
-                <div className="h-16 w-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <Upload className="h-8 w-8 text-white" />
-                </div>
-                <CardTitle className="text-xl font-bold">Smart Upload</CardTitle>
-              </CardHeader>
-              <CardContent className="text-center">
-                <CardDescription className="text-base leading-relaxed">
-                  Upload PDF, DOCX, and TXT files with intelligent parsing and automatic categorization
-                </CardDescription>
-              </CardContent>
-            </Card>
-
-            <Card className="group hover:shadow-xl transition-all duration-300 border-0 shadow-lg hover:-translate-y-2">
-              <CardHeader className="text-center pb-4">
-                <div className="h-16 w-16 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <FileSearch className="h-8 w-8 text-white" />
-                </div>
-                <CardTitle className="text-xl font-bold">AI Analysis</CardTitle>
-              </CardHeader>
-              <CardContent className="text-center">
-                <CardDescription className="text-base leading-relaxed">
-                  Advanced AI-powered document analysis with content extraction and insights
-                </CardDescription>
-              </CardContent>
-            </Card>
-
-            <Card className="group hover:shadow-xl transition-all duration-300 border-0 shadow-lg hover:-translate-y-2">
-              <CardHeader className="text-center pb-4">
-                <div className="h-16 w-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <PenTool className="h-8 w-8 text-white" />
-                </div>
-                <CardTitle className="text-xl font-bold">Document Generation</CardTitle>
-              </CardHeader>
-              <CardContent className="text-center">
-                <CardDescription className="text-base leading-relaxed">
-                  Create professional invoices, reports, and legal documents using AI templates
-                </CardDescription>
-              </CardContent>
-            </Card>
-
-            <Card className="group hover:shadow-xl transition-all duration-300 border-0 shadow-lg hover:-translate-y-2">
-              <CardHeader className="text-center pb-4">
-                <div className="h-16 w-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <MessageSquare className="h-8 w-8 text-white" />
-                </div>
-                <CardTitle className="text-xl font-bold">AI Chat Assistant</CardTitle>
-              </CardHeader>
-              <CardContent className="text-center">
-                <CardDescription className="text-base leading-relaxed">
-                  Interactive AI assistant for document-related tasks and intelligent conversations
-                </CardDescription>
-              </CardContent>
-            </Card>
-          </div>
+          <BentoGrid>
+            <BentoGridItem
+              title="Smart Upload"
+              description="Upload PDF, DOCX, and TXT files with intelligent parsing and automatic categorization"
+              icon={<Upload className="h-8 w-8 text-blue-600" />}
+            />
+            <BentoGridItem
+              title="AI Analysis"
+              description="Advanced AI-powered document analysis with content extraction and insights"
+              icon={<FileSearch className="h-8 w-8 text-green-600" />}
+            />
+            <BentoGridItem
+              title="Document Generation"
+              description="Create professional invoices, reports, and legal documents using AI templates"
+              icon={<PenTool className="h-8 w-8 text-purple-600" />}
+            />
+            <BentoGridItem
+              title="AI Chat Assistant"
+              description="Interactive AI assistant for document-related tasks and intelligent conversations"
+              icon={<MessageSquare className="h-8 w-8 text-orange-600" />}
+            />
+          </BentoGrid>
         </div>
       </section>
-      
+
       {/* Pricing Section */}
       <section className="py-20 px-4 bg-white">
         <div className="container mx-auto">

@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { uploadToS3, generateFileKey } from "@/lib/s3";
-import sharp from "sharp";
+// Remove top-level sharp import to avoid bundling issues across runtimes
+// import sharp from "sharp";
+
+// Force Node.js runtime; sharp is unsupported on Edge
+export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,12 +60,21 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     let buffer: any = Buffer.from(new Uint8Array(bytes));
 
-    // Process images - compress if needed
-    if (file.type.startsWith("image/")) {
+    // Attempt dynamic import of sharp to avoid cross-platform build/runtime issues
+    let sharpLib: any = null;
+    try {
+      const mod = await import("sharp");
+      sharpLib = (mod as any).default || mod;
+    } catch (err) {
+      console.warn("Sharp not available; skipping image compression.", err);
+    }
+
+    // Process images - compress if needed (only if sharp is available)
+    if (sharpLib && file.type.startsWith("image/")) {
       try {
         // Compress image if larger than 2MB
         if (buffer.length > 2 * 1024 * 1024) {
-          buffer = await sharp(buffer)
+          buffer = await sharpLib(buffer)
             .resize(1920, 1920, {
               fit: "inside",
               withoutEnlargement: true,
