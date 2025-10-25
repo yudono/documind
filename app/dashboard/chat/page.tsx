@@ -925,10 +925,115 @@ export default function ChatPage() {
                                 return message.content;
                               })()}
                             </div>
+                          </>
+                        )}
+                      </div>
 
-                            {/* Document File Display */}
-                            {message.documentFile && (
-                              <div className="mt-3 p-3 bg-background border rounded-lg">
+                      {/* Document File Display */}
+                      {message.documentFile && (
+                        <div className="mt-3 p-3 bg-background border rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div className="p-2 bg-primary/10 rounded-lg">
+                                <FileText className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm">
+                                  {message.documentFile.name}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2 ml-4">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => {
+                                      const df = message.documentFile;
+                                      if (!df) return;
+
+                                      if (df.error) {
+                                        alert(`Download failed: ${df.error}`);
+                                        return;
+                                      }
+
+                                      const url = df.url || "";
+                                      const name = df.name || "document.pdf";
+
+                                      // Direct URL: open in new tab
+                                      if (
+                                        url &&
+                                        url !== "#" &&
+                                        !url.startsWith("data:")
+                                      ) {
+                                        window.open(url, "_blank");
+                                        return;
+                                      }
+
+                                      // Data URL: trigger download
+                                      if (url.startsWith("data:")) {
+                                        try {
+                                          const a = document.createElement("a");
+                                          a.href = url;
+                                          a.download = name;
+                                          a.style.display = "none";
+                                          document.body.appendChild(a);
+                                          a.click();
+                                          document.body.removeChild(a);
+                                        } catch (error) {
+                                          console.error(
+                                            "Download failed:",
+                                            error
+                                          );
+                                          alert(
+                                            "Download failed. The file may be too large or corrupted."
+                                          );
+                                        }
+                                        return;
+                                      }
+
+                                      // Fallback: mock document
+                                      const content = `Mock Document: ${
+                                        df.name ?? "document"
+                                      }\nType: ${
+                                        df.type ?? ""
+                                      }\nGenerated at: ${new Date().toISOString()}`;
+                                      const blob = new Blob([content], {
+                                        type: "text/plain",
+                                      });
+                                      const objectUrl =
+                                        URL.createObjectURL(blob);
+                                      const a = document.createElement("a");
+                                      a.href = objectUrl;
+                                      a.download = df.name || "document.txt";
+                                      document.body.appendChild(a);
+                                      a.click();
+                                      document.body.removeChild(a);
+                                      URL.revokeObjectURL(objectUrl);
+                                    }}
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  Download Document
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {message.referencedDocs &&
+                        message.referencedDocs.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {message.referencedDocs.map((doc, index) => (
+                              <div
+                                className="mt-3 p-3 bg-background border rounded-lg"
+                                key={index}
+                              >
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center space-x-3">
                                     <div className="p-2 bg-primary/10 rounded-lg">
@@ -936,28 +1041,11 @@ export default function ChatPage() {
                                     </div>
                                     <div>
                                       <p className="font-medium text-sm">
-                                        {message.documentFile.name}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        {message.documentFile.type} Document
+                                        {doc.name}
                                       </p>
                                     </div>
                                   </div>
-                                  <div className="flex items-center space-x-2">
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-8 w-8 p-0"
-                                        >
-                                          <Eye className="h-4 w-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        Preview Document
-                                      </TooltipContent>
-                                    </Tooltip>
+                                  <div className="flex items-center space-x-2 ml-4">
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <Button
@@ -965,77 +1053,34 @@ export default function ChatPage() {
                                           size="sm"
                                           className="h-8 w-8 p-0"
                                           onClick={() => {
-                                            if (message.documentFile?.error) {
-                                              // Show error message if PDF processing failed
-                                              alert(
-                                                `Download failed: ${message.documentFile.error}`
-                                              );
-                                              return;
-                                            }
-
-                                            if (
-                                              message.documentFile?.url &&
-                                              message.documentFile.url !==
-                                                "#" &&
-                                              !message.documentFile.url.startsWith(
-                                                "data:"
-                                              )
-                                            ) {
-                                              // For real URLs, open in new tab
-                                              window.open(
-                                                message.documentFile.url,
-                                                "_blank"
-                                              );
-                                            } else if (
-                                              message.documentFile?.url &&
-                                              message.documentFile.url.startsWith(
-                                                "data:"
-                                              )
-                                            ) {
-                                              try {
-                                                // For data URLs, create download link with better error handling
-                                                const a =
-                                                  document.createElement("a");
-                                                a.href =
-                                                  message.documentFile.url;
-                                                a.download =
-                                                  message.documentFile.name ||
-                                                  "document.pdf";
-                                                a.style.display = "none";
-                                                document.body.appendChild(a);
-                                                a.click();
-                                                document.body.removeChild(a);
-                                              } catch (error) {
-                                                console.error(
-                                                  "Download failed:",
-                                                  error
-                                                );
-                                                alert(
-                                                  "Download failed. The file may be too large or corrupted."
-                                                );
-                                              }
-                                            } else {
-                                              // For mock documents, create a downloadable blob
-                                              const content = `Mock Document: ${
-                                                message.documentFile?.name
-                                              }\nType: ${
-                                                message.documentFile?.type
-                                              }\nGenerated at: ${new Date().toISOString()}`;
-                                              const blob = new Blob([content], {
-                                                type: "text/plain",
-                                              });
-                                              const url =
-                                                URL.createObjectURL(blob);
-                                              const a =
-                                                document.createElement("a");
-                                              a.href = url;
-                                              a.download =
-                                                message.documentFile?.name ||
-                                                "document.txt";
-                                              document.body.appendChild(a);
-                                              a.click();
-                                              document.body.removeChild(a);
-                                              URL.revokeObjectURL(url);
+                                            // download file blob from doc.url
+                                            if (doc.url) {
+                                              fetch(doc.url)
+                                                .then((response) =>
+                                                  response.blob()
+                                                )
+                                                .then((blob) => {
+                                                  const url =
+                                                    URL.createObjectURL(blob);
+                                                  const a =
+                                                    document.createElement("a");
+                                                  a.href = url;
+                                                  a.download =
+                                                    doc.name || "document.pdf";
+                                                  document.body.appendChild(a);
+                                                  a.click();
+                                                  document.body.removeChild(a);
+                                                  URL.revokeObjectURL(url);
+                                                })
+                                                .catch((error) => {
+                                                  console.error(
+                                                    "Download failed:",
+                                                    error
+                                                  );
+                                                  alert(
+                                                    "Download failed. The file may be too large or corrupted."
+                                                  );
+                                                });
                                             }
                                           }}
                                         >
@@ -1049,26 +1094,9 @@ export default function ChatPage() {
                                   </div>
                                 </div>
                               </div>
-                            )}
-
-                            {message.referencedDocs &&
-                              message.referencedDocs.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-1">
-                                  {message.referencedDocs.map((doc) => (
-                                    <Badge
-                                      key={doc.url || doc.name}
-                                      variant="secondary"
-                                      className="text-xs"
-                                    >
-                                      <File className="h-3 w-3 mr-1" />
-                                      {doc.name || doc.url}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              )}
-                          </>
+                            ))}
+                          </div>
                         )}
-                      </div>
 
                       <div
                         className={`flex items-center space-x-2 text-xs text-muted-foreground ${

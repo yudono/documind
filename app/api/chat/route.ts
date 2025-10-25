@@ -397,7 +397,9 @@ export async function GET(request: NextRequest) {
                 ...msg,
                 documentFile: {
                   name,
-                  type: url.includes("type=docx") ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/pdf",
+                  type: url.includes("type=docx")
+                    ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    : "application/pdf",
                   downloadUrl: url,
                   url,
                 },
