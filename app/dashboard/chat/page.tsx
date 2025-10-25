@@ -61,7 +61,7 @@ interface Message {
   role: "user" | "assistant";
   timestamp: Date;
   isTyping?: boolean;
-  referencedDocuments?: string[];
+  referencedDocs?: { name: string; url: string }[];
   documentFile?: {
     name: string;
     type: string;
@@ -106,9 +106,9 @@ export default function ChatPage() {
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [useSemanticSearch, setUseSemanticSearch] = useState(true);
   const [aiFormattingEnabled, setAiFormattingEnabled] = useState(true);
-  const [selectedDocumentUrls, setSelectedDocumentUrls] = useState<string[]>(
-    []
-  );
+  const [selectedreferencedDocs, setSelectedreferencedDocs] = useState<
+    { name: string; url: string }[]
+  >([]);
 
   // Session state
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
@@ -217,8 +217,7 @@ export default function ChatPage() {
                 content: msg.content,
                 role: msg.role,
                 timestamp: new Date(msg.createdAt),
-                referencedDocuments: msg.referencedDocs || [],
-                documentFile: msg.documentFile,
+                referencedDocs: normalizeReferencedDocs(msg.referencedDocs),
               }))
             );
           }
@@ -332,8 +331,7 @@ export default function ChatPage() {
                   content: msg.content,
                   role: msg.role,
                   timestamp: new Date(msg.createdAt),
-                  referencedDocuments: msg.referencedDocs || [],
-                  documentFile: msg.documentFile,
+                  referencedDocs: msg.referencedDocs || [],
                 }))
               );
             } else {
@@ -426,7 +424,7 @@ export default function ChatPage() {
               content: msg.content,
               role: msg.role,
               timestamp: new Date(msg.createdAt),
-              referencedDocuments: msg.referencedDocs || [],
+              referencedDocs: msg.referencedDocs || [],
             }));
             setMessages(messages);
 
@@ -551,6 +549,23 @@ export default function ChatPage() {
     fetchCreditBalance();
   }, [fetchCreditBalance]);
 
+  // Normalize referenced docs payloads (handles legacy string[] and object[])
+  const normalizeReferencedDocs = (
+    value: any
+  ): { name: string; url: string }[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((item: any) => {
+        if (typeof item === "string") {
+          return { name: item, url: item };
+        }
+        const name = item?.name ?? item?.url ?? "";
+        const url = item?.url ?? item?.name ?? "";
+        return { name, url };
+      })
+      .filter((d) => !!d.name && !!d.url);
+  };
+
   // Send message function with credit consumption
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -575,7 +590,7 @@ export default function ChatPage() {
       content: input,
       role: "user",
       timestamp: new Date(),
-      referencedDocuments: selectedDocuments.map((doc) => doc.name),
+      referencedDocs: selectedreferencedDocs,
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -612,7 +627,7 @@ export default function ChatPage() {
           context: context,
           documentRequest: false,
           sessionId: currentSession?.id, // Pass the current session ID
-          documentUrls: selectedDocumentUrls,
+          referencedDocs: selectedreferencedDocs,
         }),
       });
 
@@ -633,6 +648,7 @@ export default function ChatPage() {
         role: "assistant",
         timestamp: new Date(),
         documentFile: aiResponse.documentFile,
+        referencedDocs: normalizeReferencedDocs(aiResponse.referencedDocs),
       };
 
       setMessages((prev) =>
@@ -678,77 +694,6 @@ export default function ChatPage() {
     if (diffDays <= 7) return `${diffDays - 1} days ago`;
     return date.toLocaleDateString();
   };
-
-  // Check if file is a document that can be parsed
-  const isDocumentFile = (fileType: string, fileName: string): boolean => {
-    const documentTypes = [
-      "application/pdf",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    ];
-
-    const extension = fileName.split(".").pop()?.toLowerCase();
-    const documentExtensions = ["pdf", "docx", "xlsx", "xls", "pptx"];
-
-    return (
-      documentTypes.includes(fileType) ||
-      documentExtensions.includes(extension || "")
-    );
-  };
-
-  // Parse document files using the document parser
-  const parseDocumentFile = async (
-    file: File,
-    fileName: string,
-    fileType: string
-  ) => {
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("/api/parse-document", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Document parsing failed: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success && result.extractedText) {
-        const parseMessage: Message = {
-          id: `parse-${Date.now()}`,
-          content: `📄 **Document Content for ${fileName}:**\n\n${result.extractedText.substring(
-            0,
-            1000
-          )}${
-            result.extractedText.length > 1000
-              ? "...\n\n*[Content truncated for display. Full content available for AI analysis.]*"
-              : ""
-          }`,
-          role: "assistant",
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, parseMessage]);
-      }
-    } catch (error) {
-      console.error("Document parsing error:", error);
-      const errorMessage: Message = {
-        id: `parse-error-${Date.now()}`,
-        content: `❌ Failed to parse document ${fileName}: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`,
-        role: "assistant",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    }
-  };
-
   const copyMessage = (content: string) => {
     navigator.clipboard.writeText(content);
   };
@@ -824,144 +769,6 @@ export default function ChatPage() {
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
-    }
-  };
-
-  // Analyze document function
-  const analyzeDocument = async (documentId: string) => {
-    try {
-      setIsLoading(true);
-      const response = await fetch(`/api/documents/${documentId}/analyze`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Document analysis failed: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-
-      if (data.success) {
-        const analysisMessage: Message = {
-          id: `analysis-${Date.now()}`,
-          content: `📊 Document Analysis Complete:\n\n**Summary:** ${
-            data.analysis.summary
-          }\n\n**Key Points:**\n${
-            data.analysis.keyPoints
-              ?.map((point: string) => `• ${point}`)
-              .join("\n") || "No key points found"
-          }\n\n**Sentiment:** ${data.analysis.sentiment}\n**Topics:** ${
-            data.analysis.topics?.join(", ") || "None identified"
-          }`,
-          role: "assistant",
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, analysisMessage]);
-
-        // Store extracted text for future queries
-        if (data.extractedText) {
-          console.log(
-            "Document text extracted:",
-            data.extractedText.substring(0, 200) + "..."
-          );
-        }
-      } else {
-        throw new Error(data.error || "Analysis failed");
-      }
-    } catch (error) {
-      console.error("Document analysis error:", error);
-      const errorMessage: Message = {
-        id: `analysis-error-${Date.now()}`,
-        content: `❌ Failed to analyze document: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`,
-        role: "assistant",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Upload document function with documents list update
-  const uploadDocument = async (file: File) => {
-    try {
-      setIsLoading(true);
-      const formData = new FormData();
-      formData.append("file", file);
-
-      // First, upload to S3
-      const uploadResponse = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json();
-        throw new Error(errorData.error || "Upload failed");
-      }
-
-      const uploadResult = await uploadResponse.json();
-
-      // Then, save document metadata to database
-      const documentData = {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        content: "", // We'll store the S3 URL instead
-        url: uploadResult.file.url,
-        key: uploadResult.file.key,
-        bucket: uploadResult.file.bucket,
-        folderId: null, // Chat uploads go to root folder
-      };
-
-      const documentResponse = await fetch("/api/documents", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(documentData),
-      });
-
-      if (!documentResponse.ok) {
-        throw new Error("Failed to save document to database");
-      }
-
-      const newDocument = await documentResponse.json();
-
-      // Add success message
-      const successMessage: Message = {
-        id: `upload-success-${Date.now()}`,
-        content: `📄 Document "${file.name}" uploaded successfully and is now available in your documents.`,
-        role: "assistant",
-        timestamp: new Date(),
-        documentFile: {
-          name: file.name,
-          type: file.type,
-          downloadUrl: uploadResult.file.url || "#",
-        },
-      };
-      setMessages((prev) => [...prev, successMessage]);
-
-      // Refresh documents list (this would typically trigger a re-fetch)
-      window.dispatchEvent(new CustomEvent("documentsUpdated"));
-    } catch (error) {
-      console.error("Upload error:", error);
-      const errorMessage: Message = {
-        id: `upload-error-${Date.now()}`,
-        content: `❌ Failed to upload document: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`,
-        role: "assistant",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -1244,24 +1051,19 @@ export default function ChatPage() {
                               </div>
                             )}
 
-                            {message.referencedDocuments &&
-                              message.referencedDocuments.length > 0 && (
+                            {message.referencedDocs &&
+                              message.referencedDocs.length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-1">
-                                  {message.referencedDocuments.map((docId) => {
-                                    const doc = documents.find(
-                                      (d) => d.id === docId
-                                    );
-                                    return doc ? (
-                                      <Badge
-                                        key={docId}
-                                        variant="secondary"
-                                        className="text-xs"
-                                      >
-                                        <File className="h-3 w-3 mr-1" />
-                                        {doc ? doc.name : docId}
-                                      </Badge>
-                                    ) : null;
-                                  })}
+                                  {message.referencedDocs.map((doc) => (
+                                    <Badge
+                                      key={doc.url || doc.name}
+                                      variant="secondary"
+                                      className="text-xs"
+                                    >
+                                      <File className="h-3 w-3 mr-1" />
+                                      {doc.name || doc.url}
+                                    </Badge>
+                                  ))}
                                 </div>
                               )}
                           </>
@@ -1437,7 +1239,16 @@ export default function ChatPage() {
                     documents={documents}
                     selectedDocuments={selectedDocuments as any}
                     onSubmit={(urls, docs) => {
-                      setSelectedDocumentUrls(urls);
+                      // Store referenced docs as objects { name, url }
+                      try {
+                        const refs = docs.map((d: any) => ({
+                          name: d.name,
+                          url: d.url,
+                        }));
+                        setSelectedreferencedDocs(refs);
+                      } catch (e) {
+                        console.warn("Failed to map referenced docs:", e);
+                      }
                       // Mirror selection for UI badges (name display)
                       try {
                         const mapped = docs.map((d: any) => ({

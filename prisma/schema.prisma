@@ -47,8 +47,6 @@ model User {
   role          String    @default("user") // "user" or "admin"
   accounts      Account[]
   sessions      Session[]
-  documents     Document[]
-  folders       Folder[]
   items         Item[]    // New unified items relation
   chatSessions  ChatSession[]
   templates     Template[]
@@ -69,42 +67,7 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-model Document {
-  id          String   @id @default(cuid())
-  name        String
-  type        String
-  size        Int
-  content     String?
-  url         String?  // S3 URL
-  key         String?  // S3 key
-  bucket      String?  // S3 bucket
-  summary     String?
-  keyPoints   String?
-  sentiment   String?
-  topics      String?
-  uploadDate  DateTime @default(now())
-  folderId    String?  // Optional folder association
-  folder      Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  milvusCollectionId String? // Reference to Milvus collection for this document's chunks
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
 
-model Folder {
-  id          String     @id @default(cuid())
-  name        String
-  color       String?    @default("#3B82F6") // Default blue color
-  userId      String
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  documents   Document[]
-  parentId    String?    // For nested folders
-  parent      Folder?    @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children    Folder[]   @relation("FolderHierarchy")
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-}
 
 model ChatSession {
   id          String   @id @default(cuid())
@@ -125,20 +88,10 @@ model ChatMessage {
   role          String      // 'user' or 'assistant'
   sessionId     String
   session       ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  referencedDocs String[]   // Array of document IDs
+  referencedDocs Json?      // Array of { name: string; url: string }
   milvusId      String?     // Milvus vector ID for semantic search
-  embedding     ChatMessageEmbedding?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
-}
-
-model ChatMessageEmbedding {
-  id        String      @id @default(cuid())
-  messageId String      @unique
-  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  embedding Float[]     // Vector embedding
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
 }
 
 model UserSettings {

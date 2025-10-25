@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       documentRequest,
       sessionId,
       type,
-      documentUrls,
+      referencedDocs,
       action,
       title,
     } = body;
@@ -138,21 +138,11 @@ export async function POST(request: NextRequest) {
       currentSessionId = createdSession.id;
     }
 
-    // Resolve selected document URLs to Item IDs for persistence
-    const resolvedItems =
-      documentUrls && Array.isArray(documentUrls) && documentUrls.length > 0
-        ? await prisma.item.findMany({
-            where: {
-              userId: user.id,
-              type: "document",
-              url: {
-                in: documentUrls.filter((u: any) => typeof u === "string"),
-              },
-            },
-            select: { id: true },
-          })
+    // Prepare referenced docs as objects { name, url }
+    const referencedDocObjects =
+      referencedDocs && Array.isArray(referencedDocs)
+        ? referencedDocs.filter((d: any) => d && typeof d === "object")
         : [];
-    const referencedDocIds = resolvedItems.map((i) => i.id);
 
     // Persist the user's message so linked resources survive refresh
     const createdUserMessage = await prisma.chatMessage.create({
@@ -160,7 +150,7 @@ export async function POST(request: NextRequest) {
         content: message,
         role: "user",
         sessionId: currentSessionId!,
-        referencedDocs: referencedDocIds,
+        referencedDocs: referencedDocObjects as any,
       },
     });
 
@@ -207,7 +197,7 @@ export async function POST(request: NextRequest) {
       true,
       currentSessionId ? [currentSessionId] : undefined,
       conversationContext,
-      documentUrls
+      referencedDocs
     );
 
     // Handle different response types from the agent
@@ -252,7 +242,7 @@ export async function POST(request: NextRequest) {
           // Build stable download URL via documents download route
           const isPdf =
             agentResponse.documentFile.mimeType === "application/pdf";
-          const downloadUrl = `/api/documents/${createdItem.id}/download?type=${
+          const downloadUrl = `/api/items/${createdItem.id}/download?type=${
             isPdf ? "pdf" : "docx"
           }`;
 
@@ -290,12 +280,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Persist AI assistant response with referenced generated document (if any)
+    const assistantReferencedDocs =
+      documentFile?.url && documentFile?.name
+        ? [{ name: documentFile.name, url: documentFile.url }]
+        : [];
+
     const assistantMessage = await prisma.chatMessage.create({
       data: {
         content: response,
         role: "assistant",
         sessionId: currentSessionId!,
-        referencedDocs: generatedItemId ? [generatedItemId] : [],
+        referencedDocs: assistantReferencedDocs as any,
       },
     });
 
@@ -394,28 +389,19 @@ export async function GET(request: NextRequest) {
             Array.isArray((msg as any).referencedDocs) &&
             (msg as any).referencedDocs.length > 0
           ) {
-            const docId = (msg as any).referencedDocs[0];
-            try {
-              const item = await prisma.item.findFirst({
-                where: { id: docId, userId: user.id, type: "document" },
-              });
-              if (item) {
-                const isPdfDefault = true; // default to pdf
-                const url = `/api/documents/${item.id}/download?type=${
-                  isPdfDefault ? "pdf" : "docx"
-                }`;
-                return {
-                  ...msg,
-                  documentFile: {
-                    name: `${item.name}.pdf`,
-                    type: item.fileType || "application/pdf",
-                    downloadUrl: url,
-                    url,
-                  },
-                };
-              }
-            } catch (e) {
-              console.warn("Failed to attach document to message", e);
+            const ref = (msg as any).referencedDocs[0];
+            if (ref && typeof ref === "object" && ref.url) {
+              const url = ref.url;
+              const name = ref.name || "Document";
+              return {
+                ...msg,
+                documentFile: {
+                  name,
+                  type: url.includes("type=docx") ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/pdf",
+                  downloadUrl: url,
+                  url,
+                },
+              };
             }
           }
           return msg;
@@ -559,15 +545,6 @@ export async function DELETE(request: NextRequest) {
         { error: "Chat session not found" },
         { status: 404 }
       );
-    }
-
-    // Clean up embeddings tied to this session
-    try {
-      await prisma.chatMessageEmbedding.deleteMany({
-        where: { message: { sessionId } },
-      });
-    } catch (e) {
-      console.warn("Failed to delete chat message embeddings for session", e);
     }
 
     // Clean up Milvus memory chunks for this session

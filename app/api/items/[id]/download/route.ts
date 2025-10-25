@@ -87,7 +87,7 @@ const normalizeHtmlForExport = (html: string): string => {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { documentId: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -96,7 +96,7 @@ export async function GET(
     }
 
     const userId = (session.user as any).id;
-    const documentId = params.documentId;
+    const documentId = params.id;
 
     const urlObj = new URL(request.url);
     const typeParam = urlObj.searchParams.get("type");

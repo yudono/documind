@@ -4,7 +4,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   timestamp: Date;
   isTyping?: boolean;
-  referencedDocuments?: string[];
+  referencedDocs?: { name: string; url: string }[];
   documentFile?: {
     name: string;
     type: string;

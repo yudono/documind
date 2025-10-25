@@ -74,11 +74,10 @@ export async function generateChatCompletionWithAgent(
     useSemanticSearch?: boolean;
     documentIds?: string[];
     conversationContext?: string;
-    documentUrls?: string[];
+    referencedDocs?: { name: string; url: string }[];
   } = {}
 ): Promise<
-  | string
-  | { response: string; referencedDocuments: string[]; documentFile?: any }
+  string | { response: string; referencedDocs: { name: string; url: string }[]; documentFile?: any }
 > {
   try {
     // Extract the user query from messages (typically the last user message)
@@ -99,7 +98,7 @@ export async function generateChatCompletionWithAgent(
         useSemanticSearch: options.useSemanticSearch || false,
         documentIds: options.documentIds,
         conversationContext: options.conversationContext,
-        documentUrls: options.documentUrls,
+        referencedDocs: options.referencedDocs,
       });
 
       return agentResult;
@@ -373,10 +372,10 @@ export async function generateChatWithAgent(
   useSemanticSearch: boolean = false,
   documentIds?: string[],
   conversationContext?: string,
-  documentUrls?: string[]
+  referencedDocs?: { name: string; url: string }[]
 ): Promise<{
   response: string;
-  referencedDocuments: string[];
+  referencedDocs: { name: string; url: string }[];
   documentFile?: any;
 }> {
   try {
@@ -387,7 +386,7 @@ export async function generateChatWithAgent(
       useSemanticSearch,
       documentIds,
       conversationContext,
-      documentUrls,
+      referencedDocs,
     });
   } catch (error) {
     console.error("Error generating chat with agent:", error);

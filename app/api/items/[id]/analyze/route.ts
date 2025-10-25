@@ -6,7 +6,7 @@ import { performOCR } from '@/lib/groq';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { documentId: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -23,13 +23,14 @@ export async function POST(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const documentId = params.documentId;
+    const documentId = params.id;
 
     // Get the document from database
-    const document = await prisma.document.findFirst({
+    const document = await prisma.item.findFirst({
       where: {
         id: documentId,
         userId: user.id,
+        type: 'document',
       },
     });
 
@@ -48,7 +49,7 @@ export async function POST(
 
         // Create analysis based on extracted text
         const analysis = {
-          summary: `Analysis of ${document.name}: This document contains approximately ${extractedText.split(/\s+/).length} words. The content appears to be ${getDocumentCategory(document.type, extractedText)}.`,
+          summary: `Analysis of ${document.name}: This document contains approximately ${extractedText.split(/\s+/).length} words. The content appears to be ${getDocumentCategory(document.fileType || '', extractedText)}.`,
           keyPoints: extractKeyPoints(extractedText),
           sentiment: analyzeSentiment(extractedText),
           topics: extractTopics(extractedText),
@@ -57,7 +58,7 @@ export async function POST(
         };
 
         // Update document in database with analysis
-        await prisma.document.update({
+        await prisma.item.update({
           where: { id: documentId },
           data: {
             content: extractedText,
@@ -65,6 +66,7 @@ export async function POST(
             keyPoints: JSON.stringify(analysis.keyPoints),
             sentiment: analysis.sentiment,
             topics: JSON.stringify(analysis.topics),
+            type: 'document',
           },
         });
 

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { documentId: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -14,7 +14,7 @@ export async function GET(
     }
 
     const userId = (session.user as any).id;
-    const documentId = params.documentId;
+    const documentId = params.id;
 
     const histories = await prisma.item.findMany({
       where: {

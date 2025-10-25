@@ -32,15 +32,6 @@ export async function DELETE(
       return NextResponse.json({ error: "Chat session not found" }, { status: 404 });
     }
 
-    // Delete message embeddings linked to this session
-    try {
-      await prisma.chatMessageEmbedding.deleteMany({
-        where: { message: { sessionId: params.id } },
-      });
-    } catch (e) {
-      console.warn("Failed to delete chat message embeddings for session", params.id, e);
-    }
-
     // Delete Milvus memory chunks for this session
     try {
       if (milvusService) {

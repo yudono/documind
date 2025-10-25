@@ -163,7 +163,7 @@ export default function DocumentEditor({
     if (mode === "edit" && documentId) {
       const loadDocument = async () => {
         try {
-          const response = await fetch(`/api/documents/${documentId}`);
+          const response = await fetch(`/api/items/${documentId}`);
           if (response.ok) {
             const data = await response.json();
             setDocumentTitle(data.name || "Untitled Document");
@@ -341,7 +341,7 @@ export default function DocumentEditor({
     setIsSaving(true);
     try {
       const content = editorRef.current.getHTML();
-      const response = await fetch("/api/documents/save", {
+      const response = await fetch("/api/items/save", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -375,7 +375,7 @@ export default function DocumentEditor({
     setIsSaving(true);
     try {
       const content = editorRef.current.getHTML();
-      const response = await fetch("/api/documents/save", {
+      const response = await fetch("/api/items/save", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -417,7 +417,7 @@ export default function DocumentEditor({
 
     try {
       const response = await fetch(
-        `/api/documents/${currentDocumentId}/download?type=${type}`
+        `/api/items/${currentDocumentId}/download?type=${type}`
       );
       if (response.ok) {
         const blob = await response.blob();
