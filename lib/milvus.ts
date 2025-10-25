@@ -26,20 +26,24 @@ interface SearchResult {
 }
 
 class MilvusService {
-  private client: MilvusClient;
+  private client: MilvusClient | null = null;
   private collectionName: string = "document_embeddings";
   private isConnected: boolean = false;
+  private config: MilvusConfig;
 
   constructor(config: MilvusConfig) {
-    this.client = new MilvusClient({
-      address: config.address,
-      token: config.token,
-      database: config.database || "default",
-    });
+    this.config = config;
   }
 
   async connect(): Promise<void> {
     try {
+      if (!this.client) {
+        this.client = new MilvusClient({
+          address: this.config.address,
+          token: this.config.token,
+          database: this.config.database || "default",
+        });
+      }
       // Test connection
       await this.client.checkHealth();
       this.isConnected = true;
@@ -57,13 +61,13 @@ class MilvusService {
 
     try {
       // Check if collection exists
-      const hasCollection = await this.client.hasCollection({
+      const hasCollection = await this.client!.hasCollection({
         collection_name: this.collectionName,
       });
 
       if (hasCollection.value) {
         console.log(`Collection ${this.collectionName} already exists`);
-        await this.client.loadCollection({
+        await this.client!.loadCollection({
           collection_name: this.collectionName,
         });
         return;
@@ -113,10 +117,10 @@ class MilvusService {
         ],
       };
 
-      await this.client.createCollection(schema);
+      await this.client!.createCollection(schema);
 
       // Create index for vector field
-      await this.client.createIndex({
+      await this.client!.createIndex({
         collection_name: this.collectionName,
         field_name: "embedding",
         index_type: "IVF_FLAT",
@@ -125,7 +129,7 @@ class MilvusService {
       });
 
       // Load collection
-      await this.client.loadCollection({
+      await this.client!.loadCollection({
         collection_name: this.collectionName,
       });
 
@@ -154,7 +158,7 @@ class MilvusService {
         user_id: userId,
       }));
 
-      await this.client.insert({
+      await this.client!.insert({
         collection_name: this.collectionName,
         data,
       });
@@ -169,10 +173,12 @@ class MilvusService {
   async processAndInsertDocument(
     documentId: string,
     text: string,
-    userId: string
+    userId: string,
+    chunkSize: number = 1000,
+    overlap: number = 200
   ): Promise<{ chunksCount: number }> {
     // Split text into chunks (simple implementation)
-    const chunks = this.splitTextIntoChunks(text);
+    const chunks = this.splitTextIntoChunks(text, chunkSize, overlap);
 
     if (chunks.length === 0) {
       throw new Error("No valid text chunks found");
@@ -250,7 +256,7 @@ class MilvusService {
 
     try {
       // Ensure collection is loaded before performing search
-      await this.client.loadCollection({ collection_name: this.collectionName });
+      await this.client!.loadCollection({ collection_name: this.collectionName });
 
       // Build filter expression
       let expr = `user_id == "${userId}"`;
@@ -272,7 +278,7 @@ class MilvusService {
         expr,
       };
 
-      const results = await this.client.search(searchParams);
+      const results = await this.client!.search(searchParams);
 
       if (!results.results || results.results.length === 0) {
         return [];
@@ -325,7 +331,7 @@ class MilvusService {
     try {
       const expr = `document_id == "${documentId}" && user_id == "${userId}"`;
 
-      await this.client.delete({
+      await this.client!.delete({
         collection_name: this.collectionName,
         filter: expr,
       });
@@ -345,7 +351,7 @@ class MilvusService {
     try {
       const expr = `user_id == "${userId}"`;
 
-      await this.client.delete({
+      await this.client!.delete({
         collection_name: this.collectionName,
         filter: expr,
       });
@@ -363,7 +369,7 @@ class MilvusService {
     }
 
     try {
-      const stats = await this.client.getCollectionStatistics({
+      const stats = await this.client!.getCollectionStatistics({
         collection_name: this.collectionName,
       });
       return stats;

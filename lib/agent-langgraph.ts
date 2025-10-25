@@ -128,8 +128,7 @@ interface AgentOutput {
      });
 
      this.buildGraph();
-     // Ensure Milvus collection is initialized
-     initializeMilvus().catch((e) => console.warn("Milvus init failed", e));
+    // Milvus init is deferred to runtime calls where needed
    }
 
    private buildGraph() {
@@ -256,7 +255,10 @@ interface AgentOutput {
              await milvusService.processAndInsertDocument(
                state.sessionId,
                labeled,
-               state.userId
+-              state.userId
++              state.userId,
++              800,
++              160
              );
            }
          } catch (err) {

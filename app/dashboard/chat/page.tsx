@@ -838,7 +838,7 @@ export default function ChatPage() {
           {/* Messages */}
           <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
             <div className="mx-auto space-y-6">
-              {isLoadingMessages && (
+              {(isLoadingMessages || isLoadingSessions) && (
                 <div className="space-y-6">
                   {[...Array(6)].map((_, i) => (
                     <div key={`skeleton-msg-${i}`} className="space-y-6">
@@ -854,7 +854,7 @@ export default function ChatPage() {
                   ))}
                 </div>
               )}
-              {!isLoadingMessages &&
+              {(!isLoadingMessages || !isLoadingSessions) &&
                 messages.map((message) => (
                   <div
                     key={message.id}
