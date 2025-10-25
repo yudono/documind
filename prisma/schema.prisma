@@ -49,11 +49,10 @@ model User {
   sessions      Session[]
   items         Item[]    // New unified items relation
   chatSessions  ChatSession[]
-  templates     Template[]
-  templateGenerations TemplateGeneration[]
   userSettings  UserSettings?
   billing       Billing?
   userCredit    UserCredit?
+
   creditTransactions CreditTransaction[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -132,7 +131,6 @@ model UserCredit {
   id            String   @id @default(cuid())
   userId        String   @unique
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  balance       Int      @default(0) // Current credit balance
   totalEarned   Int      @default(0) // Total credits earned (from subscriptions, top-ups)
   totalSpent    Int      @default(0) // Total credits spent
   dailyLimit    Int      @default(500) // Daily credit limit based on plan
@@ -163,7 +161,6 @@ model CreditPackage {
   currency    String   @default("USD")
   stripePriceId String? // Stripe price ID for one-time purchases
   isActive    Boolean  @default(true)
-  isPopular   Boolean  @default(false) // Whether this package is marked as popular
   bonusCredits Int?    @default(0) // Additional bonus credits
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
@@ -187,43 +184,15 @@ model SubscriptionPlan {
 }
 
 model Template {
-  id            String   @id @default(cuid())
-  name          String
-  description   String?
-  type          String   // pptx, xlsx, docx, etc.
-  category      String?  // business, education, personal, etc.
-  url           String?  // S3 URL for original template file
-  key           String?  // S3 key for original template file
-  bucket        String?  // S3 bucket
-  size          Int?     // File size in bytes
-  thumbnail     String?  // Thumbnail image URL
-  isPublic      Boolean  @default(true) // Whether template is publicly available
-  downloadCount Int      @default(0)
-  templateFields Json?   // JSON structure defining form fields and placeholders
-  previewUrl    String?  // URL for template preview/sample
-  instructions  String?  // Instructions for using the template
-  aiPrompt      String?  // AI prompt template for document generation
-  userId        String?  // Optional: creator of the template
-  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  generatedDocs TemplateGeneration[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  html      String
+  thumbnail String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model TemplateGeneration {
-  id          String   @id @default(cuid())
-  templateId  String
-  template    Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  formData    Json     // The form data submitted by user
-  documentUrl String?  // Generated document URL
-  documentKey String?  // Generated document S3 key
-  status      String   @default("pending") // pending, processing, completed, failed
-  aiEnhanced  Boolean  @default(false) // Whether AI was used to enhance the generation
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
+
 
 // Unified Item model that combines folders and documents
 model Item {
@@ -251,7 +220,6 @@ model Item {
   topics      String?  // AI-generated topics
   milvusCollectionId String? // Reference to Milvus collection
   
-  // Folder-specific fields (nullable for documents)
   color       String?  @default("#3B82F6") // Folder color
   
   // Relations

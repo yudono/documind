@@ -109,6 +109,10 @@ import {
 import fileToIcon from "@/lib/fileToIcon";
 import fileSize from "@/lib/fileSize";
 import { twMerge } from "tailwind-merge";
+import CreateFolderDialog from "@/components/create-folder-dialog";
+import TemplateSelectDialog from "@/components/template-select-dialog";
+import UploadingOverlay from "@/components/uploading-overlay";
+import { toast } from "sonner";
 
 interface AnalysisResult {
   summary: string;
@@ -168,9 +172,7 @@ export default function MyDocumentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(
-    null
-  );
+
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
@@ -179,6 +181,7 @@ export default function MyDocumentsPage() {
     "idle" | "uploading" | "success" | "error"
   >("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
 
   // Load items using unified endpoint
   const loadItems = useCallback(async () => {
@@ -254,6 +257,7 @@ export default function MyDocumentsPage() {
           }
         }
 
+        toast.success(`Successfully uploaded ${acceptedFiles.length} files`);
         setUploadStatus("success");
         await loadItems();
 
@@ -264,9 +268,8 @@ export default function MyDocumentsPage() {
       } catch (error) {
         console.error("Upload error:", error);
         setUploadStatus("error");
-        setUploadError(
-          error instanceof Error ? error.message : "Upload failed"
-        );
+
+        toast.error(error instanceof Error ? error.message : "Upload failed");
 
         // Auto-hide error message after 5 seconds
         setTimeout(() => {
@@ -287,7 +290,6 @@ export default function MyDocumentsPage() {
         });
 
         if (response.ok) {
-          setSelectedDocumentId((prev) => (prev === itemId ? null : prev));
           await loadItems();
         } else {
           console.error("Failed to delete item");
@@ -298,33 +300,6 @@ export default function MyDocumentsPage() {
     },
     [loadItems]
   );
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      "application/pdf": [".pdf"],
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        [".docx"],
-      "text/plain": [".txt"],
-    },
-    multiple: true,
-  });
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
-  const getFileIcon = (type: string) => {
-    if (type?.includes("pdf")) return <FileText className="w-6 h-6" />;
-    if (type?.includes("image")) return <FileImage className="w-6 h-6" />;
-    if (type?.includes("spreadsheet"))
-      return <FileSpreadsheet className="w-6 h-6" />;
-    return <FileIcon className="w-6 h-6" />;
-  };
 
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment) {
@@ -387,37 +362,11 @@ export default function MyDocumentsPage() {
 
   return (
     <div className="flex h-screen">
-      {/* Upload status notification */}
-      {(uploadStatus === "success" || uploadStatus === "error") && (
-        <div
-          className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 ${
-            uploadStatus === "success"
-              ? "bg-green-500 text-white"
-              : "bg-red-500 text-white"
-          }`}
-        >
-          <div className="flex items-center space-x-2">
-            {uploadStatus === "success" ? (
-              <>
-                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
-                  <div className="w-2 h-2 bg-white rounded-full"></div>
-                </div>
-                <span>Document uploaded successfully!</span>
-              </>
-            ) : (
-              <>
-                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
-                  <div className="w-2 h-2 bg-white rounded-full"></div>
-                </div>
-                <span>{uploadError || "Upload failed"}</span>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Main content area */}
       <div className="bg-white min-h-screen flex-1">
+        {isUploading && (
+          <UploadingOverlay status={uploadStatus} error={uploadError} />
+        )}
         {/* Header */}
         <div className="border-b p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 h-20 flex items-center w-full">
           <div className="flex items-center justify-between w-full">
@@ -488,9 +437,7 @@ export default function MyDocumentsPage() {
               variant="outline"
               size="sm"
               className="flex items-center gap-3"
-              onClick={() =>
-                router.push("/dashboard/documents/create?type=document")
-              }
+              onClick={() => setShowTemplateDialog(true)}
             >
               <FileText size={20} />
               Document
@@ -532,12 +479,7 @@ export default function MyDocumentsPage() {
             )}
 
             {/* Unified Items Grid */}
-            <div
-              className={twMerge(
-                "grid grid-cols-1 gap-4",
-                selectedDocumentId ? "lg:grid-cols-4" : "lg:grid-cols-6"
-              )}
-            >
+            <div className={twMerge("grid grid-cols-1 gap-4 lg:grid-cols-6")}>
               {isLoading ? (
                 <>
                   {Array(12)
@@ -570,8 +512,6 @@ export default function MyDocumentsPage() {
                       className={`relative flex flex-col items-center justify-center space-y-2 rounded-lg min-h-40 p-4 cursor-pointer transition-all duration-200 group border-2 ${
                         item.type === "folder"
                           ? "bg-gray-50 hover:bg-blue-100 border-transparent hover:border-blue-200"
-                          : selectedDocumentId === item.id
-                          ? "bg-blue-50 border-blue-200"
                           : "bg-gray-50 hover:bg-blue-100 border-transparent hover:border-gray-200"
                       }`}
                     >
@@ -687,239 +627,40 @@ export default function MyDocumentsPage() {
         </div>
       </div>
 
-      {/* Document preview sidebar */}
-      {selectedDocumentId && (
-        <div className="w-[480px] border-l h-screen bg-white flex flex-col">
-          <div className="p-4 border-b h-20 flex items-center w-full">
-            <div className="flex items-center justify-between space-x-2 w-full">
-              {selectedDocumentId ? (
-                (() => {
-                  const selectedDoc = items.find(
-                    (item) =>
-                      item.id === selectedDocumentId && item.type === "document"
-                  );
-                  return selectedDoc ? (
-                    <>
-                      <div className="flex items-center space-x-3">
-                        <img
-                          src={fileToIcon(
-                            selectedDoc.fileType?.split("/").pop() || "unknown"
-                          )}
-                          alt={selectedDoc.name}
-                          className="w-8"
-                        />
-                        <div>
-                          <h3 className="font-medium text-sm line-clamp-1">
-                            {selectedDoc.name}
-                          </h3>
-                          <p className="text-xs text-muted-foreground">
-                            {fileSize(selectedDoc.size || 0)}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedDocumentId(null)}
-                      >
-                        ×
-                      </Button>
-                    </>
-                  ) : null;
-                })()
-              ) : (
-                <></>
-              )}
-            </div>
-          </div>
-
-          <ScrollArea className="flex-1 p-4">
-            <div className="space-y-4">
-              {selectedDocumentId ? (
-                (() => {
-                  const selectedDoc = items.find(
-                    (item) =>
-                      item.id === selectedDocumentId && item.type === "document"
-                  );
-                  return selectedDoc ? (
-                    <div className="space-y-6">
-                      {/* Document preview */}
-                      <div>
-                        <h4 className="font-medium mb-2">Preview</h4>
-                        <div className="bg-gray-50 rounded-lg p-4 min-h-[200px] flex items-center justify-center">
-                          {selectedDoc.preview ? (
-                            <img
-                              src={selectedDoc.preview}
-                              alt="Document preview"
-                              className="max-w-full max-h-full object-contain"
-                            />
-                          ) : (
-                            <div className="text-center text-gray-500">
-                              <FileText className="w-12 h-12 mx-auto mb-2" />
-                              <p>No preview available</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Document analysis */}
-                      {selectedDoc.analysis && (
-                        <div>
-                          <h4 className="font-medium mb-2">AI Analysis</h4>
-                          <div className="space-y-4">
-                            {/* Summary */}
-                            <div>
-                              <h5 className="text-sm font-medium text-gray-700 mb-1">
-                                Summary
-                              </h5>
-                              <p className="text-sm text-gray-600">
-                                {selectedDoc.analysis.summary}
-                              </p>
-                            </div>
-
-                            {/* Key Points */}
-                            <div>
-                              <h5 className="text-sm font-medium text-gray-700 mb-1">
-                                Key Points
-                              </h5>
-                              <ul className="text-sm text-gray-600 space-y-1">
-                                {selectedDoc.analysis.keyPoints.map(
-                                  (point, index) => (
-                                    <li
-                                      key={index}
-                                      className="flex items-start"
-                                    >
-                                      <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 mr-2 flex-shrink-0"></span>
-                                      {point}
-                                    </li>
-                                  )
-                                )}
-                              </ul>
-                            </div>
-
-                            {/* Sentiment */}
-                            <div>
-                              <h5 className="text-sm font-medium text-gray-700 mb-1">
-                                Sentiment
-                              </h5>
-                              <Badge
-                                className={getSentimentColor(
-                                  selectedDoc.analysis.sentiment
-                                )}
-                              >
-                                {selectedDoc.analysis.sentiment}
-                              </Badge>
-                            </div>
-
-                            {/* Reading Time */}
-                            <div>
-                              <h5 className="text-sm font-medium text-gray-700 mb-1">
-                                Reading Time
-                              </h5>
-                              <p className="text-sm text-gray-600">
-                                {selectedDoc.analysis.readingTime} minutes
-                              </p>
-                            </div>
-
-                            {/* Word Count */}
-                            <div>
-                              <h5 className="text-sm font-medium text-gray-700 mb-1">
-                                Word Count
-                              </h5>
-                              <p className="text-sm text-gray-600">
-                                {selectedDoc.analysis.wordCount} words
-                              </p>
-                            </div>
-
-                            {/* Topics */}
-                            <div>
-                              <h5 className="text-sm font-medium text-gray-700 mb-1">
-                                Topics
-                              </h5>
-                              <div className="flex flex-wrap gap-1">
-                                {selectedDoc.analysis.topics.map(
-                                  (topic, index) => (
-                                    <Badge
-                                      key={index}
-                                      variant="secondary"
-                                      className="text-xs"
-                                    >
-                                      {topic}
-                                    </Badge>
-                                  )
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : null;
-                })()
-              ) : (
-                <div className="text-center py-12">
-                  <FileSearch className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-slate-900 mb-2">
-                    Select a Document
-                  </h3>
-                  <p className="text-slate-500">
-                    Choose a document from the grid to view its preview and AI
-                    analysis
-                  </p>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        </div>
-      )}
-
       {/* Hidden file input */}
       <input
         type="file"
         ref={fileInputRef}
         onChange={handleFileChange}
-        accept=".pdf,.docx,.txt"
+        accept=".ai,.avi,.bmp,.crd,.csv,.dll,.doc,.docx,.dwg,.eps,.exe,.flv,.gif,.html,.iso,.java,.jpg,.jpeg,.mdb,.mid,.mov,.mp3,.mp4,.mpeg,.pdf,.png,.ppt,.ps,.psd,.pub,.rar,.raw,.rss,.svg,.tiff,.txt,.wav,.wma,.xls,.xlsx,.xml,.xsl,.zip"
         multiple
         style={{ display: "none" }}
       />
 
       {/* Create Folder Dialog */}
-      <Dialog
+      <CreateFolderDialog
         open={showCreateFolderDialog}
         onOpenChange={setShowCreateFolderDialog}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create New Folder</DialogTitle>
-            <DialogDescription>
-              Enter a name for your new folder.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Input
-              placeholder="Folder name"
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  createFolder();
-                }
-              }}
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowCreateFolderDialog(false)}
-            >
-              Cancel
-            </Button>
-            <Button onClick={createFolder} disabled={!newFolderName.trim()}>
-              Create Folder
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        newFolderName={newFolderName}
+        setNewFolderName={(v: string) => setNewFolderName(v)}
+        onCreate={createFolder}
+      />
+
+      {/* Template Select Dialog */}
+      <TemplateSelectDialog
+        open={showTemplateDialog}
+        onOpenChange={setShowTemplateDialog}
+        onSelect={(templateId: string | null) => {
+          setShowTemplateDialog(false);
+          if (!templateId) {
+            router.push("/dashboard/documents/create?type=document");
+          } else {
+            router.push(
+              `/dashboard/documents/create?type=document&template=${templateId}`
+            );
+          }
+        }}
+      />
     </div>
   );
 }

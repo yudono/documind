@@ -1,274 +1,159 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting template seeding...');
+  console.log("🌱 Starting template seeding...");
 
-  // Create dummy templates with form fields and original files
+  // Create 20 common HTML templates
   const templates = [
     {
-      name: 'Business Proposal Template',
-      description: 'Professional business proposal template with modern design and comprehensive sections for project overview, timeline, and budget.',
-      type: 'docx',
-      category: 'business',
-      thumbnail: 'https://via.placeholder.com/300x200/4F46E5/FFFFFF?text=Business+Proposal',
-      isPublic: true,
-      downloadCount: 245,
-      url: 'https://example-bucket.s3.amazonaws.com/templates/business-proposal-template.docx',
-      key: 'templates/business-proposal-template.docx',
-      bucket: 'example-bucket',
-      previewUrl: 'https://via.placeholder.com/600x800/4F46E5/FFFFFF?text=Business+Proposal+Preview',
-      instructions: 'Fill in your company details, project information, and budget to create a professional business proposal.',
-      aiPrompt: 'Create a comprehensive business proposal document for {{companyName}} to present to {{clientName}}. The proposal should include: 1) Executive Summary highlighting the project "{{projectTitle}}" 2) Detailed project description: {{projectDescription}} 3) Timeline of {{timeline}} weeks with key milestones 4) Budget breakdown totaling {{budget}} 5) Company credentials and why {{companyName}} is the best choice 6) Next steps and contact information ({{contactEmail}}). Make it professional, persuasive, and tailored to win the client\'s business. Use formal business language and include relevant industry insights.',
-      templateFields: {
-        fields: [
-          { name: 'companyName', label: 'Company Name', type: 'text', placeholder: 'Enter your company name', required: true },
-          { name: 'clientName', label: 'Client Name', type: 'text', placeholder: 'Enter client name', required: true },
-          { name: 'projectTitle', label: 'Project Title', type: 'text', placeholder: 'Enter project title', required: true },
-          { name: 'projectDescription', label: 'Project Description', type: 'textarea', placeholder: 'Describe the project in detail', required: true },
-          { name: 'budget', label: 'Budget', type: 'number', placeholder: 'Enter budget amount', required: true },
-          { name: 'timeline', label: 'Timeline (weeks)', type: 'number', placeholder: 'Enter project duration', required: true },
-          { name: 'contactEmail', label: 'Contact Email', type: 'email', placeholder: 'Enter contact email', required: true },
-          { name: 'date', label: 'Proposal Date', type: 'date', required: true }
-        ],
-        placeholders: {
-          '{{companyName}}': 'companyName',
-          '{{clientName}}': 'clientName',
-          '{{projectTitle}}': 'projectTitle',
-          '{{projectDescription}}': 'projectDescription',
-          '{{budget}}': 'budget',
-          '{{timeline}}': 'timeline',
-          '{{contactEmail}}': 'contactEmail',
-          '{{date}}': 'date'
-        }
-      }
+      name: "Invoice Template",
+      thumbnail: "https://placehold.co/300x200/7C2D12/FFFFFF?text=Invoice",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Invoice</title><style>body{font-family:Arial,sans-serif;padding:24px}h1{font-size:24px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px}th{background:#f3f4f6;text-align:left}</style></head><body><h1>Invoice</h1><p>From: Your Business</p><p>To: Client Name</p><table><thead><tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead><tbody><tr><td>Service A</td><td>1</td><td>$100</td><td>$100</td></tr></tbody><tfoot><tr><td colspan="3"><strong>Grand Total</strong></td><td><strong>$100</strong></td></tr></tfoot></table></body></html>`,
     },
     {
-      name: 'Invoice Template',
-      description: 'Professional invoice template with automatic calculations and customizable branding.',
-      type: 'docx',
-      category: 'finance',
-      thumbnail: 'https://via.placeholder.com/300x200/7C2D12/FFFFFF?text=Invoice+Template',
-      isPublic: true,
-      downloadCount: 423,
-      url: 'https://example-bucket.s3.amazonaws.com/templates/invoice-template.docx',
-      key: 'templates/invoice-template.docx',
-      bucket: 'example-bucket',
-      previewUrl: 'https://via.placeholder.com/600x800/7C2D12/FFFFFF?text=Invoice+Preview',
-      instructions: 'Enter your business details and invoice items to generate a professional invoice.',
-      aiPrompt: 'Generate a professional invoice document from {{businessName}} to {{clientName}}. Include: 1) Business header with {{businessName}} and address: {{businessAddress}} 2) Client information: {{clientName}} at {{clientAddress}} 3) Invoice details: Invoice #{{invoiceNumber}}, Date: {{invoiceDate}}, Due Date: {{dueDate}} 4) Itemized billing: {{itemDescription}} - Quantity: {{quantity}} x Unit Price: {{unitPrice}} 5) Calculate subtotal, apply {{taxRate}}% tax if provided, and show total amount 6) Payment terms and instructions 7) Professional formatting with clear sections. Make it legally compliant and business-ready.',
-      templateFields: {
-        fields: [
-          { name: 'businessName', label: 'Business Name', type: 'text', placeholder: 'Enter your business name', required: true },
-          { name: 'businessAddress', label: 'Business Address', type: 'textarea', placeholder: 'Enter your business address', required: true },
-          { name: 'clientName', label: 'Client Name', type: 'text', placeholder: 'Enter client name', required: true },
-          { name: 'clientAddress', label: 'Client Address', type: 'textarea', placeholder: 'Enter client address', required: true },
-          { name: 'invoiceNumber', label: 'Invoice Number', type: 'text', placeholder: 'Enter invoice number', required: true },
-          { name: 'invoiceDate', label: 'Invoice Date', type: 'date', required: true },
-          { name: 'dueDate', label: 'Due Date', type: 'date', required: true },
-          { name: 'itemDescription', label: 'Item Description', type: 'text', placeholder: 'Describe the service/product', required: true },
-          { name: 'quantity', label: 'Quantity', type: 'number', placeholder: 'Enter quantity', required: true },
-          { name: 'unitPrice', label: 'Unit Price', type: 'number', placeholder: 'Enter unit price', required: true },
-          { name: 'taxRate', label: 'Tax Rate (%)', type: 'number', placeholder: 'Enter tax rate', required: false }
-        ],
-        placeholders: {
-          '{{businessName}}': 'businessName',
-          '{{businessAddress}}': 'businessAddress',
-          '{{clientName}}': 'clientName',
-          '{{clientAddress}}': 'clientAddress',
-          '{{invoiceNumber}}': 'invoiceNumber',
-          '{{invoiceDate}}': 'invoiceDate',
-          '{{dueDate}}': 'dueDate',
-          '{{itemDescription}}': 'itemDescription',
-          '{{quantity}}': 'quantity',
-          '{{unitPrice}}': 'unitPrice',
-          '{{taxRate}}': 'taxRate',
-          '{{totalAmount}}': 'calculated'
-        }
-      }
+      name: "Business Proposal",
+      thumbnail: "https://placehold.co/300x200/4F46E5/FFFFFF?text=Proposal",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Business Proposal</title><style>body{font-family:Arial;padding:24px}h1{font-size:28px;margin-bottom:8px}h2{font-size:18px;margin-top:16px}</style></head><body><h1>Business Proposal</h1><p>Executive Summary...</p><h2>Project Overview</h2><p>Describe project...</p><h2>Timeline</h2><p>Weeks and milestones...</p><h2>Budget</h2><p>Breakdown...</p></body></html>`,
     },
     {
-      name: 'Contract Agreement Template',
-      description: 'Legal contract template for service agreements with customizable terms and conditions.',
-      type: 'docx',
-      category: 'legal',
-      thumbnail: 'https://via.placeholder.com/300x200/059669/FFFFFF?text=Contract+Template',
-      isPublic: true,
-      downloadCount: 189,
-      url: 'https://example-bucket.s3.amazonaws.com/templates/contract-template.docx',
-      key: 'templates/contract-template.docx',
-      bucket: 'example-bucket',
-      previewUrl: 'https://via.placeholder.com/600x800/059669/FFFFFF?text=Contract+Preview',
-      instructions: 'Fill in the contract details to create a legally binding service agreement.',
-      aiPrompt: 'Create a comprehensive service agreement contract between {{partyAName}} and {{partyBName}}. Include: 1) Contract header with parties and effective date 2) Service description: {{serviceDescription}} 3) Contract terms: Start Date {{startDate}}, End Date {{endDate}}, Value {{contractValue}} 4) Payment terms: {{paymentTerms}} 5) Responsibilities and obligations of both parties 6) Termination clauses and conditions 7) Governing law under {{jurisdiction}} jurisdiction 8) Signature blocks and legal disclaimers. Ensure the contract is legally sound, comprehensive, and protects both parties\' interests.',
-      templateFields: {
-        fields: [
-          { name: 'partyAName', label: 'Party A Name', type: 'text', placeholder: 'Enter first party name', required: true },
-          { name: 'partyBName', label: 'Party B Name', type: 'text', placeholder: 'Enter second party name', required: true },
-          { name: 'serviceDescription', label: 'Service Description', type: 'textarea', placeholder: 'Describe the services to be provided', required: true },
-          { name: 'contractValue', label: 'Contract Value', type: 'number', placeholder: 'Enter contract value', required: true },
-          { name: 'startDate', label: 'Start Date', type: 'date', required: true },
-          { name: 'endDate', label: 'End Date', type: 'date', required: true },
-          { name: 'paymentTerms', label: 'Payment Terms', type: 'select', options: ['Net 30', 'Net 15', 'Upon completion', 'Monthly'], required: true },
-          { name: 'jurisdiction', label: 'Jurisdiction', type: 'text', placeholder: 'Enter governing jurisdiction', required: true }
-        ],
-        placeholders: {
-          '{{partyAName}}': 'partyAName',
-          '{{partyBName}}': 'partyBName',
-          '{{serviceDescription}}': 'serviceDescription',
-          '{{contractValue}}': 'contractValue',
-          '{{startDate}}': 'startDate',
-          '{{endDate}}': 'endDate',
-          '{{paymentTerms}}': 'paymentTerms',
-          '{{jurisdiction}}': 'jurisdiction'
-        }
-      }
+      name: "Resume / CV",
+      thumbnail: "https://placehold.co/300x200/1F2937/FFFFFF?text=Resume",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Resume</title><style>body{font-family:Arial;padding:24px}h1{font-size:24px}ul{margin:0;padding-left:16px}</style></head><body><h1>Candidate Name</h1><p>Contact | Email | Phone</p><h2>Experience</h2><ul><li>Role at Company (Years) - Achievements</li></ul><h2>Education</h2><p>Degree - University</p><h2>Skills</h2><p>List skills</p></body></html>`,
     },
     {
-      name: 'Employee Offer Letter',
-      description: 'Professional job offer letter template with salary, benefits, and terms details.',
-      type: 'docx',
-      category: 'hr',
-      thumbnail: 'https://via.placeholder.com/300x200/1F2937/FFFFFF?text=Offer+Letter',
-      isPublic: true,
-      downloadCount: 156,
-      url: 'https://example-bucket.s3.amazonaws.com/templates/offer-letter-template.docx',
-      key: 'templates/offer-letter-template.docx',
-      bucket: 'example-bucket',
-      previewUrl: 'https://via.placeholder.com/600x800/1F2937/FFFFFF?text=Offer+Letter+Preview',
-      instructions: 'Enter employee and position details to generate a professional job offer letter.',
-      templateFields: {
-        fields: [
-          { name: 'candidateName', label: 'Candidate Name', type: 'text', placeholder: 'Enter candidate full name', required: true },
-          { name: 'position', label: 'Position Title', type: 'text', placeholder: 'Enter job position', required: true },
-          { name: 'department', label: 'Department', type: 'text', placeholder: 'Enter department', required: true },
-          { name: 'salary', label: 'Annual Salary', type: 'number', placeholder: 'Enter annual salary', required: true },
-          { name: 'startDate', label: 'Start Date', type: 'date', required: true },
-          { name: 'reportingManager', label: 'Reporting Manager', type: 'text', placeholder: 'Enter manager name', required: true },
-          { name: 'workLocation', label: 'Work Location', type: 'text', placeholder: 'Enter work location', required: true },
-          { name: 'benefits', label: 'Benefits Package', type: 'textarea', placeholder: 'Describe benefits package', required: false }
-        ],
-        placeholders: {
-          '{{candidateName}}': 'candidateName',
-          '{{position}}': 'position',
-          '{{department}}': 'department',
-          '{{salary}}': 'salary',
-          '{{startDate}}': 'startDate',
-          '{{reportingManager}}': 'reportingManager',
-          '{{workLocation}}': 'workLocation',
-          '{{benefits}}': 'benefits'
-        }
-      }
+      name: "Cover Letter",
+      thumbnail: "https://placehold.co/300x200/111827/FFFFFF?text=Cover+Letter",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Cover Letter</title><style>body{font-family:Arial;padding:24px;line-height:1.6}</style></head><body><p>Date</p><p>Hiring Manager</p><p>Company</p><p>Dear Hiring Manager,</p><p>Intro paragraph...</p><p>Body paragraph...</p><p>Closing,</p><p>Your Name</p></body></html>`,
     },
     {
-      name: 'Meeting Minutes Template',
-      description: 'Professional meeting minutes template with action items and attendee tracking.',
-      type: 'docx',
-      category: 'business',
-      thumbnail: 'https://via.placeholder.com/300x200/0891B2/FFFFFF?text=Meeting+Minutes',
-      isPublic: true,
-      downloadCount: 134,
-      url: 'https://example-bucket.s3.amazonaws.com/templates/meeting-minutes-template.docx',
-      key: 'templates/meeting-minutes-template.docx',
-      bucket: 'example-bucket',
-      previewUrl: 'https://via.placeholder.com/600x800/0891B2/FFFFFF?text=Meeting+Minutes+Preview',
-      instructions: 'Record meeting details and action items to create professional meeting minutes.',
-      templateFields: {
-        fields: [
-          { name: 'meetingTitle', label: 'Meeting Title', type: 'text', placeholder: 'Enter meeting title', required: true },
-          { name: 'meetingDate', label: 'Meeting Date', type: 'date', required: true },
-          { name: 'meetingTime', label: 'Meeting Time', type: 'time', required: true },
-          { name: 'location', label: 'Location', type: 'text', placeholder: 'Enter meeting location', required: true },
-          { name: 'chairperson', label: 'Chairperson', type: 'text', placeholder: 'Enter chairperson name', required: true },
-          { name: 'attendees', label: 'Attendees', type: 'textarea', placeholder: 'List all attendees', required: true },
-          { name: 'agenda', label: 'Agenda Items', type: 'textarea', placeholder: 'List agenda items', required: true },
-          { name: 'decisions', label: 'Key Decisions', type: 'textarea', placeholder: 'Record key decisions made', required: false },
-          { name: 'actionItems', label: 'Action Items', type: 'textarea', placeholder: 'List action items and owners', required: false }
-        ],
-        placeholders: {
-          '{{meetingTitle}}': 'meetingTitle',
-          '{{meetingDate}}': 'meetingDate',
-          '{{meetingTime}}': 'meetingTime',
-          '{{location}}': 'location',
-          '{{chairperson}}': 'chairperson',
-          '{{attendees}}': 'attendees',
-          '{{agenda}}': 'agenda',
-          '{{decisions}}': 'decisions',
-          '{{actionItems}}': 'actionItems'
-        }
-      }
+      name: "Offer Letter",
+      thumbnail: "https://placehold.co/300x200/2563EB/FFFFFF?text=Offer+Letter",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Offer Letter</title><style>body{font-family:Arial;padding:24px}</style></head><body><h1>Offer Letter</h1><p>We are pleased to offer...</p><p>Position, Salary, Start Date...</p><p>Regards, HR</p></body></html>`,
     },
     {
-      name: 'Project Status Report',
-      description: 'Comprehensive project status report template with progress tracking and risk assessment.',
-      type: 'docx',
-      category: 'business',
-      thumbnail: 'https://via.placeholder.com/300x200/DC2626/FFFFFF?text=Status+Report',
-      isPublic: true,
-      downloadCount: 198,
-      url: 'https://example-bucket.s3.amazonaws.com/templates/status-report-template.docx',
-      key: 'templates/status-report-template.docx',
-      bucket: 'example-bucket',
-      previewUrl: 'https://via.placeholder.com/600x800/DC2626/FFFFFF?text=Status+Report+Preview',
-      instructions: 'Update project progress and status information to generate a comprehensive status report.',
-      templateFields: {
-        fields: [
-          { name: 'projectName', label: 'Project Name', type: 'text', placeholder: 'Enter project name', required: true },
-          { name: 'reportDate', label: 'Report Date', type: 'date', required: true },
-          { name: 'projectManager', label: 'Project Manager', type: 'text', placeholder: 'Enter project manager name', required: true },
-          { name: 'overallStatus', label: 'Overall Status', type: 'select', options: ['On Track', 'At Risk', 'Behind Schedule', 'Completed'], required: true },
-          { name: 'completionPercentage', label: 'Completion %', type: 'number', placeholder: 'Enter completion percentage', required: true },
-          { name: 'accomplishments', label: 'Key Accomplishments', type: 'textarea', placeholder: 'List key accomplishments', required: true },
-          { name: 'upcomingTasks', label: 'Upcoming Tasks', type: 'textarea', placeholder: 'List upcoming tasks', required: true },
-          { name: 'risks', label: 'Risks & Issues', type: 'textarea', placeholder: 'Describe risks and issues', required: false },
-          { name: 'budget', label: 'Budget Status', type: 'text', placeholder: 'Enter budget status', required: false }
-        ],
-        placeholders: {
-          '{{projectName}}': 'projectName',
-          '{{reportDate}}': 'reportDate',
-          '{{projectManager}}': 'projectManager',
-          '{{overallStatus}}': 'overallStatus',
-          '{{completionPercentage}}': 'completionPercentage',
-          '{{accomplishments}}': 'accomplishments',
-          '{{upcomingTasks}}': 'upcomingTasks',
-          '{{risks}}': 'risks',
-          '{{budget}}': 'budget'
-        }
-      }
-    }
+      name: "Contract Agreement",
+      thumbnail: "https://placehold.co/300x200/059669/FFFFFF?text=Contract",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Contract Agreement</title><style>body{font-family:Arial;padding:24px}h2{margin-top:16px}</style></head><body><h1>Service Agreement</h1><h2>Parties</h2><p>A and B...</p><h2>Scope</h2><p>Description...</p><h2>Payment</h2><p>Terms...</p><h2>Termination</h2><p>Clauses...</p></body></html>`,
+    },
+    {
+      name: "NDA (Non-Disclosure Agreement)",
+      thumbnail: "https://placehold.co/300x200/6B7280/FFFFFF?text=NDA",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>NDA</title><style>body{font-family:Arial;padding:24px}</style></head><body><h1>Non-Disclosure Agreement</h1><p>Definition of Confidential Information...</p><p>Obligations...</p><p>Term...</p></body></html>`,
+    },
+    {
+      name: "Meeting Minutes",
+      thumbnail: "https://placehold.co/300x200/0891B2/FFFFFF?text=Minutes",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Meeting Minutes</title><style>body{font-family:Arial;padding:24px}ul{padding-left:16px}</style></head><body><h1>Meeting Minutes</h1><p>Date/Time/Location</p><h2>Attendees</h2><ul><li>Name</li></ul><h2>Agenda</h2><ul><li>Item</li></ul><h2>Decisions</h2><ul><li>Decision</li></ul></body></html>`,
+    },
+    {
+      name: "Meeting Agenda",
+      thumbnail: "https://placehold.co/300x200/0EA5E9/FFFFFF?text=Agenda",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Meeting Agenda</title><style>body{font-family:Arial;padding:24px}</style></head><body><h1>Agenda</h1><ol><li>Welcome</li><li>Updates</li></ol></body></html>`,
+    },
+    {
+      name: "Project Status Report",
+      thumbnail:
+        "https://placehold.co/300x200/DC2626/FFFFFF?text=Status+Report",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Status Report</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;padding:8px}</style></head><body><h1>Status Report</h1><p>Project: Name</p><table><tr><th>Area</th><th>Details</th></tr><tr><td>Progress</td><td>...</td></tr></table></body></html>`,
+    },
+    {
+      name: "Project Plan",
+      thumbnail: "https://placehold.co/300x200/F59E0B/FFFFFF?text=Project+Plan",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Project Plan</title><style>body{font-family:Arial;padding:24px}</style></head><body><h1>Project Plan</h1><h2>Objectives</h2><p>...</p><h2>Schedule</h2><p>...</p></body></html>`,
+    },
+    {
+      name: "Standard Operating Procedure (SOP)",
+      thumbnail: "https://placehold.co/300x200/10B981/FFFFFF?text=SOP",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>SOP</title><style>body{font-family:Arial;padding:24px}ol{padding-left:16px}</style></head><body><h1>SOP</h1><ol><li>Step 1</li><li>Step 2</li></ol></body></html>`,
+    },
+    {
+      name: "Privacy Policy",
+      thumbnail:
+        "https://placehold.co/300x200/9333EA/FFFFFF?text=Privacy+Policy",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Privacy Policy</title><style>body{font-family:Arial;padding:24px}</style></head><body><h1>Privacy Policy</h1><p>Introduction...</p><p>Data Collection...</p></body></html>`,
+    },
+    {
+      name: "Terms of Service",
+      thumbnail:
+        "https://placehold.co/300x200/7C3AED/FFFFFF?text=Terms+of+Service",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Terms of Service</title><style>body{font-family:Arial;padding:24px}</style></head><body><h1>Terms of Service</h1><p>Agreement...</p><p>Use of Service...</p></body></html>`,
+    },
+    {
+      name: "Memorandum (Memo)",
+      thumbnail: "https://placehold.co/300x200/374151/FFFFFF?text=Memo",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Memo</title><style>body{font-family:Arial;padding:24px}</style></head><body><h1>Memo</h1><p>To:</p><p>From:</p><p>Subject:</p><p>Body...</p></body></html>`,
+    },
+    {
+      name: "Press Release",
+      thumbnail:
+        "https://placehold.co/300x200/EF4444/FFFFFF?text=Press+Release",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Press Release</title><style>body{font-family:Arial;padding:24px}</style></head><body><h1>Press Release Title</h1><p>City, Date — Intro...</p><p>Details...</p></body></html>`,
+    },
+    {
+      name: "Newsletter",
+      thumbnail: "https://placehold.co/300x200/3B82F6/FFFFFF?text=Newsletter",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Newsletter</title><style>body{font-family:Arial;padding:24px}</style></head><body><h1>Monthly Newsletter</h1><h2>Section</h2><p>Content...</p></body></html>`,
+    },
+    {
+      name: "Receipt",
+      thumbnail: "https://placehold.co/300x200/0EA5E9/FFFFFF?text=Receipt",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Receipt</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;padding:8px}</style></head><body><h1>Receipt</h1><table><tr><th>Item</th><th>Amount</th></tr><tr><td>Product</td><td>$50</td></tr></table><p>Total: $50</p></body></html>`,
+    },
+    {
+      name: "Purchase Order",
+      thumbnail: "https://placehold.co/300x200/10B981/FFFFFF?text=PO",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Purchase Order</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;padding:8px}</style></head><body><h1>Purchase Order</h1><p>Vendor: ...</p><table><tr><th>Item</th><th>Qty</th><th>Price</th></tr><tr><td>Item A</td><td>2</td><td>$20</td></tr></table></body></html>`,
+    },
+    {
+      name: "Job Description",
+      thumbnail:
+        "https://placehold.co/300x200/F59E0B/FFFFFF?text=Job+Description",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Job Description</title><style>body{font-family:Arial;padding:24px}</style></head><body><h1>Job Title</h1><h2>Responsibilities</h2><ul><li>Task</li></ul><h2>Qualifications</h2><ul><li>Req</li></ul></body></html>`,
+    },
+    {
+      name: "Quote / Quotation",
+      thumbnail: "https://placehold.co/300x200/22C55E/FFFFFF?text=Quotation",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Quotation</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;padding:8px}</style></head><body><h1>Quotation</h1><table><tr><th>Item</th><th>Price</th></tr><tr><td>Service</td><td>$100</td></tr></table></body></html>`,
+    },
+    {
+      name: "Timesheet",
+      thumbnail: "https://placehold.co/300x200/06B6D4/FFFFFF?text=Timesheet",
+      html: `<!doctype html><html><head><meta charset="utf-8"><title>Timesheet</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;padding:8px}</style></head><body><h1>Timesheet</h1><table><tr><th>Date</th><th>Hours</th><th>Task</th></tr><tr><td>2024-01-01</td><td>8</td><td>Work</td></tr></table></body></html>`,
+    },
   ];
 
   for (const template of templates) {
     await prisma.template.create({
       data: {
-        ...template,
-        size: Math.floor(Math.random() * 5000000) + 100000, // Random size between 100KB and 5MB
+        name: template.name,
+        thumbnail: template.thumbnail,
+        html: template.html,
       },
     });
   }
 
-  console.log(`✅ Created ${templates.length} template records with form fields`);
-  console.log('✅ Templates seeded successfully!');
+  console.log(`✅ Created ${templates.length} HTML template records`);
+  console.log("✅ Templates seeded successfully!");
 
-  // Create credit packages
-  console.log('🌱 Starting credit packages seeding...');
-  
+  // Credit packages (unchanged)
+  console.log("🌱 Starting credit packages seeding...");
   const creditPackages = [
     {
-      name: 'Pro Pack',
-      description: 'Professional package for regular users',
+      name: "Pro Pack",
+      description: "Professional package for regular users",
       credits: 1500,
       price: 99000,
-      currency: 'IDR',
+      currency: "IDR",
       isActive: true,
     },
     {
-      name: 'Enterprise Pack',
-      description: 'Enterprise package for organizations',
+      name: "Enterprise Pack",
+      description: "Enterprise package for organizations",
       credits: 5000,
       price: 499000,
-      currency: 'IDR',
+      currency: "IDR",
       isActive: true,
     },
   ];
@@ -277,53 +162,65 @@ async function main() {
     const existingPackage = await prisma.creditPackage.findFirst({
       where: { name: pkg.name },
     });
-    
     if (existingPackage) {
       await prisma.creditPackage.update({
         where: { id: existingPackage.id },
         data: pkg,
       });
     } else {
-      await prisma.creditPackage.create({
-        data: pkg,
-      });
+      await prisma.creditPackage.create({ data: pkg });
     }
   }
+  console.log("✅ Credit packages seeded successfully!");
 
-  console.log('✅ Credit packages seeded successfully!');
-
-  // Create subscription plans
-  console.log('🌱 Starting subscription plans seeding...');
-  
+  // Subscription plans (unchanged)
+  console.log("🌱 Starting subscription plans seeding...");
   const subscriptionPlans = [
     {
-      name: 'Free Plan',
-      description: 'Essential features for individual users',
+      name: "Free Plan",
+      description: "Essential features for individual users",
       price: 0,
-      currency: 'IDR',
-      dailyCredits: 3, // ~100 per month
+      currency: "IDR",
+      dailyCredits: 3,
       monthlyCredits: 100,
-      features: ['100 monthly credits', 'Basic AI analysis', 'Standard templates', 'Email support'],
+      features: [
+        "100 monthly credits",
+        "Basic AI analysis",
+        "Standard templates",
+        "Email support",
+      ],
       isActive: true,
     },
     {
-      name: 'Pro Plan',
-      description: 'Advanced features for professionals',
+      name: "Pro Plan",
+      description: "Advanced features for professionals",
       price: 99000,
-      currency: 'IDR',
-      dailyCredits: 50, // ~1500 per month
+      currency: "IDR",
+      dailyCredits: 50,
       monthlyCredits: 1500,
-      features: ['1500 monthly credits', 'Advanced AI analysis', 'Premium templates', 'AI Chat Assistant', 'Priority support'],
+      features: [
+        "1500 monthly credits",
+        "Advanced AI analysis",
+        "Premium templates",
+        "AI Chat Assistant",
+        "Priority support",
+      ],
       isActive: true,
     },
     {
-      name: 'Enterprise Plan',
-      description: 'Full features for teams and organizations',
+      name: "Enterprise Plan",
+      description: "Full features for teams and organizations",
       price: 499000,
-      currency: 'IDR',
-      dailyCredits: 167, // ~5000 per month
+      currency: "IDR",
+      dailyCredits: 167,
       monthlyCredits: 5000,
-      features: ['5000 monthly credits', 'Custom AI models', 'Custom templates', 'API access', '24/7 dedicated support'],
+      features: [
+        "5000 monthly credits",
+        "Custom AI models",
+        "Custom templates",
+        "API access",
+        "24/7 dedicated support",
+      ],
       isActive: true,
     },
   ];
@@ -332,26 +229,23 @@ async function main() {
     const existingPlan = await prisma.subscriptionPlan.findFirst({
       where: { name: plan.name },
     });
-    
     if (existingPlan) {
       await prisma.subscriptionPlan.update({
         where: { id: existingPlan.id },
         data: plan,
       });
     } else {
-      await prisma.subscriptionPlan.create({
-        data: plan,
-      });
+      await prisma.subscriptionPlan.create({ data: plan });
     }
   }
 
-  console.log('✅ Subscription plans seeded successfully!');
-  console.log('🎉 Database seeded successfully!');
+  console.log("✅ Subscription plans seeded successfully!");
+  console.log("🎉 Database seeded successfully!");
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Error during seeding:', e);
+    console.error("❌ Error during seeding:", e);
     process.exit(1);
   })
   .finally(async () => {

@@ -25,35 +25,10 @@ export async function GET(
 
     const template = await prisma.template.findUnique({
       where: { id: params.id },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
     });
 
     if (!template) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
-    }
-
-    // Check if template is public or belongs to the user
-    if (!template.isPublic && template.userId !== user.id) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
-
-    // Increment download count if accessing for download
-    const { searchParams } = new URL(request.url);
-    const incrementDownload = searchParams.get('download') === 'true';
-
-    if (incrementDownload) {
-      await prisma.template.update({
-        where: { id: params.id },
-        data: { downloadCount: { increment: 1 } },
-      });
     }
 
     return NextResponse.json({ template });
@@ -94,47 +69,15 @@ export async function PUT(
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
-    // Only allow updating own templates
-    if (existingTemplate.userId !== user.id) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
-
     const body = await request.json();
-    const {
-      name,
-      description,
-      type,
-      category,
-      url,
-      key,
-      bucket,
-      size,
-      thumbnail,
-      isPublic,
-    } = body;
+    const { name, html, thumbnail } = body;
 
     const updatedTemplate = await prisma.template.update({
       where: { id: params.id },
       data: {
         ...(name && { name }),
-        ...(description !== undefined && { description }),
-        ...(type && { type }),
-        ...(category !== undefined && { category }),
-        ...(url !== undefined && { url }),
-        ...(key !== undefined && { key }),
-        ...(bucket !== undefined && { bucket }),
-        ...(size !== undefined && { size }),
+        ...(html && { html }),
         ...(thumbnail !== undefined && { thumbnail }),
-        ...(isPublic !== undefined && { isPublic }),
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
       },
     });
 
@@ -174,11 +117,6 @@ export async function DELETE(
 
     if (!existingTemplate) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
-    }
-
-    // Only allow deleting own templates
-    if (existingTemplate.userId !== user.id) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     await prisma.template.delete({

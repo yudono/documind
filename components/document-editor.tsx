@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import type { Editor as TiptapEditor } from "@tiptap/react";
@@ -113,6 +113,7 @@ export default function DocumentEditor({
 }: DocumentEditorProps) {
   const router = useRouter();
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
 
   const [documentTitle, setDocumentTitle] = useState("Untitled Document");
   const [isSaving, setIsSaving] = useState(false);
@@ -202,6 +203,35 @@ export default function DocumentEditor({
     }
   }, [documentId, mode, router]);
 
+  // Load template for create mode from query param
+  useEffect(() => {
+    if (mode !== "create") return;
+    const templateId = searchParams.get("template");
+    if (!templateId) return;
+
+    const loadTemplate = async () => {
+      try {
+        const response = await fetch(`/api/templates/${templateId}`);
+        if (!response.ok) {
+          console.error("Failed to load template");
+          return;
+        }
+        const data = await response.json();
+        const tpl = data?.template ?? data;
+        if (tpl?.name) setDocumentTitle(tpl.name);
+        const html = tpl?.html || "";
+        setInitialHTML(html);
+        if (editorRef.current) {
+          editorRef.current.commands.setContent(html);
+        }
+      } catch (error) {
+        console.error("Error loading template:", error);
+      }
+    };
+
+    loadTemplate();
+  }, [mode, searchParams]);
+
   // Handle editor updates (auto-save)
   const handleEditorUpdate = useCallback(
     (content: string) => {
@@ -239,25 +269,28 @@ export default function DocumentEditor({
   );
 
   // Stabilize onEditorReady to avoid repeated resets
-  const onEditorReady = useCallback((editorInstance: TiptapEditor) => {
-    editorRef.current = editorInstance;
+  const onEditorReady = useCallback(
+    (editorInstance: TiptapEditor) => {
+      editorRef.current = editorInstance;
 
-    const onUpdate = () => {
-      const html = editorInstance.getHTML();
-      handleEditorUpdate(html);
-    };
+      const onUpdate = () => {
+        const html = editorInstance.getHTML();
+        handleEditorUpdate(html);
+      };
 
-    const onSelection = () => {
-      const { from, to } = editorInstance.state.selection;
-      const selected = editorInstance.state.doc.textBetween(from, to, "\n");
-      setSelectedText(selected);
-      setSelectedRange(from !== to ? { from, to } : undefined);
-    };
+      const onSelection = () => {
+        const { from, to } = editorInstance.state.selection;
+        const selected = editorInstance.state.doc.textBetween(from, to, "\n");
+        setSelectedText(selected);
+        setSelectedRange(from !== to ? { from, to } : undefined);
+      };
 
-    editorInstance.on("update", onUpdate);
-    editorInstance.on("selectionUpdate", onSelection);
-    // Do NOT reset content here; SimpleEditor initializes and loadDocument sets content.
-  }, [handleEditorUpdate]);
+      editorInstance.on("update", onUpdate);
+      editorInstance.on("selectionUpdate", onSelection);
+      // Do NOT reset content here; SimpleEditor initializes and loadDocument sets content.
+    },
+    [handleEditorUpdate]
+  );
 
   // Comment handlers
   const handleAddComment = useCallback(

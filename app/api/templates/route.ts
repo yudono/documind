@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-// GET /api/templates - Get all templates or user's templates
+// GET /api/templates - Get all templates
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -20,37 +20,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const category = searchParams.get('category');
-    const type = searchParams.get('type');
-    const myTemplates = searchParams.get('my') === 'true';
-
-    const whereClause: any = {};
-
-    if (myTemplates) {
-      whereClause.userId = user.id;
-    } else {
-      whereClause.isPublic = true;
-    }
-
-    if (category) {
-      whereClause.category = category;
-    }
-
-    if (type) {
-      whereClause.type = type;
-    }
-
     const templates = await prisma.template.findMany({
-      where: whereClause,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
+      select: {
+        id: true,
+        name: true,
+        thumbnail: true,
+        createdAt: true,
+        updatedAt: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -85,22 +61,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const {
-      name,
-      description,
-      type,
-      category,
-      url,
-      key,
-      bucket,
-      size,
-      thumbnail,
-      isPublic = true,
-    } = body;
+    const { name, html, thumbnail } = body;
 
-    if (!name || !type) {
+    if (!name || !html) {
       return NextResponse.json(
-        { error: 'Name and type are required' },
+        { error: 'Name and HTML content are required' },
         { status: 400 }
       );
     }
@@ -108,25 +73,8 @@ export async function POST(request: NextRequest) {
     const template = await prisma.template.create({
       data: {
         name,
-        description,
-        type,
-        category,
-        url,
-        key,
-        bucket,
-        size,
+        html,
         thumbnail,
-        isPublic,
-        userId: user.id,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
       },
     });
 
@@ -167,11 +115,10 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Only allow deletion of user's own templates
+    // Delete templates by IDs
     const deletedTemplates = await prisma.template.deleteMany({
       where: {
         id: { in: templateIds },
-        userId: user.id,
       },
     });
 
