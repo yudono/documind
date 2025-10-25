@@ -1,17 +1,17 @@
-import './globals.css';
-import '../styles/ai-placeholders.css';
-import '../styles/_variables.scss';
-import '../styles/_keyframe-animations.scss';
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import { Providers } from '@/components/providers';
-import { Toaster } from '@/components/ui/toaster';
+import "./globals.css";
+import "../styles/ai-placeholders.css";
+import "../styles/_variables.scss";
+import "../styles/_keyframe-animations.scss";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import { Providers } from "@/components/providers";
+import { Toaster } from "@/components/ui/sonner";
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'AI Document Assistant',
-  description: 'AI-powered document management and generation platform',
+  title: "AI Document Assistant",
+  description: "AI-powered document management and generation platform",
 };
 
 export default function RootLayout({

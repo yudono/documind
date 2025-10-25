@@ -27,7 +27,7 @@ import {
   FileSpreadsheet,
   Presentation,
 } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface Template {
   id: string;
@@ -93,11 +93,12 @@ export default function TemplatePage() {
       setTemplates(data.templates);
     } catch (error) {
       console.error("Error fetching templates:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load templates. Please try again.",
-        variant: "destructive",
-      });
+      // toast({
+      //   title: "Error",
+      //   description: "Failed to load templates. Please try again.",
+      //   variant: "destructive",
+      // });
+      toast.error("Failed to load templates. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -119,17 +120,19 @@ export default function TemplatePage() {
         window.open(data.downloadUrl, "_blank");
       }
 
-      toast({
-        title: "Download Started",
-        description: `${templateName} download has been initiated.`,
-      });
+      // toast({
+      //   title: "Download Started",
+      //   description: `${templateName} download has been initiated.`,
+      // });
+      toast.success(`${templateName} download has been initiated.`);
     } catch (error) {
       console.error("Error downloading template:", error);
-      toast({
-        title: "Error",
-        description: "Failed to download template. Please try again.",
-        variant: "destructive",
-      });
+      // toast({
+      //   title: "Error",
+      //   description: "Failed to download template. Please try again.",
+      //   variant: "destructive",
+      // });
+      toast.error("Failed to download template. Please try again.");
     }
   };
 

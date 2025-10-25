@@ -14,6 +14,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileUpload } from "@/components/ui/file-upload";
 import { File } from "lucide-react";
+import { toast } from "sonner";
 
 interface DocumentItem {
   id: string;
@@ -105,7 +106,6 @@ export function FilesDocumentsDialog({
 
           <TabsContent value="upload" className="space-y-4">
             <FileUpload
-              multiple={true}
               onFileUpload={async (file, result) => {
                 try {
                   const itemData = {

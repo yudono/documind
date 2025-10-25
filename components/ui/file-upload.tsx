@@ -16,10 +16,10 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface FileUploadProps {
   onFileUpload?: (file: File, result: any) => void;
-  onError?: (error: string) => void;
   onAllUploadsComplete?: (results: any[]) => void;
   maxSize?: number; // in bytes
   acceptedTypes?: string[];
@@ -37,9 +37,8 @@ interface UploadedFile {
 
 export function FileUpload({
   onFileUpload,
-  onError,
   onAllUploadsComplete,
-  maxSize = 10 * 1024 * 1024, // 10MB default
+  maxSize = 20 * 1024 * 1024, // 10MB default
   acceptedTypes = [
     "image/jpeg",
     "image/png",
@@ -108,8 +107,8 @@ export function FileUpload({
       for (const file of filesToProcess) {
         const validationError = validateFile(file);
         if (validationError) {
-          onError?.(validationError);
-          continue;
+          toast.error(validationError);
+          return;
         }
 
         const uploadedFile: UploadedFile = {
@@ -161,7 +160,7 @@ export function FileUpload({
             )
           );
 
-          onError?.(error instanceof Error ? error.message : "Upload failed");
+          toast.error(error instanceof Error ? error.message : "Upload failed");
         }
       }
 
@@ -170,14 +169,7 @@ export function FileUpload({
         onAllUploadsComplete?.(results);
       }
     },
-    [
-      maxSize,
-      acceptedTypes,
-      multiple,
-      onFileUpload,
-      onError,
-      onAllUploadsComplete,
-    ]
+    [maxSize, acceptedTypes, multiple, onFileUpload, onAllUploadsComplete]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
