@@ -63,6 +63,9 @@ class MilvusService {
 
       if (hasCollection.value) {
         console.log(`Collection ${this.collectionName} already exists`);
+        await this.client.loadCollection({
+          collection_name: this.collectionName,
+        });
         return;
       }
 
@@ -246,6 +249,9 @@ class MilvusService {
     }
 
     try {
+      // Ensure collection is loaded before performing search
+      await this.client.loadCollection({ collection_name: this.collectionName });
+
       // Build filter expression
       let expr = `user_id == "${userId}"`;
       if (documentIds && documentIds.length > 0) {
@@ -384,9 +390,9 @@ const milvusConfig: MilvusConfig = {
   database: process.env.MILVUS_DATABASE || "default",
 };
 
-// Only create the service if Milvus is configured and we're not in build mode
+// Only create the service if Milvus is configured
 export const milvusService =
-  milvusConfig.address && milvusConfig.token && process.env.NODE_ENV !== 'production'
+  milvusConfig.address && milvusConfig.token
     ? new MilvusService(milvusConfig)
     : null;
 

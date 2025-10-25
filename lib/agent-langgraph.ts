@@ -3,7 +3,7 @@ import { StateGraph, END, START, Annotation } from "@langchain/langgraph";
 import { ChatGroq } from "@langchain/groq";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { prisma } from "./prisma";
-import { milvusService } from "./milvus";
+import { milvusService, initializeMilvus } from "./milvus";
 import {
   DocumentGenerator,
   DocumentGenerationOptions,
@@ -12,6 +12,44 @@ import ReactPDF from "@react-pdf/renderer";
 import { Document, Page, Font } from "@react-pdf/renderer";
 import Html from "react-pdf-html";
 import { performOCR } from "./groq";
+import { generateEmbedding } from "./embeddings";
+
+// Helper: simpan satu entri memori (user/assistant) ke Milvus
+async function saveMemoryEntry(
+  userId: string,
+  sessionId: string | undefined,
+  role: "user" | "assistant" | "ocr",
+  content: string
+): Promise<void> {
+  try {
+    if (!milvusService || !sessionId) return;
+    await initializeMilvus();
+
+    const text = (content || "").trim();
+    if (!text) return;
+
+    // If content is long, save using chunked insertion
+    if (text.length > 1500) {
+      const labeled = `[${role.toUpperCase()}]` + "\n" + text;
+      await milvusService.processAndInsertDocument(sessionId, labeled, userId);
+      return;
+    }
+
+    // Otherwise, save as a single chunk
+    const embedding = await generateEmbedding(text);
+    const chunk = {
+      id: `${sessionId}_${role}_${Date.now()}`,
+      documentId: sessionId,
+      chunkText: text,
+      chunkIndex: role === "user" ? 0 : role === "assistant" ? 1 : 2,
+      embedding,
+    };
+
+    await milvusService.insertDocumentChunks([chunk], userId);
+  } catch (err) {
+    console.warn("Milvus memory save failed:", err);
+  }
+}
 
 // Register Roboto font family using local TTF files
 Font.register({
@@ -91,6 +129,8 @@ export class LangGraphDocumentAgent {
     });
 
     this.buildGraph();
+    // Ensure Milvus collection is initialized
+    initializeMilvus().catch((e) => console.warn("Milvus init failed", e));
   }
 
   private buildGraph() {
@@ -148,15 +188,31 @@ export class LangGraphDocumentAgent {
           return { ...state, context: "", referencedDocuments: [] };
         }
 
+        // Ensure Milvus is initialized and collection ready
+        await initializeMilvus();
+
+        // Default to current session when documentIds not provided
+        const targetDocIds =
+          state.documentIds && state.documentIds.length
+            ? state.documentIds
+            : state.sessionId
+            ? [state.sessionId]
+            : undefined;
+
         const similarChunks = await milvusService.searchSimilarChunksByText(
           state.query,
           state.userId,
           5,
-          state.documentIds
+          targetDocIds
         );
 
         // Build context from similar chunks
         context = similarChunks.map((chunk) => chunk.chunkText).join("\n\n");
+
+        // Cap context length to avoid overly long prompts
+        if (context.length > 6000) {
+          context = context.slice(-6000);
+        }
 
         // Get referenced document IDs
         referencedDocuments = Array.from(
@@ -196,6 +252,16 @@ export class LangGraphDocumentAgent {
         try {
           const text = await performOCR(url, ocrPrompt);
           results.push({ url, text });
+          // Persist OCR text to Milvus under session context (chunked if long)
+          if (milvusService && state.sessionId) {
+            await initializeMilvus();
+            const labeled = `OCR from ${url}:\n${text}`;
+            await milvusService.processAndInsertDocument(
+              state.sessionId,
+              labeled,
+              state.userId
+            );
+          }
         } catch (err) {
           console.error("OCR failed for", url, err);
         }
@@ -229,161 +295,107 @@ export class LangGraphDocumentAgent {
    * Helper method to detect if a query is likely a document generation request
    */
   private isDocumentGenerationRequest(query: string): boolean {
-    const documentKeywords = [
+    const q = query.toLowerCase();
+    const actionKeywords = [
       "create",
       "generate",
       "make",
       "write",
       "build",
       "produce",
-      "document",
-      "report",
-      "analysis",
-      "presentation",
-      "spreadsheet",
+      "export",
+      "download",
+      "save",
+      "convert",
+      // Indonesian verbs
+      "buat",
+      "jadikan",
+      "ubah",
+      "ekspor",
+    ];
+    const formatKeywords = [
       "pdf",
       "docx",
       "xlsx",
       "pptx",
-      "word",
-      "excel",
-      "powerpoint",
+      "document",
+      "dokumen",
+      "report",
+      "laporan",
+      "presentation",
+      "presentasi",
       "slide",
-      "chart",
+      "powerpoint",
+      "excel",
+      "word",
+      "spreadsheet",
       "table",
-      "summary",
-      "proposal",
-      "letter",
+      "tabel",
     ];
 
-    const lowerQuery = query.toLowerCase();
-    return documentKeywords.some((keyword) => lowerQuery.includes(keyword));
+    const hasAction = actionKeywords.some((k) => q.includes(k));
+    const hasFormat = formatKeywords.some((k) => q.includes(k));
+    // Only generate when both an action and a document format/type are present
+    return hasAction && hasFormat;
   }
 
-  /**
-   * Node: Generate AI response based on query and context with document type awareness
-   */
-  private async generateResponseNode(
-    state: AgentState
-  ): Promise<Partial<AgentState>> {
-    try {
-      const messages = [
-        new SystemMessage(`You are a helpful AI assistant that can analyze documents and answer questions based on the provided context.
-
-Please provide clear, conversational responses in plain text format. Do not use HTML formatting or special markup unless specifically requested.
-
-${
-  state.context
-    ? `Context from documents:
-${state.context}
-
-Please use this context to answer the user's question. If the context doesn't contain relevant information, you can provide a general response but mention that you don't have specific information from the documents.`
-    : "No document context available. Please provide a helpful general response."
-}
-
-Provide helpful, informative responses that directly address the user's question.`),
-        new HumanMessage(state.query),
-      ];
-
-      const response = await this.llm.invoke(messages);
-      const aiResponse = response.content as string;
-
-      return {
-        aiResponse,
-        finalResponse: aiResponse,
-      };
-    } catch (error) {
-      console.error("Error generating response:", error);
-      throw new Error("Failed to generate response");
+  // Detect document type heuristically from query without calling LLM
+  private detectDocumentType(
+    query: string
+  ): "pdf" | "xlsx" | "docx" | "pptx" {
+    const q = query.toLowerCase();
+    if (
+      q.includes("pptx") ||
+      q.includes("powerpoint") ||
+      q.includes("presentation") ||
+      q.includes("presentasi") ||
+      q.includes("slide")
+    ) {
+      return "pptx";
     }
+    if (
+      q.includes("xlsx") ||
+      q.includes("excel") ||
+      q.includes("spreadsheet") ||
+      q.includes("table") ||
+      q.includes("tabel")
+    ) {
+      return "xlsx";
+    }
+    if (
+      q.includes("docx") ||
+      q.includes("word") ||
+      q.includes("dokumen") ||
+      q.includes("document") ||
+      q.includes("proposal") ||
+      q.includes("letter") ||
+      q.includes("surat")
+    ) {
+      return "docx";
+    }
+    if (
+      q.includes("pdf") ||
+      q.includes("report") ||
+      q.includes("laporan") ||
+      q.includes("analisis") ||
+      q.includes("analysis")
+    ) {
+      return "pdf";
+    }
+    return "pdf";
   }
 
-  /**
-   * Node: Decide whether to generate a document and determine document type
-   */
   private async decideDocumentGenerationNode(
     state: AgentState
   ): Promise<Partial<AgentState>> {
     try {
-      console.log("Deciding whether to generate document...");
-
-      if (!this.llm) {
-        console.error("LLM not initialized");
-        return { shouldGenerateDoc: false, documentType: undefined };
-      }
-
-      // First, decide if a document should be generated
-      const decisionPrompt = `Based on the following user query and AI response, determine if a document should be generated.
-      
-      User Query: ${state.query}
-      AI Response: ${state.aiResponse}
-      
-      Generate a document if:
-      - The user explicitly requests document creation (e.g., "create a report", "generate a document", "make a presentation")
-      - The response contains structured information that would benefit from formatting
-      - The content includes data that could be presented in tables, charts, or organized format
-      - The user asks for something to be saved, exported, or shared
-      
-      Do NOT generate a document for:
-      - Simple conversational responses or questions
-      - Short answers or confirmations
-      - Error messages or clarifications
-      - General information requests without document creation intent
-      
-      Respond with only "yes" or "no".`;
-
-      const decision = await this.llm.invoke(decisionPrompt);
-      const shouldGenerate = decision.content
-        .toString()
-        .toLowerCase()
-        .includes("yes");
-
-      console.log(
-        `Document generation decision: ${shouldGenerate ? "yes" : "no"}`
-      );
-
+      const shouldGenerate = this.isDocumentGenerationRequest(state.query);
       if (!shouldGenerate) {
         return { shouldGenerateDoc: false, documentType: undefined };
       }
 
-      // If document should be generated, determine the type
-      const typePrompt = `Based on the user query and content, determine the most appropriate document type:
-
-      User Query: ${state.query}
-      AI Response: ${state.aiResponse}
-
-      Choose the best document type:
-      - "pdf": For reports, articles, formal documents, text-heavy content, or when user specifically mentions PDF
-      - "xlsx": For data analysis, tables, calculations, spreadsheets, financial reports, or when user mentions Excel/spreadsheet
-      - "docx": For formal documents, letters, proposals, structured text documents, or when user mentions Word document
-      - "pptx": For presentations, slide decks, visual content, or when user mentions PowerPoint/presentation
-
-      Consider these keywords:
-      - PDF: report, document, article, formal, text, analysis
-      - XLSX: data, table, spreadsheet, calculation, numbers, Excel, financial, budget
-      - DOCX: letter, proposal, document, Word, formal text, contract
-      - PPTX: presentation, slides, PowerPoint, deck, visual, meeting
-
-      Respond with only one of: pdf, xlsx, docx, pptx`;
-
-      const typeDecision = await this.llm.invoke(typePrompt);
-      const documentType = typeDecision.content
-        .toString()
-        .toLowerCase()
-        .trim() as "pdf" | "xlsx" | "docx" | "pptx";
-
-      // Validate the document type
-      const validTypes = ["pdf", "xlsx", "docx", "pptx"];
-      const finalDocumentType = validTypes.includes(documentType)
-        ? documentType
-        : "pdf";
-
-      console.log(`Document type decision: ${finalDocumentType}`);
-
-      return {
-        shouldGenerateDoc: true,
-        documentType: finalDocumentType,
-      };
+      const documentType = this.detectDocumentType(state.query);
+      return { shouldGenerateDoc: true, documentType };
     } catch (error) {
       console.error("Error in document generation decision:", error);
       return { shouldGenerateDoc: false, documentType: undefined };
@@ -409,10 +421,6 @@ Provide helpful, informative responses that directly address the user's question
       const messages = [
         new SystemMessage(`You are a helpful AI assistant that generates structured content for document creation.
 
-IMPORTANT: This is a document generation request. Please provide your response in HTML format with proper structure.
-
-DOCUMENT FORMATTING REQUIREMENTS:
-- Use proper HTML structure with <h1>, <h2>, <h3>, <h4>, <h5> for headings
 - Use <p> tags for paragraphs
 - Use <ul> and <ol> for bullet points and numbered lists
 - Use <li> for list items
@@ -470,6 +478,44 @@ When generating documents, please:
     } catch (error) {
       console.error("Error generating document response:", error);
       throw new Error("Failed to generate document response");
+    }
+  }
+
+  /**
+   * Generate HTML-formatted response for document creation
+   */
+  private async generateResponseNode(
+    state: AgentState
+  ): Promise<Partial<AgentState>> {
+    try {
+      const messages = [
+        new SystemMessage(`You are a helpful AI assistant that can analyze documents and answer questions based on the provided context.
+
+    Please provide clear, conversational responses in plain text format. Do not use HTML formatting or special markup unless specifically requested.
+
+    ${
+      state.context
+        ? `Context from documents:
+    ${state.context}
+
+    Please use this context to answer the user's question. If the context doesn't contain relevant information, you can provide a general response but mention that you don't have specific information from the documents.`
+        : "No document context available. Please provide a helpful general response."
+    }
+
+    Provide helpful, informative responses that directly address the user's question.`),
+        new HumanMessage(state.query),
+      ];
+
+      const response = await this.llm.invoke(messages);
+      const aiResponse = response.content as string;
+
+      return {
+        aiResponse,
+        finalResponse: aiResponse,
+      };
+    } catch (error) {
+      console.error("Error generating response:", error);
+      throw new Error("Failed to generate response");
     }
   }
 
@@ -1166,6 +1212,20 @@ Provide only the HTML content (no explanations):`;
     }
   }
 
+  // Wrapper to persist memory entries to Milvus
+  private async saveMemoryEntry(
+    userId: string,
+    sessionId: string | undefined,
+    role: "user" | "assistant" | "ocr",
+    content: string
+  ): Promise<void> {
+    try {
+      await saveMemoryEntry(userId, sessionId, role, content);
+    } catch (err) {
+      console.warn("saveMemoryEntry wrapper failed:", err);
+    }
+  }
+
   /**
    * Node: Save conversation to database
    */
@@ -1186,6 +1246,13 @@ Provide only the HTML content (no explanations):`;
           referencedDocs: state.referencedDocuments,
         },
       });
+      // Persist user memory to Milvus
+      await this.saveMemoryEntry(
+        state.userId,
+        state.sessionId,
+        "user",
+        state.query
+      );
 
       // Save assistant message
       await prisma.chatMessage.create({
@@ -1196,6 +1263,13 @@ Provide only the HTML content (no explanations):`;
           referencedDocs: state.referencedDocuments,
         },
       });
+      // Persist assistant memory to Milvus
+      await this.saveMemoryEntry(
+        state.userId,
+        state.sessionId,
+        "assistant",
+        state.finalResponse
+      );
     } catch (error) {
       console.error("Error saving conversation:", error);
       // Don't throw error here to avoid breaking the response flow

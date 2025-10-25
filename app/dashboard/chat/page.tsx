@@ -125,6 +125,10 @@ export default function ChatPage() {
   // Credit balance state
   const [creditBalance, setCreditBalance] = useState<number>(0);
   const [isLoadingCredits, setIsLoadingCredits] = useState(false);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
+
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
   // Session management
   const sessions = chatSessions;
@@ -143,7 +147,8 @@ export default function ChatPage() {
   useEffect(() => {
     const loadChatSessions = async () => {
       try {
-        const response = await fetch("/api/chat-sessions");
+        setIsLoadingSessions(true);
+        const response = await fetch("/api/chat");
         if (response.ok) {
           const data = await response.json();
           const sessions = data.chatSessions.map((session: any) => ({
@@ -187,6 +192,8 @@ export default function ChatPage() {
         if (!currentSession) {
           await createNewSession();
         }
+      } finally {
+        setIsLoadingSessions(false);
       }
     };
 
@@ -198,13 +205,14 @@ export default function ChatPage() {
     const loadSessionMessages = async () => {
       if (currentSession && currentSession.id !== "current") {
         try {
+          setIsLoadingMessages(true);
           const response = await fetch(
-            `/api/chat-messages?sessionId=${currentSession.id}`
+            `/api/chat?sessionId=${currentSession.id}`
           );
           if (response.ok) {
             const data = await response.json();
             setMessages(
-              data.messages.map((msg: any) => ({
+              (data.messages || []).map((msg: any) => ({
                 id: msg.id,
                 content: msg.content,
                 role: msg.role,
@@ -216,7 +224,12 @@ export default function ChatPage() {
           }
         } catch (error) {
           console.error("Error loading session messages:", error);
+        } finally {
+          setIsLoadingMessages(false);
         }
+      } else {
+        setMessages([]);
+        setIsLoadingMessages(false);
       }
     };
 
@@ -224,14 +237,17 @@ export default function ChatPage() {
   }, [currentSession]);
 
   const createNewSession = async () => {
+    setIsCreatingChat(true);
     try {
-      const response = await fetch("/api/chat-sessions", {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          action: "createSession",
           title: "New Chat",
+          type: "chat",
         }),
       });
 
@@ -266,6 +282,8 @@ export default function ChatPage() {
       setSelectedSession(newSession.id);
       setMessages([]);
       updateUrlWithSessionId(newSession.id);
+    } finally {
+      setIsCreatingChat(false);
     }
   };
 
@@ -274,6 +292,69 @@ export default function ChatPage() {
     setCurrentSession(session);
     setSelectedSession(session.id);
     updateUrlWithSessionId(session.id);
+  };
+
+  const deleteChatSession = async (id: string) => {
+    try {
+      const response = await fetch(`/api/chat-sessions/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        let errMsg = "Gagal menghapus chat session";
+        try {
+          const data = await response.json();
+          if (data?.error) errMsg = data.error;
+        } catch {}
+        throw new Error(errMsg);
+      }
+
+      // Update daftar sessions di UI
+      setChatSessions((prev) => prev.filter((s) => s.id !== id));
+
+      // Jika session yang dihapus adalah session aktif, pilih session lain atau buat baru
+      if (currentSession?.id === id) {
+        const remaining = chatSessions.filter((s) => s.id !== id);
+        if (remaining.length > 0) {
+          const next = remaining[0];
+          setCurrentSession(next);
+          setSelectedSession(next.id);
+          updateUrlWithSessionId(next.id);
+          // Muat ulang pesan untuk session baru
+          try {
+            setIsLoadingMessages(true);
+            const res = await fetch(`/api/chat?sessionId=${next.id}`);
+            if (res.ok) {
+              const data = await res.json();
+              setMessages(
+                (data.messages || []).map((msg: any) => ({
+                  id: msg.id,
+                  content: msg.content,
+                  role: msg.role,
+                  timestamp: new Date(msg.createdAt),
+                  referencedDocuments: msg.referencedDocs || [],
+                  documentFile: msg.documentFile,
+                }))
+              );
+            } else {
+              setMessages([]);
+            }
+          } catch {
+            setMessages([]);
+          } finally {
+            setIsLoadingMessages(false);
+          }
+        } else {
+          // Tidak ada session tersisa: buat session baru
+          setCurrentSession(null);
+          setSelectedSession("current");
+          setMessages([]);
+          await createNewSession();
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting chat session:", error);
+    }
   };
 
   const toggleDocumentSelection = (doc: Document) => {
@@ -322,18 +403,17 @@ export default function ChatPage() {
       if (templateId && sessionId) {
         try {
           // Load the session that was created by the template API
-          const response = await fetch(`/api/chat-sessions/${sessionId}`);
+          const response = await fetch(`/api/chat?sessionId=${sessionId}`);
           if (response.ok) {
             const sessionData = await response.json();
             const session = {
               id: sessionData.chatSession.id,
               title: sessionData.chatSession.title,
               lastMessage:
-                sessionData.chatSession.messages[
-                  sessionData.chatSession.messages.length - 1
-                ]?.content || "",
+                (sessionData.messages || [])[sessionData.messages.length - 1]
+                  ?.content || "",
               timestamp: new Date(sessionData.chatSession.updatedAt),
-              messageCount: sessionData.chatSession.messages.length,
+              messageCount: (sessionData.messages || []).length,
             };
 
             setCurrentSession(session);
@@ -341,15 +421,13 @@ export default function ChatPage() {
             setIsTemplateMode(true);
 
             // Load messages for this session
-            const messages = sessionData.chatSession.messages.map(
-              (msg: any) => ({
-                id: msg.id,
-                content: msg.content,
-                role: msg.role,
-                timestamp: new Date(msg.createdAt),
-                referencedDocuments: msg.referencedDocs || [],
-              })
-            );
+            const messages = (sessionData.messages || []).map((msg: any) => ({
+              id: msg.id,
+              content: msg.content,
+              role: msg.role,
+              timestamp: new Date(msg.createdAt),
+              referencedDocuments: msg.referencedDocs || [],
+            }));
             setMessages(messages);
 
             // Update chat sessions list
@@ -550,7 +628,7 @@ export default function ChatPage() {
       }
 
       const assistantMessage: Message = {
-        id: `assistant-${Date.now()}`,
+        id: aiResponse.messageId || `assistant-${Date.now()}`,
         content: aiResponse.response,
         role: "assistant",
         timestamp: new Date(),
@@ -1044,354 +1122,376 @@ export default function ChatPage() {
           {/* Messages */}
           <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
             <div className="mx-auto space-y-6">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`group flex items-start space-x-3 ${
-                    message.role === "user"
-                      ? "flex-row-reverse space-x-reverse"
-                      : ""
-                  }`}
-                >
-                  <Avatar className="h-8 w-8 flex-shrink-0">
-                    <AvatarFallback
-                      className={
-                        message.role === "assistant"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
-                      }
-                    >
-                      {message.role === "assistant" ? (
-                        <Bot className="h-4 w-4" />
-                      ) : (
-                        <User className="h-4 w-4" />
-                      )}
-                    </AvatarFallback>
-                  </Avatar>
-
+              {isLoadingMessages && (
+                <div className="space-y-6">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={`skeleton-msg-${i}`} className="space-y-6">
+                      <div className="flex items-start space-x-3">
+                        <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
+                        <div className="h-20 w-2/3 bg-muted rounded-2xl animate-pulse" />
+                      </div>
+                      <div className="flex items-start justify-end space-x-3">
+                        <div className="h-20 w-2/3 bg-muted rounded-2xl animate-pulse" />
+                        <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!isLoadingMessages &&
+                messages.map((message) => (
                   <div
-                    className={`flex-1 space-y-2 ${
-                      message.role === "user" ? "flex flex-col items-end" : ""
+                    key={message.id}
+                    className={`group flex items-start space-x-3 ${
+                      message.role === "user"
+                        ? "flex-row-reverse space-x-reverse"
+                        : ""
                     }`}
                   >
+                    <Avatar className="h-8 w-8 flex-shrink-0">
+                      <AvatarFallback
+                        className={
+                          message.role === "assistant"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted"
+                        }
+                      >
+                        {message.role === "assistant" ? (
+                          <Bot className="h-4 w-4" />
+                        ) : (
+                          <User className="h-4 w-4" />
+                        )}
+                      </AvatarFallback>
+                    </Avatar>
+
                     <div
-                      className={`rounded-2xl px-4 py-3 max-w-[80%] ${
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
+                      className={`flex-1 space-y-2 ${
+                        message.role === "user" ? "flex flex-col items-end" : ""
                       }`}
                     >
-                      {message.isTyping ? (
-                        <div className="flex items-center space-x-2 py-2">
-                          <div className="flex space-x-1">
-                            <div className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce"></div>
-                            <div
-                              className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce"
-                              style={{ animationDelay: "0.1s" }}
-                            ></div>
-                            <div
-                              className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce"
-                              style={{ animationDelay: "0.2s" }}
-                            ></div>
+                      <div
+                        className={`rounded-2xl px-4 py-3 max-w-[80%] ${
+                          message.role === "user"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted"
+                        }`}
+                      >
+                        {message.isTyping ? (
+                          <div className="flex items-center space-x-2 py-2">
+                            <div className="flex space-x-1">
+                              <div className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce"></div>
+                              <div
+                                className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce"
+                                style={{ animationDelay: "0.1s" }}
+                              ></div>
+                              <div
+                                className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce"
+                                style={{ animationDelay: "0.2s" }}
+                              ></div>
+                            </div>
+                            <span className="text-sm text-muted-foreground">
+                              AI is thinking...
+                            </span>
                           </div>
-                          <span className="text-sm text-muted-foreground">
-                            AI is thinking...
-                          </span>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="text-sm whitespace-pre-wrap leading-relaxed">
-                            {(() => {
-                              const containsHtml =
-                                typeof message.content === "string" &&
-                                /<\/?[a-z][\s\S]*>/i.test(message.content);
-                              if (message.role === "assistant" && containsHtml) {
-                                return "📄 Dokumen telah dibuat. Gunakan tombol download di bawah untuk mengunduh.";
-                              }
-                              return message.content;
-                            })()}
-                          </div>
+                        ) : (
+                          <>
+                            <div className="text-sm whitespace-pre-wrap leading-relaxed">
+                              {(() => {
+                                const containsHtml =
+                                  typeof message.content === "string" &&
+                                  /<\/?[a-z][\s\S]*>/i.test(message.content);
+                                if (
+                                  message.role === "assistant" &&
+                                  containsHtml
+                                ) {
+                                  return "📄 Dokumen telah dibuat. Gunakan tombol download di bawah untuk mengunduh.";
+                                }
+                                return message.content;
+                              })()}
+                            </div>
 
-                          {/* Document File Display */}
-                          {message.documentFile && (
-                            <div className="mt-3 p-3 bg-background border rounded-lg">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                  <div className="p-2 bg-primary/10 rounded-lg">
-                                    <FileText className="h-5 w-5 text-primary" />
+                            {/* Document File Display */}
+                            {message.documentFile && (
+                              <div className="mt-3 p-3 bg-background border rounded-lg">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-3">
+                                    <div className="p-2 bg-primary/10 rounded-lg">
+                                      <FileText className="h-5 w-5 text-primary" />
+                                    </div>
+                                    <div>
+                                      <p className="font-medium text-sm">
+                                        {message.documentFile.name}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {message.documentFile.type} Document
+                                      </p>
+                                    </div>
                                   </div>
-                                  <div>
-                                    <p className="font-medium text-sm">
-                                      {message.documentFile.name}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {message.documentFile.type} Document
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-8 w-8 p-0"
-                                      >
-                                        <Eye className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      Preview Document
-                                    </TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-8 w-8 p-0"
-                                        onClick={() => {
-                                          if (message.documentFile?.error) {
-                                            // Show error message if PDF processing failed
-                                            alert(
-                                              `Download failed: ${message.documentFile.error}`
-                                            );
-                                            return;
-                                          }
+                                  <div className="flex items-center space-x-2">
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-8 w-8 p-0"
+                                        >
+                                          <Eye className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Preview Document
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-8 w-8 p-0"
+                                          onClick={() => {
+                                            if (message.documentFile?.error) {
+                                              // Show error message if PDF processing failed
+                                              alert(
+                                                `Download failed: ${message.documentFile.error}`
+                                              );
+                                              return;
+                                            }
 
-                                          if (
-                                            message.documentFile?.url &&
-                                            message.documentFile.url !== "#" &&
-                                            !message.documentFile.url.startsWith(
-                                              "data:"
-                                            )
-                                          ) {
-                                            // For real URLs, open in new tab
-                                            window.open(
-                                              message.documentFile.url,
-                                              "_blank"
-                                            );
-                                          } else if (
-                                            message.documentFile?.url &&
-                                            message.documentFile.url.startsWith(
-                                              "data:"
-                                            )
-                                          ) {
-                                            try {
-                                              // For data URLs, create download link with better error handling
+                                            if (
+                                              message.documentFile?.url &&
+                                              message.documentFile.url !==
+                                                "#" &&
+                                              !message.documentFile.url.startsWith(
+                                                "data:"
+                                              )
+                                            ) {
+                                              // For real URLs, open in new tab
+                                              window.open(
+                                                message.documentFile.url,
+                                                "_blank"
+                                              );
+                                            } else if (
+                                              message.documentFile?.url &&
+                                              message.documentFile.url.startsWith(
+                                                "data:"
+                                              )
+                                            ) {
+                                              try {
+                                                // For data URLs, create download link with better error handling
+                                                const a =
+                                                  document.createElement("a");
+                                                a.href =
+                                                  message.documentFile.url;
+                                                a.download =
+                                                  message.documentFile.name ||
+                                                  "document.pdf";
+                                                a.style.display = "none";
+                                                document.body.appendChild(a);
+                                                a.click();
+                                                document.body.removeChild(a);
+                                              } catch (error) {
+                                                console.error(
+                                                  "Download failed:",
+                                                  error
+                                                );
+                                                alert(
+                                                  "Download failed. The file may be too large or corrupted."
+                                                );
+                                              }
+                                            } else {
+                                              // For mock documents, create a downloadable blob
+                                              const content = `Mock Document: ${
+                                                message.documentFile?.name
+                                              }\nType: ${
+                                                message.documentFile?.type
+                                              }\nGenerated at: ${new Date().toISOString()}`;
+                                              const blob = new Blob([content], {
+                                                type: "text/plain",
+                                              });
+                                              const url =
+                                                URL.createObjectURL(blob);
                                               const a =
                                                 document.createElement("a");
-                                              a.href = message.documentFile.url;
+                                              a.href = url;
                                               a.download =
-                                                message.documentFile.name ||
-                                                "document.pdf";
-                                              a.style.display = "none";
+                                                message.documentFile?.name ||
+                                                "document.txt";
                                               document.body.appendChild(a);
                                               a.click();
                                               document.body.removeChild(a);
-                                            } catch (error) {
-                                              console.error(
-                                                "Download failed:",
-                                                error
-                                              );
-                                              alert(
-                                                "Download failed. The file may be too large or corrupted."
-                                              );
+                                              URL.revokeObjectURL(url);
                                             }
-                                          } else {
-                                            // For mock documents, create a downloadable blob
-                                            const content = `Mock Document: ${
-                                              message.documentFile?.name
-                                            }\nType: ${
-                                              message.documentFile?.type
-                                            }\nGenerated at: ${new Date().toISOString()}`;
-                                            const blob = new Blob([content], {
-                                              type: "text/plain",
-                                            });
-                                            const url =
-                                              URL.createObjectURL(blob);
-                                            const a =
-                                              document.createElement("a");
-                                            a.href = url;
-                                            a.download =
-                                              message.documentFile?.name ||
-                                              "document.txt";
-                                            document.body.appendChild(a);
-                                            a.click();
-                                            document.body.removeChild(a);
-                                            URL.revokeObjectURL(url);
-                                          }
-                                        }}
-                                      >
-                                        <Download className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      Download Document
-                                    </TooltipContent>
-                                  </Tooltip>
+                                          }}
+                                        >
+                                          <Download className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Download Document
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          )}
-
-                          {message.referencedDocuments &&
-                            message.referencedDocuments.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1">
-                                {message.referencedDocuments.map((docId) => {
-                                  const doc = documents.find(
-                                    (d) => d.id === docId
-                                  );
-                                  return doc ? (
-                                    <Badge
-                                      key={docId}
-                                      variant="secondary"
-                                      className="text-xs"
-                                    >
-                                      <File className="h-3 w-3 mr-1" />
-                                      {doc.name}
-                                    </Badge>
-                                  ) : null;
-                                })}
-                              </div>
                             )}
-                        </>
-                      )}
-                    </div>
 
-                    <div
-                      className={`flex items-center space-x-2 text-xs text-muted-foreground ${
-                        message.role === "user"
-                          ? "justify-end"
-                          : "justify-start"
-                      }`}
-                    >
-                      <span>{formatTime(message.timestamp)}</span>
-                      {message.role === "assistant" && !message.isTyping && (
-                        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() => copyMessage(message.content)}
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Copy message</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                              >
-                                <RefreshCw className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Regenerate</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                              >
-                                <ThumbsUp className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Good response</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                              >
-                                <ThumbsDown className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Poor response</TooltipContent>
-                          </Tooltip>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                              >
-                                <FileDown className="h-3 w-3" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>
-                                Generate Document
-                              </DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  generateDocument(
-                                    message.content,
-                                    "pdf",
-                                    "Chat Response",
-                                    aiFormattingEnabled
-                                  )
-                                }
-                              >
-                                <Sparkles className="mr-2 h-4 w-4" />
-                                AI-Enhanced PDF
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  generateDocument(
-                                    message.content,
-                                    "pdf",
-                                    "Chat Response",
-                                    false
-                                  )
-                                }
-                              >
-                                <FileText className="mr-2 h-4 w-4" />
-                                Standard PDF
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  generateDocument(
-                                    message.content,
-                                    "html",
-                                    "Chat Response"
-                                  )
-                                }
-                              >
-                                <Eye className="mr-2 h-4 w-4" />
-                                HTML Document
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  generateDocument(
-                                    message.content,
-                                    "excel",
-                                    "Chat Response"
-                                  )
-                                }
-                              >
-                                <FileText className="mr-2 h-4 w-4" />
-                                Excel Spreadsheet
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      )}
+                            {message.referencedDocuments &&
+                              message.referencedDocuments.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {message.referencedDocuments.map((docId) => {
+                                    const doc = documents.find(
+                                      (d) => d.id === docId
+                                    );
+                                    return doc ? (
+                                      <Badge
+                                        key={docId}
+                                        variant="secondary"
+                                        className="text-xs"
+                                      >
+                                        <File className="h-3 w-3 mr-1" />
+                                        {doc ? doc.name : docId}
+                                      </Badge>
+                                    ) : null;
+                                  })}
+                                </div>
+                              )}
+                          </>
+                        )}
+                      </div>
+
+                      <div
+                        className={`flex items-center space-x-2 text-xs text-muted-foreground ${
+                          message.role === "user"
+                            ? "justify-end"
+                            : "justify-start"
+                        }`}
+                      >
+                        <span>{formatTime(message.timestamp)}</span>
+                        {message.role === "assistant" && !message.isTyping && (
+                          <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => copyMessage(message.content)}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Copy message</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                >
+                                  <RefreshCw className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Regenerate</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                >
+                                  <ThumbsUp className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Good response</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                >
+                                  <ThumbsDown className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Poor response</TooltipContent>
+                            </Tooltip>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                >
+                                  <FileDown className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>
+                                  Generate Document
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    generateDocument(
+                                      message.content,
+                                      "pdf",
+                                      "Chat Response",
+                                      aiFormattingEnabled
+                                    )
+                                  }
+                                >
+                                  <Sparkles className="mr-2 h-4 w-4" />
+                                  AI-Enhanced PDF
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    generateDocument(
+                                      message.content,
+                                      "pdf",
+                                      "Chat Response",
+                                      false
+                                    )
+                                  }
+                                >
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  Standard PDF
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    generateDocument(
+                                      message.content,
+                                      "html",
+                                      "Chat Response"
+                                    )
+                                  }
+                                >
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  HTML Document
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    generateDocument(
+                                      message.content,
+                                      "excel",
+                                      "Chat Response"
+                                    )
+                                  }
+                                >
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  Excel Spreadsheet
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           </ScrollArea>
 
@@ -1498,9 +1598,14 @@ export default function ChatPage() {
               <Button size="sm" variant="outline">
                 <Search className="h-4 w-4" />
               </Button>
-              <Button onClick={newChat} size="sm" variant="outline">
-                <Plus className="h-4 w-4" />
-                {/* New Chat */}
+              <Button
+                onClick={newChat}
+                disabled={isCreatingChat}
+                size="sm"
+                variant="outline"
+              >
+                {isCreatingChat ? "Creating..." : "New Chat"}{" "}
+                {!isCreatingChat && <Plus size={14} className="ml-2" />}
               </Button>
             </div>
             {/* <div className="relative">
@@ -1511,42 +1616,77 @@ export default function ChatPage() {
 
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-2">
-              {chatSessions.map((chatSession) => (
-                <Card
-                  key={chatSession.id}
-                  className={`cursor-pointer transition-colors hover:bg-muted/50 ${
-                    selectedSession === chatSession.id
-                      ? "bg-muted border-primary"
-                      : ""
-                  }`}
-                  onClick={() => {
-                    switchToSession(chatSession);
-                  }}
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-sm truncate">
-                          {chatSession.title}
-                        </h3>
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          {chatSession.lastMessage}
-                        </p>
-                        <div className="flex items-center mt-2 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3 mr-1" />
-                          {formatDate(chatSession.timestamp)}
-                          <Separator
-                            orientation="vertical"
-                            className="mx-2 h-3"
-                          />
-                          <MessageSquare className="h-3 w-3 mr-1" />
-                          {chatSession.messageCount}
+              {isLoadingSessions && (
+                <div className="space-y-2">
+                  {[...Array(6)].map((_, i) => (
+                    <Card
+                      key={`skeleton-session-${i}`}
+                      className="cursor-default"
+                    >
+                      <CardContent className="p-3">
+                        <div className="space-y-2 animate-pulse">
+                          <div className="h-4 w-1/2 bg-muted rounded" />
+                          <div className="h-3 w-3/4 bg-muted rounded" />
+                          <div className="flex items-center mt-2 space-x-2">
+                            <div className="h-3 w-16 bg-muted rounded" />
+                            <Separator orientation="vertical" className="h-3" />
+                            <div className="h-3 w-10 bg-muted rounded" />
+                          </div>
                         </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+              {!isLoadingSessions &&
+                chatSessions.map((chatSession) => (
+                  <Card
+                    key={chatSession.id}
+                    className={`cursor-pointer transition-colors hover:bg-muted/50 ${
+                      selectedSession === chatSession.id
+                        ? "bg-muted border-primary"
+                        : ""
+                    }`}
+                    onClick={() => {
+                      switchToSession(chatSession);
+                    }}
+                  >
+                    <CardContent className="p-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {chatSession.title}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1 line-clamp-2 w-72">
+                            {chatSession.lastMessage}
+                          </div>
+                          <div className="w-full flex items-center mt-2 text-xs text-muted-foreground">
+                            <Clock className="h-3 w-3 mr-1" />
+                            {formatDate(chatSession.timestamp)}
+                            <Separator
+                              orientation="vertical"
+                              className="mx-2 h-3"
+                            />
+                            <MessageSquare className="h-3 w-3 mr-1" />
+                            {chatSession.messageCount}
+                          </div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem
+                              onClick={() => deleteChatSession(chatSession.id)}
+                            >
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                ))}
             </div>
           </ScrollArea>
         </div>

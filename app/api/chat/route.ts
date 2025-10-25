@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import {
-  generateChatCompletion,
-  generateChatCompletionWithAgent,
-  generateDocument,
-} from "@/lib/groq";
+import { generateChatWithAgent } from "@/lib/groq";
 import { prisma } from "@/lib/prisma";
-import {
-  getChatContext,
-  generateChatMessageEmbedding,
-} from "@/lib/chat-embeddings";
+import { milvusService, initializeMilvus } from "@/lib/milvus";
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,8 +25,38 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { message, context, documentRequest, sessionId, type, documentUrls } =
-      body;
+    const {
+      message,
+      context,
+      documentRequest,
+      sessionId,
+      type,
+      documentUrls,
+      action,
+      title,
+    } = body;
+    let currentSessionId = sessionId as string | undefined;
+
+    // New: allow creating a chat session without sending a message
+    if (action === "createSession") {
+      const defaultTitle =
+        typeof title === "string" && title ? title : "New Chat";
+      const createdSession = await prisma.chatSession.create({
+        data: {
+          title: defaultTitle,
+          userId: user.id,
+          type: type || "chat",
+        },
+        include: {
+          messages: {
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      });
+
+      // Return the newly created session
+      return NextResponse.json({ chatSession: createdSession });
+    }
 
     if (!message) {
       return NextResponse.json(
@@ -44,10 +67,10 @@ export async function POST(request: NextRequest) {
 
     // Verify the chat session exists and belongs to the user if sessionId is provided
     let chatSession = null;
-    if (sessionId) {
+    if (currentSessionId) {
       chatSession = await prisma.chatSession.findFirst({
         where: {
-          id: sessionId,
+          id: currentSessionId,
           userId: user.id,
         },
       });
@@ -101,83 +124,91 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    // Save user message to session if sessionId is provided
-    let userMessage = null;
-    if (sessionId) {
-      userMessage = await prisma.chatMessage.create({
+    // Ensure chat session exists; auto-create if none provided
+    if (!currentSessionId) {
+      const defaultTitle = "New Chat";
+      const createdSession = await prisma.chatSession.create({
         data: {
-          content: message,
-          role: "user",
-          sessionId: sessionId,
+          title: defaultTitle,
+          userId: user.id,
+          type: type || "chat",
         },
       });
-
-      // Generate embedding for user message (async, don't wait)
-      generateChatMessageEmbedding(userMessage.id, message).catch((error) => {
-        console.error("Failed to generate embedding for user message:", error);
-      });
+      // use created session for downstream operations
+      currentSessionId = createdSession.id;
     }
+
+    // Resolve selected document URLs to Item IDs for persistence
+    const resolvedItems =
+      documentUrls && Array.isArray(documentUrls) && documentUrls.length > 0
+        ? await prisma.item.findMany({
+            where: {
+              userId: user.id,
+              type: "document",
+              url: {
+                in: documentUrls.filter((u: any) => typeof u === "string"),
+              },
+            },
+            select: { id: true },
+          })
+        : [];
+    const referencedDocIds = resolvedItems.map((i) => i.id);
+
+    // Persist the user's message so linked resources survive refresh
+    const createdUserMessage = await prisma.chatMessage.create({
+      data: {
+        content: message,
+        role: "user",
+        sessionId: currentSessionId!,
+        referencedDocs: referencedDocIds,
+      },
+    });
 
     let response: string;
     let documentFile: any = null;
+    let generatedItemId: string | undefined;
 
-    // Always use the agent for processing - let the agent decide whether to generate documents
-    let messages: Array<{
-      role: "system" | "user" | "assistant";
-      content: string;
-    }> = [
-      {
-        role: "system" as const,
-        content:
-          type === "document_assistance"
-            ? "You are a helpful AI assistant specialized in document editing and writing assistance. You help users improve their writing, provide suggestions, summarize content, and generate text. Focus on being concise and actionable in your responses."
-            : "You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.",
-      },
-      ...(context
-        ? [{ role: "user" as const, content: `Document context: ${context}` }]
-        : []),
-      { role: "user" as const, content: message },
-    ];
-
-    // If sessionId is provided, get previous messages for context
+    // Build conversation context from provided document context + recent session messages
     let conversationContext = "";
-    if (sessionId) {
-      // Get embedding-based conversation context
-      conversationContext = await getChatContext(message, sessionId, 3);
+    try {
+      const prefix =
+        context && typeof context === "string" && context.trim().length
+          ? `Provided context:\n${context.trim()}\n\n`
+          : "";
 
-      const previousMessages = await prisma.chatMessage.findMany({
-        where: { sessionId: sessionId },
-        orderBy: { createdAt: "asc" },
-        take: 10, // Limit to last 10 messages for context
-      });
-
-      messages = [
-        {
-          role: "system" as const,
-          content:
-            type === "document_assistance"
-              ? "You are a helpful AI assistant specialized in document editing and writing assistance. You help users improve their writing, provide suggestions, summarize content, and generate text. Focus on being concise and actionable in your responses."
-              : "You are a helpful AI assistant specialized in document creation and analysis. Provide clear, concise, and helpful responses.",
-        },
-        ...(context
-          ? [{ role: "user" as const, content: `Document context: ${context}` }]
-          : []),
-        ...previousMessages.slice(-9).map((msg: any) => ({
-          role: msg.role as "user" | "assistant",
-          content: msg.content,
-        })),
-        { role: "user" as const, content: message },
-      ];
+      if (currentSessionId) {
+        const messages = await prisma.chatMessage.findMany({
+          where: { sessionId: currentSessionId },
+          orderBy: { createdAt: "asc" },
+          select: { role: true, content: true },
+        });
+        const last = messages.slice(Math.max(0, messages.length - 12));
+        const transcript = last
+          .map(
+            (m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`
+          )
+          .join("\n");
+        const combined = `${prefix}${transcript}`;
+        // Cap transcript length to avoid overly long prompts
+        conversationContext =
+          combined.length > 4000 ? combined.slice(-4000) : combined;
+      } else {
+        conversationContext = prefix;
+      }
+    } catch (e) {
+      console.warn("Failed to build conversation context", e);
+      conversationContext = context || "";
     }
 
-    const agentResponse = await generateChatCompletionWithAgent(messages, {
-      userId: user.id,
-      sessionId: sessionId,
-      useSemanticSearch: true, // Enable semantic search to retrieve context from vector DB
-      documentIds: context ? [] : undefined,
-      conversationContext: conversationContext || context,
-      documentUrls,
-    });
+    const agentResponse = await generateChatWithAgent(
+      message,
+      user.id,
+      currentSessionId,
+      true,
+      currentSessionId ? [currentSessionId] : undefined,
+      conversationContext,
+      documentUrls
+    );
 
     // Handle different response types from the agent
     if (typeof agentResponse === "string") {
@@ -233,19 +264,15 @@ export async function POST(request: NextRequest) {
             generatedAt: new Date().toISOString(),
           };
 
-          // Replace assistant response with a friendly, non-HTML status message
-          response = `✅ Dokumen berhasil dibuat. Gunakan tombol download untuk mengunduh.`;
-
           console.log(
             `Document persisted: ${safeName} (Item ID: ${createdItem.id}), size: ${bufferSize} bytes`
           );
 
-          // If we have a session, also attach referenced doc to assistant message later
-          if (sessionId) {
-            // We'll include this in referencedDocs when saving assistant message
-            // Attach created item id to a local variable
-            (request as any).__generatedItemId = createdItem.id;
-          }
+          // Track the generated item id for attaching to assistant message
+          generatedItemId = createdItem.id;
+
+          // Replace assistant response with a friendly, non-HTML status message
+          response = `✅ Dokumen berhasil dibuat. Gunakan tombol download untuk mengunduh.`;
         } catch (error) {
           console.error("Error processing generated document:", error);
           documentFile = {
@@ -262,45 +289,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Save AI response to session if sessionId is provided
-    let assistantMessage = null;
-    if (sessionId) {
-      // If a document was created, attach its ID in referencedDocs and avoid saving raw HTML
-      const referencedDocs: string[] = [];
-      const generatedItemId = (request as any).__generatedItemId as
-        | string
-        | undefined;
-      if (generatedItemId) {
-        referencedDocs.push(generatedItemId);
-      }
+    // Persist AI assistant response with referenced generated document (if any)
+    const assistantMessage = await prisma.chatMessage.create({
+      data: {
+        content: response,
+        role: "assistant",
+        sessionId: currentSessionId!,
+        referencedDocs: generatedItemId ? [generatedItemId] : [],
+      },
+    });
 
-      assistantMessage = await prisma.chatMessage.create({
-        data: {
-          content: response,
-          role: "assistant",
-          sessionId: sessionId,
-          referencedDocs,
-        },
-      });
-
-      // Generate embedding for assistant message (async, don't wait)
-      generateChatMessageEmbedding(assistantMessage.id, response).catch(
-        (error) => {
-          console.error(
-            "Failed to generate embedding for assistant message:",
-            error
-          );
-        }
-      );
-
-      // Update chat session timestamp
-      await prisma.chatSession.update({
-        where: { id: sessionId },
-        data: {
-          updatedAt: new Date(),
-        },
-      });
-    }
+    // Update chat session timestamp
+    await prisma.chatSession.update({
+      where: { id: currentSessionId },
+      data: {
+        updatedAt: new Date(),
+      },
+    });
 
     // Get updated credit balance
     const updatedCredit = await prisma.userCredit.findUnique({
@@ -315,6 +320,7 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       creditBalance: updatedCredit?.balance || 0,
       messageId: assistantMessage?.id,
+      sessionId: currentSessionId,
     });
   } catch (error) {
     console.error("Chat API error:", error);
@@ -342,13 +348,260 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// GET: If sessionId is provided, return messages; otherwise return sessions list
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const sessionId = searchParams.get("sessionId");
+
+    // If sessionId present, return messages for that session
+    if (sessionId) {
+      // Verify the chat session belongs to the user
+      const chatSession = await prisma.chatSession.findFirst({
+        where: { id: sessionId, userId: user.id },
+      });
+
+      if (!chatSession) {
+        return NextResponse.json(
+          { error: "Chat session not found" },
+          { status: 404 }
+        );
+      }
+
+      const messages = await prisma.chatMessage.findMany({
+        where: { sessionId },
+        orderBy: { createdAt: "asc" },
+      });
+
+      // Attach documentFile metadata for assistant messages referencing generated documents
+      const messagesWithFiles = await Promise.all(
+        messages.map(async (msg) => {
+          if (
+            msg.role === "assistant" &&
+            Array.isArray((msg as any).referencedDocs) &&
+            (msg as any).referencedDocs.length > 0
+          ) {
+            const docId = (msg as any).referencedDocs[0];
+            try {
+              const item = await prisma.item.findFirst({
+                where: { id: docId, userId: user.id, type: "document" },
+              });
+              if (item) {
+                const isPdfDefault = true; // default to pdf
+                const url = `/api/documents/${item.id}/download?type=${
+                  isPdfDefault ? "pdf" : "docx"
+                }`;
+                return {
+                  ...msg,
+                  documentFile: {
+                    name: `${item.name}.pdf`,
+                    type: item.fileType || "application/pdf",
+                    downloadUrl: url,
+                    url,
+                  },
+                };
+              }
+            } catch (e) {
+              console.warn("Failed to attach document to message", e);
+            }
+          }
+          return msg;
+        })
+      );
+
+      return NextResponse.json({
+        chatSession: {
+          id: chatSession.id,
+          title: chatSession.title,
+          createdAt: chatSession.createdAt,
+          updatedAt: chatSession.updatedAt,
+        },
+        messages: messagesWithFiles,
+      });
+    }
+
+    // Otherwise, list sessions for the user; supports optional filters
+    const documentId = searchParams.get("documentId");
+    const type = searchParams.get("type");
+
+    const whereClause: any = { userId: user.id };
+    if (documentId) whereClause.documentId = documentId;
+    if (type) whereClause.type = type;
+
+    const chatSessions = await prisma.chatSession.findMany({
+      where: whereClause,
+      include: {
+        messages: {
+          orderBy: { createdAt: "asc" },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    return NextResponse.json({ chatSessions });
+  } catch (error) {
+    console.error("Error in chat GET:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT: Update session title via ?sessionId=xxx
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const sessionId = searchParams.get("sessionId");
+    const { title } = await request.json();
+
+    if (!sessionId) {
+      return NextResponse.json(
+        { error: "sessionId is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!title || typeof title !== "string") {
+      return NextResponse.json(
+        { error: "Title is required and must be a string" },
+        { status: 400 }
+      );
+    }
+
+    const updatedCount = await prisma.chatSession.updateMany({
+      where: { id: sessionId, userId: user.id },
+      data: { title },
+    });
+
+    if (updatedCount.count === 0) {
+      return NextResponse.json(
+        { error: "Chat session not found" },
+        { status: 404 }
+      );
+    }
+
+    const updatedSession = await prisma.chatSession.findFirst({
+      where: { id: sessionId, userId: user.id },
+      include: {
+        messages: {
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    return NextResponse.json({ chatSession: updatedSession });
+  } catch (error) {
+    console.error("Error updating chat session:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE: Delete a session via ?sessionId=xxx
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const sessionId = searchParams.get("sessionId");
+
+    if (!sessionId) {
+      return NextResponse.json(
+        { error: "sessionId is required" },
+        { status: 400 }
+      );
+    }
+
+    // Ensure the session exists and belongs to the user
+    const existing = await prisma.chatSession.findFirst({
+      where: { id: sessionId, userId: user.id },
+    });
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Chat session not found" },
+        { status: 404 }
+      );
+    }
+
+    // Clean up embeddings tied to this session
+    try {
+      await prisma.chatMessageEmbedding.deleteMany({
+        where: { message: { sessionId } },
+      });
+    } catch (e) {
+      console.warn("Failed to delete chat message embeddings for session", e);
+    }
+
+    // Clean up Milvus memory chunks for this session
+    try {
+      if (milvusService) {
+        await initializeMilvus();
+        await milvusService.deleteDocumentChunks(sessionId, user.id);
+      }
+    } catch (e) {
+      console.warn("Milvus cleanup failed for session", sessionId, e);
+    }
+
+    // Delete the chat session (cascade deletes its messages)
+    await prisma.chatSession.delete({
+      where: { id: sessionId },
+    });
+
+    return NextResponse.json({ message: "Chat session deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting chat session:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
 // Handle OPTIONS for CORS
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     },
   });
