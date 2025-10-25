@@ -487,16 +487,20 @@ interface AgentOutput {
    ): Promise<Partial<AgentState>> {
      try {
        const messages = [
-         new SystemMessage(`You are a helpful AI assistant that can analyze documents and answer questions based on the provided context.
+         new SystemMessage(`You are a helpful AI assistant that analyzes documents and answers questions based on the provided context.
 
-     Please provide clear, conversational responses in plain text format. Do not use HTML formatting or special markup unless specifically requested.
+     Respond in Markdown by default.
+     - Use headings when helpful
+     - Use bullet and numbered lists
+     - Use tables when data fits
+     - Use **bold** and _italics_ for emphasis
+     - Use blockquotes for highlights
+     - Use fenced code blocks for examples or code
+     - Do NOT use HTML unless explicitly requested or when generating documents
 
      ${
        state.context
-         ? `Context from documents:
-     ${state.context}
-
-     Please use this context to answer the user's question. If the context doesn't contain relevant information, you can provide a general response but mention that you don't have specific information from the documents.`
+         ? `Context from documents:\n${state.context}\n\nPlease use this context to answer the user's question. If the context doesn't contain relevant information, you can provide a general response but mention that you don't have specific information from the documents.`
          : "No document context available. Please provide a helpful general response."
      }
 

@@ -54,6 +54,10 @@ import {
   FileDown,
   Coins, // Add Coins icon for credits
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { CodeBlock } from "@/components/ui/code-block";
+import { toast } from "sonner";
 
 interface Message {
   id: string;
@@ -695,6 +699,7 @@ export default function ChatPage() {
     return date.toLocaleDateString();
   };
   const copyMessage = (content: string) => {
+    toast.success("Copied to clipboard");
     navigator.clipboard.writeText(content);
   };
 
@@ -749,15 +754,15 @@ export default function ChatPage() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      const successMessage: Message = {
-        id: `generate-success-${Date.now()}`,
-        content: `✅ ${
-          useAIFormatting ? "AI-Enhanced" : "Standard"
-        } document generated successfully as ${format.toUpperCase()} and downloaded.`,
-        role: "assistant",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, successMessage]);
+      // const successMessage: Message = {
+      //   id: `generate-success-${Date.now()}`,
+      //   content: `✅ ${
+      //     useAIFormatting ? "AI-Enhanced" : "Standard"
+      //   } document generated successfully as ${format.toUpperCase()} and downloaded.`,
+      //   role: "assistant",
+      //   timestamp: new Date(),
+      // };
+      // setMessages((prev) => [...prev, successMessage]);
     } catch (error) {
       console.error("Document generation error:", error);
       const errorMessage: Message = {
@@ -911,7 +916,7 @@ export default function ChatPage() {
                           </div>
                         ) : (
                           <>
-                            <div className="text-sm whitespace-pre-wrap leading-relaxed">
+                            <div className="text-sm leading-relaxed">
                               {(() => {
                                 const containsHtml =
                                   typeof message.content === "string" &&
@@ -921,6 +926,106 @@ export default function ChatPage() {
                                   containsHtml
                                 ) {
                                   return "📄 Dokumen telah dibuat. Gunakan tombol download di bawah untuk mengunduh.";
+                                }
+                                if (message.role === "assistant") {
+                                  return (
+                                    <div className="prose prose-sm max-w-none dark:prose-invert prose-pre:p-0 prose-code:text-sm">
+                                      <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
+                                        components={{
+                                          code({
+                                            node,
+                                            inline,
+                                            className,
+                                            children,
+                                            ...props
+                                          }: any) {
+                                            return (
+                                              <CodeBlock
+                                                className={className}
+                                                inline={inline}
+                                                {...props}
+                                              >
+                                                {String(children).replace(
+                                                  /\n$/,
+                                                  ""
+                                                )}
+                                              </CodeBlock>
+                                            );
+                                          },
+                                          h1: ({ children }) => (
+                                            <h1 className="text-xl font-bold mb-4 text-foreground">
+                                              {children}
+                                            </h1>
+                                          ),
+                                          h2: ({ children }) => (
+                                            <h2 className="text-lg font-semibold mb-3 text-foreground">
+                                              {children}
+                                            </h2>
+                                          ),
+                                          h3: ({ children }) => (
+                                            <h3 className="text-base font-medium mb-2 text-foreground">
+                                              {children}
+                                            </h3>
+                                          ),
+                                          p: ({ children }) => (
+                                            <p className="mb-3 text-foreground leading-relaxed">
+                                              {children}
+                                            </p>
+                                          ),
+                                          ul: ({ children }) => (
+                                            <ul className="list-disc list-inside mb-3 space-y-1 text-foreground">
+                                              {children}
+                                            </ul>
+                                          ),
+                                          ol: ({ children }) => (
+                                            <ol className="list-decimal list-inside mb-3 space-y-1 text-foreground">
+                                              {children}
+                                            </ol>
+                                          ),
+                                          li: ({ children }) => (
+                                            <li className="text-foreground">
+                                              {children}
+                                            </li>
+                                          ),
+                                          blockquote: ({ children }) => (
+                                            <blockquote className="border-l-4 border-muted-foreground pl-4 italic mb-3 text-muted-foreground">
+                                              {children}
+                                            </blockquote>
+                                          ),
+                                          table: ({ children }) => (
+                                            <div className="overflow-x-auto mb-3">
+                                              <table className="min-w-full border-collapse border border-border">
+                                                {children}
+                                              </table>
+                                            </div>
+                                          ),
+                                          th: ({ children }) => (
+                                            <th className="border border-border px-3 py-2 bg-muted font-medium text-left">
+                                              {children}
+                                            </th>
+                                          ),
+                                          td: ({ children }) => (
+                                            <td className="border border-border px-3 py-2">
+                                              {children}
+                                            </td>
+                                          ),
+                                          strong: ({ children }) => (
+                                            <strong className="font-semibold text-foreground">
+                                              {children}
+                                            </strong>
+                                          ),
+                                          em: ({ children }) => (
+                                            <em className="italic text-foreground">
+                                              {children}
+                                            </em>
+                                          ),
+                                        }}
+                                      >
+                                        {message.content}
+                                      </ReactMarkdown>
+                                    </div>
+                                  );
                                 }
                                 return message.content;
                               })()}
@@ -1157,7 +1262,7 @@ export default function ChatPage() {
                               </TooltipTrigger>
                               <TooltipContent>Poor response</TooltipContent>
                             </Tooltip>
-                            <DropdownMenu>
+                            {/* <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button
                                   variant="ghost"
@@ -1224,7 +1329,7 @@ export default function ChatPage() {
                                   Excel Spreadsheet
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
-                            </DropdownMenu>
+                            </DropdownMenu> */}
                           </div>
                         )}
                       </div>

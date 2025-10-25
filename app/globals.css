@@ -91,3 +91,8 @@
   animation: slideInUp 0.4s ease-out forwards;
   animation-fill-mode: both;
 }
+
+.prose,
+.prose :where(pre):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+  background-color: transparent !important;
+}
