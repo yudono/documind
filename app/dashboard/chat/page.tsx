@@ -523,7 +523,7 @@ export default function ChatPage() {
       };
 
       setMessages((prev) =>
-        prev.filter((msg) => msg.id !== "generating").concat(documentMessage)
+        prev.map((msg) => (msg.id === "generating" ? documentMessage : msg))
       );
     }, 3000);
   };
@@ -636,7 +636,7 @@ export default function ChatPage() {
       };
 
       setMessages((prev) =>
-        prev.filter((msg) => msg.id !== "typing").concat(assistantMessage)
+        prev.map((msg) => (msg.id === "typing" ? assistantMessage : msg))
       );
       setIsLoading(false);
     } catch (error) {
@@ -651,7 +651,7 @@ export default function ChatPage() {
       };
 
       setMessages((prev) =>
-        prev.filter((msg) => msg.id !== "typing").concat(errorMessage)
+        prev.map((msg) => (msg.id === "typing" ? errorMessage : msg))
       );
       setIsLoading(false);
     }
@@ -677,50 +677,6 @@ export default function ChatPage() {
     if (diffDays === 2) return "Yesterday";
     if (diffDays <= 7) return `${diffDays - 1} days ago`;
     return date.toLocaleDateString();
-  };
-
-  // File upload handlers
-  const handleFileUpload = async (uploadResults: any[]) => {
-    // uploadResults is already the array of successful upload results from the FileUpload component
-    const successfulUploads = uploadResults.filter(
-      (result) => result && result.url
-    );
-
-    if (successfulUploads.length > 0) {
-      setUploadedFiles((prev: any[]) => [...prev, ...successfulUploads]);
-
-      // Process each uploaded file
-      for (const result of successfulUploads) {
-        if (result.fileType?.startsWith("image/")) {
-          // Use Groq OCR for image files
-          await performOCR(result.url, result.fileName);
-        } else if (isDocumentFile(result.fileType, result.fileName)) {
-          // Parse document files (PDF, DOCX, XLSX, PPTX)
-          await parseDocumentFile(
-            result.file,
-            result.fileName,
-            result.fileType
-          );
-        }
-      }
-    }
-
-    // Show upload results
-    const successCount = successfulUploads.length;
-
-    let message = "";
-    if (successCount > 0) {
-      message = `✅ ${successCount} file(s) uploaded successfully.`;
-    }
-
-    // Add system message about upload results
-    const uploadMessage: Message = {
-      id: `upload-${Date.now()}`,
-      content: message,
-      role: "assistant",
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, uploadMessage]);
   };
 
   // Check if file is a document that can be parsed
@@ -793,55 +749,8 @@ export default function ChatPage() {
     }
   };
 
-  const performOCR = async (imageUrl: string, fileName: string) => {
-    try {
-      const response = await fetch("/api/ocr", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ imageUrl }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`OCR failed: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success && result.extractedText) {
-        const ocrMessage: Message = {
-          id: `ocr-${Date.now()}`,
-          content: `📄 **OCR Results for ${fileName}:**\n\n${result.extractedText}`,
-          role: "assistant",
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, ocrMessage]);
-      }
-    } catch (error) {
-      console.error("OCR error:", error);
-      const errorMessage: Message = {
-        id: `ocr-error-${Date.now()}`,
-        content: `❌ Failed to perform OCR on ${fileName}: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`,
-        role: "assistant",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    }
-  };
-
   const copyMessage = (content: string) => {
     navigator.clipboard.writeText(content);
-  };
-
-  const handleAtSymbol = () => {
-    setShowDocumentPicker(true);
-  };
-
-  const newChat = () => {
-    createNewSession();
   };
 
   // Generate document function with enhanced AI features
@@ -1599,7 +1508,7 @@ export default function ChatPage() {
                 <Search className="h-4 w-4" />
               </Button>
               <Button
-                onClick={newChat}
+                onClick={createNewSession}
                 disabled={isCreatingChat}
                 size="sm"
                 variant="outline"
