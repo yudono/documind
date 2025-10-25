@@ -50,19 +50,18 @@ export async function POST(request: NextRequest) {
       userCredit = await prisma.userCredit.create({
         data: {
           userId: user.id,
-          balance: 0,
           dailyLimit: 500,
+          dailyUsed: 0,
           lastResetDate: new Date(),
         },
       });
     }
 
     // Add credits to user account and record transaction
-    const updatedCredit = await prisma.$transaction([
+    const [updatedCredit, transaction] = await prisma.$transaction([
       prisma.userCredit.update({
         where: { userId: user.id },
         data: {
-          balance: { increment: creditPackage.credits },
           totalEarned: { increment: creditPackage.credits },
         },
       }),
@@ -83,12 +82,14 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
+    const creditBalance = Math.max(0, (updatedCredit.dailyLimit || 0) - (updatedCredit.dailyUsed || 0));
+
     return NextResponse.json({
       success: true,
       message: `Successfully added ${creditPackage.credits} credits to your account`,
-      creditBalance: updatedCredit[0].balance,
+      creditBalance,
       transaction: {
-        id: updatedCredit[1].id,
+        id: transaction.id,
         amount: creditPackage.credits,
         packageName: creditPackage.name,
         transactionId,

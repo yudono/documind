@@ -16,6 +16,7 @@ import {
   CreditCard,
   Layout,
   Shield,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -24,6 +25,7 @@ const navigation = [
   { name: "My Documents", href: "/dashboard/documents", icon: FileText },
   // { name: "Templates", href: "/dashboard/templates", icon: Layout },
   { name: "Chat AI", href: "/dashboard/chat", icon: MessageSquare },
+  { name: "Trash", href: "/dashboard/trash", icon: Trash2 },
   { name: "Billing & Usage", href: "/dashboard/billing", icon: CreditCard },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
   { name: "Help", href: "/dashboard/help", icon: HelpCircle },

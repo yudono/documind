@@ -12,15 +12,25 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const parentId = searchParams.get('parentId');
-    const type = searchParams.get('type'); // Optional filter by type
+    const parentId = searchParams.get("parentId");
+    const type = searchParams.get("type"); // Optional filter by type
+
+    // get filter ?deleted=true
+    const deleted = searchParams.get("deleted");
 
     const whereClause: any = {
       userId: (session.user as any).id,
       parentId: parentId || null,
     };
 
-    if (type && (type === 'folder' || type === 'document')) {
+    // deleteAt null or not
+    if (deleted) {
+      whereClause.deleteAt = { not: null };
+    } else {
+      whereClause.deleteAt = null;
+    }
+
+    if (type && (type === "folder" || type === "document")) {
       whereClause.type = type;
     }
 
@@ -33,12 +43,12 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             type: true,
-          }
+          },
         },
       },
       orderBy: [
-        { type: 'asc' }, // Folders first
-        { name: 'asc' }  // Then alphabetical
+        { type: "asc" }, // Folders first
+        { name: "asc" }, // Then alphabetical
       ],
     });
 
@@ -71,7 +81,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!['folder', 'document'].includes(type)) {
+    if (!["folder", "document"].includes(type)) {
       return NextResponse.json(
         { error: "Type must be either 'folder' or 'document'" },
         { status: 400 }
@@ -79,7 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     // For documents, validate required document fields
-    if (type === 'document') {
+    if (type === "document") {
       const { fileType, size } = itemData;
       if (!fileType || !size) {
         return NextResponse.json(
@@ -101,14 +111,18 @@ export async function POST(request: NextRequest) {
 
     if (existingItem) {
       return NextResponse.json(
-        { error: `${type === 'folder' ? 'Folder' : 'Document'} with this name already exists` },
+        {
+          error: `${
+            type === "folder" ? "Folder" : "Document"
+          } with this name already exists`,
+        },
         { status: 409 }
       );
     }
 
     // For documents, generate mock analysis
     let analysisData = {};
-    if (type === 'document') {
+    if (type === "document") {
       analysisData = {
         summary: `This document appears to be a ${
           itemData.fileType?.includes("pdf")
@@ -147,7 +161,7 @@ export async function POST(request: NextRequest) {
             id: true,
             name: true,
             type: true,
-          }
+          },
         },
       },
     });

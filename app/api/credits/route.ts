@@ -1,16 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { checkAndResetUserCredits } from '@/lib/credit-reset';
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { checkAndResetUserCredits } from "@/lib/credit-reset";
 
 // GET /api/credits - Get user's credit balance
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     // Initialize user credit if it doesn't exist
@@ -30,8 +30,8 @@ export async function GET(request: NextRequest) {
       userCredit = await prisma.userCredit.create({
         data: {
           userId: user.id,
-          balance: 500, // Default daily credits for free plan
           dailyLimit: 500,
+          dailyUsed: 0,
           lastResetDate: new Date(),
         },
       });
@@ -46,20 +46,36 @@ export async function GET(request: NextRequest) {
     });
 
     if (!userCredit) {
-      return NextResponse.json({ error: 'Credit data not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: "Credit data not found" },
+        { status: 404 }
+      );
     }
 
+    // Compute derived values based on the new schema
+    const balance = Math.max(
+      0,
+      (userCredit.dailyLimit || 0) - (userCredit.dailyUsed || 0)
+    );
+
+    // Compute totalSpent from transactions to retain response compatibility
+    const totalSpentAgg = await prisma.creditTransaction.aggregate({
+      where: { userId: user.id, type: "spend" },
+      _sum: { amount: true },
+    });
+    const totalSpent = Math.abs(totalSpentAgg._sum.amount || 0);
+
     return NextResponse.json({
-      balance: userCredit.balance,
+      balance,
       dailyLimit: userCredit.dailyLimit,
       totalEarned: userCredit.totalEarned,
-      totalSpent: userCredit.totalSpent,
+      totalSpent,
       lastResetDate: userCredit.lastResetDate,
     });
   } catch (error) {
-    console.error('Error fetching credit balance:', error);
+    console.error("Error fetching credit balance:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -69,9 +85,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
@@ -82,14 +98,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     const { amount, description, reference } = await request.json();
 
     if (!amount || amount <= 0) {
       return NextResponse.json(
-        { error: 'Amount must be a positive number' },
+        { error: "Amount must be a positive number" },
         { status: 400 }
       );
     }
@@ -100,50 +116,58 @@ export async function POST(request: NextRequest) {
       userCredit = await prisma.userCredit.create({
         data: {
           userId: user.id,
-          balance: 500, // Default daily credits for free plan
           dailyLimit: 500,
+          dailyUsed: 0,
           lastResetDate: new Date(),
         },
       });
     }
 
-    // Check if user has sufficient credits
-    if (userCredit.balance < amount) {
+    // Check if user has sufficient available credits for today
+    const available = Math.max(
+      0,
+      (userCredit.dailyLimit || 0) - (userCredit.dailyUsed || 0)
+    );
+    if (available < amount) {
       return NextResponse.json(
-        { error: 'Insufficient credits' },
+        { error: "Insufficient credits" },
         { status: 400 }
       );
     }
 
-    // Consume credits in a transaction
+    // Consume credits in a transaction: increment dailyUsed
     const [updatedCredit] = await prisma.$transaction([
       prisma.userCredit.update({
         where: { userId: user.id },
         data: {
-          balance: { decrement: amount },
-          totalSpent: { increment: amount },
+          dailyUsed: { increment: amount },
         },
       }),
       prisma.creditTransaction.create({
         data: {
           userId: user.id,
-          type: 'spend',
+          type: "spend",
           amount: -amount,
-          description: description || 'Credit consumption',
+          description: description || "Credit consumption",
           reference: reference,
         },
       }),
     ]);
 
+    const newBalance = Math.max(
+      0,
+      (updatedCredit.dailyLimit || 0) - (updatedCredit.dailyUsed || 0)
+    );
+
     return NextResponse.json({
       success: true,
-      newBalance: updatedCredit.balance,
+      newBalance,
       consumed: amount,
     });
   } catch (error) {
-    console.error('Error consuming credits:', error);
+    console.error("Error consuming credits:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

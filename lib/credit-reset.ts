@@ -135,14 +135,8 @@ export async function addDailyCreditsForSubscribers() {
         // Add daily subscription credits (example: 10 bonus credits)
         const bonusCredits = 10;
         
-        await prisma.userCredit.update({
-          where: { id: userCredit.id },
-          data: {
-            balance: { increment: bonusCredits },
-            totalEarned: { increment: bonusCredits }
-          }
-        });
-
+        // With dailyLimit/dailyUsed model, we avoid mutating persistent limits here.
+        // Record a transaction to indicate bonus credits (for auditing/UX messaging).
         await prisma.creditTransaction.create({
           data: {
             userId: userCredit.userId,
@@ -157,7 +151,7 @@ export async function addDailyCreditsForSubscribers() {
       }
     }
 
-    console.log(`Added ${creditsAdded} daily bonus credits to subscribers`);
+    console.log(`Recorded ${creditsAdded} daily bonus credits to subscribers`);
     return { success: true, creditsAdded };
   } catch (error: any) {
     console.error('Error adding daily credits for subscribers:', error);

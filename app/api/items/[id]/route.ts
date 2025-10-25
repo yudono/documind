@@ -263,6 +263,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const permanently = request.nextUrl?.searchParams.get("permanently") === "true";
+
     // Check if item exists and belongs to user
     const existingItem = await prisma.item.findFirst({
       where: {
@@ -278,19 +280,30 @@ export async function DELETE(
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
     }
 
-    // For folders, check if they have children
-    if (existingItem.type === "folder" && existingItem.children.length > 0) {
+    // If permanently deleting, prevent deleting folders that contain items
+    if (
+      permanently &&
+      existingItem.type === "folder" &&
+      existingItem.children.length > 0
+    ) {
       return NextResponse.json(
-        { error: "Cannot delete folder that contains items" },
+        { error: "Cannot permanently delete folder that contains items" },
         { status: 400 }
       );
     }
 
-    await prisma.item.delete({
-      where: { id: params.id },
-    });
-
-    return NextResponse.json({ message: "Item deleted successfully" });
+    if (permanently) {
+      await prisma.item.delete({
+        where: { id: params.id },
+      });
+      return NextResponse.json({ message: "Item deleted successfully" });
+    } else {
+      await prisma.item.update({
+        where: { id: params.id },
+        data: { deleteAt: new Date() },
+      });
+      return NextResponse.json({ message: "Item moved to trash" });
+    }
   } catch (error) {
     console.error("Error deleting item:", error);
     return NextResponse.json(

@@ -86,6 +86,7 @@ import {
   Presentation,
   FolderPlusIcon,
   Code,
+  RotateCcw,
 } from "lucide-react";
 import {
   ChartContainer,
@@ -151,19 +152,6 @@ interface Item {
   analysis?: AnalysisResult;
 }
 
-interface Template {
-  id: string;
-  name: string;
-  description: string;
-  type: string;
-  category: string;
-  thumbnailUrl?: string;
-  isPublic: boolean;
-  downloadCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export default function MyDocumentsPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -189,7 +177,7 @@ export default function MyDocumentsPage() {
     try {
       setIsLoading(true);
       const response = await fetch(
-        `/api/items?parentId=${currentFolderId || ""}`
+        `/api/items?parentId=${currentFolderId || ""}&deleted=true`
       );
       if (!response.ok) throw new Error("Failed to fetch items");
       const data = await response.json();
@@ -210,97 +198,40 @@ export default function MyDocumentsPage() {
     loadItems();
   }, [loadItems]);
 
-  const onDrop = useCallback(
-    async (acceptedFiles: File[]) => {
-      setIsUploading(true);
-      setUploadStatus("uploading");
-      setUploadError(null);
-
-      try {
-        for (const file of acceptedFiles) {
-          // Step 1: Upload file to S3 via /api/upload
-          const formData = new FormData();
-          formData.append("file", file);
-
-          const uploadResponse = await fetch("/api/upload", {
-            method: "POST",
-            body: formData,
-          });
-
-          if (!uploadResponse.ok) {
-            throw new Error(`Failed to upload ${file.name}`);
-          }
-
-          const uploadResult = await uploadResponse.json();
-
-          // Step 2: Create item record in database via /api/items
-          const itemData = {
-            name: file.name,
-            type: "document",
-            parentId: currentFolderId || null,
-            fileType: file.type,
-            size: file.size,
-            url: uploadResult.file.url,
-            key: uploadResult.file.key,
-            bucket: uploadResult.file.bucket,
-          };
-
-          const itemResponse = await fetch("/api/items", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(itemData),
-          });
-
-          if (!itemResponse.ok) {
-            throw new Error(`Failed to create item record for ${file.name}`);
-          }
-        }
-
-        toast.success(`Successfully uploaded ${acceptedFiles.length} files`);
-        setUploadStatus("success");
-        await loadItems();
-
-        // Auto-hide success message after 3 seconds
-        setTimeout(() => {
-          setUploadStatus("idle");
-        }, 3000);
-      } catch (error) {
-        console.error("Upload error:", error);
-        setUploadStatus("error");
-
-        toast.error(error instanceof Error ? error.message : "Upload failed");
-
-        // Auto-hide error message after 5 seconds
-        setTimeout(() => {
-          setUploadStatus("idle");
-        }, 5000);
-      } finally {
-        setIsUploading(false);
-      }
-    },
-    [currentFolderId, loadItems]
-  );
-
-  const deleteItem = useCallback(
+  const restoreItem = useCallback(
     async (itemId: string) => {
       try {
-        const response = await fetch(`/api/items/${itemId}`, {
-          method: "DELETE",
+        const response = await fetch(`/api/items/${itemId}/restore`, {
+          method: "POST",
         });
 
         if (response.ok) {
           await loadItems();
         } else {
-          console.error("Failed to delete item");
+          console.error("Failed to restore item");
         }
       } catch (error) {
-        console.error("Error deleting item:", error);
+        console.error("Error restoring item:", error);
       }
     },
     [loadItems]
   );
+
+  const deleteAll = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/items/delete-all`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        await loadItems();
+      } else {
+        console.error("Failed to delete all items");
+      }
+    } catch (error) {
+      console.error("Error deleting all items:", error);
+    }
+  }, [loadItems]);
 
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment) {
@@ -310,49 +241,6 @@ export default function MyDocumentsPage() {
         return "text-red-600";
       default:
         return "text-yellow-600";
-    }
-  };
-
-  const handleFileSelect = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    if (files.length > 0) {
-      onDrop(files);
-    }
-  };
-
-  // Create folder function
-  const createFolder = async () => {
-    if (!newFolderName.trim()) return;
-
-    try {
-      setIsLoading(true);
-      const response = await fetch("/api/items", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: newFolderName.trim(),
-          type: "folder",
-          parentId: currentFolderId,
-        }),
-      });
-
-      if (response.ok) {
-        setNewFolderName("");
-        setShowCreateFolderDialog(false);
-        await loadItems();
-      } else {
-        console.error("Failed to create folder");
-      }
-    } catch (error) {
-      console.error("Error creating folder:", error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -373,9 +261,10 @@ export default function MyDocumentsPage() {
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center space-x-3">
               <div>
-                <h1 className="font-semibold">My Documents</h1>
+                <h1 className="font-semibold">Trash</h1>
                 <p className="text-sm text-muted-foreground">
-                  Upload and manage your documents, analyze their content, and
+                  Items moved to trash are kept for 30 days before being
+                  permanently deleted.
                 </p>
               </div>
             </div>
@@ -383,96 +272,39 @@ export default function MyDocumentsPage() {
         </div>
 
         <div className="p-8 relative h-[calc(100vh-80px)] overflow-auto">
-          {/* Search and filters */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                <Input
-                  placeholder="Search documents..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-80"
-                />
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant={viewMode === "grid" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("grid")}
-              >
-                <Grid3X3 className="w-4 h-4" />
-              </Button>
-              <Button
-                variant={viewMode === "list" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("list")}
-              >
-                <List className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex flex-wrap gap-4 mb-6">
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-3"
-              onClick={handleFileSelect}
-            >
-              <UploadCloud size={20} />
-              Upload
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-3"
-              onClick={() => setShowCreateFolderDialog(true)}
-            >
-              <FolderPlusIcon size={20} />
-              Folder
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-3"
-              onClick={() => setShowTemplateDialog(true)}
-            >
-              <FileText size={20} />
-              Document
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-3"
-              onClick={() => router.push("/dashboard/documents/tables")}
-            >
-              <TableProperties size={20} />
-              Table
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-3 relative"
-            >
-              <Presentation size={20} />
-              Presentation
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-3"
-            >
-              <Code size={20} />
-              Code
-            </Button>
-          </div>
-
           <div>
-            <div className="mb-4 text-lg font-semibold">
-              My Documents ( {filteredItems.length} )
+            <div className="flex justify-between items-center mb-6">
+              <div className="text-lg font-semibold">
+                Trash ( {filteredItems.length} )
+              </div>
+              {/* empty all */}
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size={"sm"}>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Empty All
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete
+                      all items in the trash.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteAll()}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      Yes
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
             {/* Breadcrumb navigation */}
             {currentFolderId && (
@@ -550,31 +382,14 @@ export default function MyDocumentsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <Eye className="w-4 h-4 mr-2" />
-                            View
-                          </DropdownMenuItem>
-                          {item.type === "document" && (
-                            <>
-                              <DropdownMenuItem>
-                                <Share className="w-4 h-4 mr-2" />
-                                Share
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <Download className="w-4 h-4 mr-2" />
-                                Download
-                              </DropdownMenuItem>
-                            </>
-                          )}
                           <DropdownMenuSeparator />
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <DropdownMenuItem
-                                className="text-red-600 focus:text-red-600"
                                 onSelect={(e) => e.preventDefault()}
                               >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete
+                                <RotateCcw className="w-4 h-4 mr-2" />
+                                Restore
                               </DropdownMenuItem>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
@@ -583,15 +398,14 @@ export default function MyDocumentsPage() {
                                   Are you sure?
                                 </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  {item.type === "folder"
-                                    ? "This will move the folder and all its contents to the trash."
-                                    : "This will move the document to the trash."}
+                                  This action cannot be undone. This will
+                                  restore the {item.type}.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => deleteItem(item.id)}
+                                  onClick={() => restoreItem(item.id)}
                                   className="bg-red-600 hover:bg-red-700"
                                 >
                                   Delete
@@ -682,42 +496,6 @@ export default function MyDocumentsPage() {
           </div>
         </div>
       </div>
-
-      {/* Hidden file input */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept=".ai,.avi,.bmp,.crd,.csv,.dll,.doc,.docx,.dwg,.eps,.exe,.flv,.gif,.html,.iso,.java,.jpg,.jpeg,.mdb,.mid,.mov,.mp3,.mp4,.mpeg,.pdf,.png,.ppt,.ps,.psd,.pub,.rar,.raw,.rss,.svg,.tiff,.txt,.wav,.wma,.xls,.xlsx,.xml,.xsl,.zip"
-        multiple
-        style={{ display: "none" }}
-      />
-
-      {/* Create Folder Dialog */}
-      <CreateFolderDialog
-        open={showCreateFolderDialog}
-        onOpenChange={setShowCreateFolderDialog}
-        newFolderName={newFolderName}
-        setNewFolderName={(v: string) => setNewFolderName(v)}
-        onCreate={createFolder}
-        isLoading={isLoading}
-      />
-
-      {/* Template Select Dialog */}
-      <TemplateSelectDialog
-        open={showTemplateDialog}
-        onOpenChange={setShowTemplateDialog}
-        onSelect={(templateId: string | null) => {
-          setShowTemplateDialog(false);
-          if (!templateId) {
-            router.push("/dashboard/documents/create?type=document");
-          } else {
-            router.push(
-              `/dashboard/documents/create?type=document&template=${templateId}`
-            );
-          }
-        }}
-      />
     </div>
   );
 }

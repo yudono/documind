@@ -225,6 +225,9 @@ model Item {
   // Relations
   chatSessions ChatSession[] // AI chat sessions for this document
   
+  // Soft delete timestamp
+  deleteAt    DateTime?
+  
   // Common metadata
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

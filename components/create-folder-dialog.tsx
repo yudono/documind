@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { RefreshCcw, RefreshCw } from "lucide-react";
 
 interface CreateFolderDialogProps {
   open: boolean;
@@ -18,6 +19,7 @@ interface CreateFolderDialogProps {
   newFolderName: string;
   setNewFolderName: (name: string) => void;
   onCreate: () => void;
+  isLoading: boolean;
 }
 
 export default function CreateFolderDialog({
@@ -26,6 +28,7 @@ export default function CreateFolderDialog({
   newFolderName,
   setNewFolderName,
   onCreate,
+  isLoading,
 }: CreateFolderDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -49,11 +52,20 @@ export default function CreateFolderDialog({
           />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isLoading}
+          >
+            Close{" "}
+            {isLoading && <RefreshCw size={14} className="ml-4 animate-spin" />}
           </Button>
-          <Button onClick={onCreate} disabled={!newFolderName.trim()}>
-            Create Folder
+          <Button
+            onClick={onCreate}
+            disabled={!newFolderName.trim() || isLoading}
+          >
+            {isLoading ? "Creating" : "Create Folder"}
+            {isLoading && <RefreshCw size={14} className="ml-4 animate-spin" />}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -495,40 +495,6 @@ export default function DocumentEditor({
     };
   }, []);
 
-  // AI Generation handler
-  const handleAIGenerate = async (prompt: string, type: string) => {
-    try {
-      const response = await fetch("/api/ai-generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt,
-          type,
-          context: editorRef.current?.getHTML() || "",
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to generate content");
-      }
-
-      const data = await response.json();
-
-      // Insert the generated content into the editor
-      if (editorRef.current) {
-        if (mode === "create") {
-          editorRef.current.commands.setContent(data.content);
-        } else {
-          editorRef.current.commands.insertContent(data.content);
-        }
-      }
-    } catch (error) {
-      console.error("AI generation failed:", error);
-    }
-  };
-
   // Apply generated HTML into the editor (used by AIChatSidebar)
   const applyGeneratedHtml = useCallback((html: string) => {
     const editor = editorRef.current;
