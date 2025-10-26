@@ -90,14 +90,15 @@ export async function POST(request: NextRequest) {
       userCredit = await prisma.userCredit.create({
         data: {
           userId: user.id,
-          balance: 500, // Default daily credits for free plan
           dailyLimit: 500,
+          dailyUsed: 0,
           lastResetDate: new Date(),
         },
       });
     }
 
-    if (userCredit.balance < 1) {
+    const availableToday = Math.max(0, (userCredit.dailyLimit || 0) - (userCredit.dailyUsed || 0));
+    if (availableToday < 1) {
       return NextResponse.json(
         { error: "Insufficient credits" },
         { status: 400 }
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
       prisma.userCredit.update({
         where: { userId: user.id },
         data: {
-          balance: { decrement: 1 },
+          dailyUsed: { increment: 1 },
           totalSpent: { increment: 1 },
         },
       }),
@@ -307,13 +308,15 @@ export async function POST(request: NextRequest) {
       where: { userId: user.id },
     });
 
+    const creditBalance = Math.max(0, (updatedCredit?.dailyLimit || 0) - (updatedCredit?.dailyUsed || 0));
+
     return NextResponse.json({
       success: true,
       response,
       documentFile,
       timestamp: new Date().toISOString(),
       userId: user.id,
-      creditBalance: updatedCredit?.balance || 0,
+      creditBalance,
       messageId: assistantMessage?.id,
       sessionId: currentSessionId,
     });

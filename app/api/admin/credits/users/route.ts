@@ -95,12 +95,11 @@ export async function PATCH(request: NextRequest) {
     let transactionData: any = null;
 
     switch (action) {
-      case 'set_balance':
+      case 'set_balance': {
         if (typeof balance !== 'number') {
           return NextResponse.json({ error: 'Balance must be a number' }, { status: 400 });
         }
-        
-        // Get current balance to calculate difference
+
         const currentCredit = await prisma.userCredit.findUnique({
           where: { userId }
         });
@@ -109,21 +108,24 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ error: 'User credit record not found' }, { status: 404 });
         }
 
-        const difference = balance - currentCredit.balance;
-        
-        updateData = { 
-          balance,
-          totalEarned: difference > 0 ? { increment: difference } : currentCredit.totalEarned
+        const currentBalance = Math.max(0, (currentCredit.dailyLimit || 0) - (currentCredit.dailyUsed || 0));
+        const difference = balance - currentBalance;
+
+        // Adjust dailyUsed so that derived balance equals requested balance
+        const newDailyUsed = Math.max(0, (currentCredit.dailyLimit || 0) - balance);
+        updateData = {
+          dailyUsed: newDailyUsed,
         };
 
         transactionData = {
           userId,
           type: 'admin_adjustment',
           amount: difference,
-          description: `Admin balance adjustment: ${difference > 0 ? '+' : ''}${difference} credits`,
+          description: `Admin balance adjustment: ${difference > 0 ? '+' : ''}${difference} credits (set balance to ${balance})`,
           reference: `admin-${Date.now()}`
         };
         break;
+      }
 
       case 'set_daily_limit':
         if (typeof dailyLimit !== 'number') {
@@ -133,11 +135,11 @@ export async function PATCH(request: NextRequest) {
         break;
 
       case 'reset_daily':
-        updateData = { 
+        updateData = {
           dailyUsed: 0,
           lastResetDate: new Date()
         };
-        
+
         transactionData = {
           userId,
           type: 'admin_reset',

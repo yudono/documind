@@ -86,6 +86,7 @@ import {
   Presentation,
   FolderPlusIcon,
   Code,
+  FlaskConical,
 } from "lucide-react";
 import {
   ChartContainer,
@@ -464,9 +465,10 @@ export default function MyDocumentsPage() {
               variant="outline"
               size="sm"
               className="flex items-center gap-3"
+              onClick={() => router.push("/dashboard/documents/labs")}
             >
-              <Code size={20} />
-              Code
+              <FlaskConical size={20} />
+              Labs
             </Button>
           </div>
 
@@ -623,7 +625,7 @@ export default function MyDocumentsPage() {
                         {item.type === "folder" ? (
                           viewMode === "grid" ? (
                             <>
-                              <Folder className="w-12 h-12 text-blue-600" />
+                              <Folder className="w-12 h-12 text-blue-600 fill-current" />
                               <div className="text-center text-sm text-slate-600 line-clamp-2">
                                 {item.name}
                               </div>

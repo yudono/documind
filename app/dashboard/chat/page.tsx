@@ -58,6 +58,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock } from "@/components/ui/code-block";
 import { toast } from "sonner";
+import ResourceFile from "@/components/resource-file";
 
 interface Message {
   id: string;
@@ -962,169 +963,14 @@ export default function ChatPage() {
 
                       {/* Document File Display */}
                       {message.documentFile && (
-                        <div className="mt-3 p-3 bg-background border rounded-lg">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <div className="p-2 bg-primary/10 rounded-lg">
-                                <FileText className="h-5 w-5 text-primary" />
-                              </div>
-                              <div>
-                                <p className="font-medium text-sm">
-                                  {message.documentFile.name}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-2 ml-4">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    onClick={() => {
-                                      const df = message.documentFile;
-                                      if (!df) return;
-
-                                      if (df.error) {
-                                        alert(`Download failed: ${df.error}`);
-                                        return;
-                                      }
-
-                                      const url = df.url || "";
-                                      const name = df.name || "document.pdf";
-
-                                      // Direct URL: open in new tab
-                                      if (
-                                        url &&
-                                        url !== "#" &&
-                                        !url.startsWith("data:")
-                                      ) {
-                                        window.open(url, "_blank");
-                                        return;
-                                      }
-
-                                      // Data URL: trigger download
-                                      if (url.startsWith("data:")) {
-                                        try {
-                                          const a = document.createElement("a");
-                                          a.href = url;
-                                          a.download = name;
-                                          a.style.display = "none";
-                                          document.body.appendChild(a);
-                                          a.click();
-                                          document.body.removeChild(a);
-                                        } catch (error) {
-                                          console.error(
-                                            "Download failed:",
-                                            error
-                                          );
-                                          alert(
-                                            "Download failed. The file may be too large or corrupted."
-                                          );
-                                        }
-                                        return;
-                                      }
-
-                                      // Fallback: mock document
-                                      const content = `Mock Document: ${
-                                        df.name ?? "document"
-                                      }\nType: ${
-                                        df.type ?? ""
-                                      }\nGenerated at: ${new Date().toISOString()}`;
-                                      const blob = new Blob([content], {
-                                        type: "text/plain",
-                                      });
-                                      const objectUrl =
-                                        URL.createObjectURL(blob);
-                                      const a = document.createElement("a");
-                                      a.href = objectUrl;
-                                      a.download = df.name || "document.txt";
-                                      document.body.appendChild(a);
-                                      a.click();
-                                      document.body.removeChild(a);
-                                      URL.revokeObjectURL(objectUrl);
-                                    }}
-                                  >
-                                    <Download className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  Download Document
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </div>
-                        </div>
+                        <ResourceFile resource={message.documentFile} />
                       )}
 
                       {message.referencedDocs &&
                         message.referencedDocs.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1">
                             {message.referencedDocs.map((doc, index) => (
-                              <div
-                                className="mt-3 p-3 bg-background border rounded-lg"
-                                key={index}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center space-x-3">
-                                    <div className="p-2 bg-primary/10 rounded-lg">
-                                      <FileText className="h-5 w-5 text-primary" />
-                                    </div>
-                                    <div>
-                                      <p className="font-medium text-sm">
-                                        {doc.name}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center space-x-2 ml-4">
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-8 w-8 p-0"
-                                          onClick={() => {
-                                            // download file blob from doc.url
-                                            if (doc.url) {
-                                              fetch(doc.url)
-                                                .then((response) =>
-                                                  response.blob()
-                                                )
-                                                .then((blob) => {
-                                                  const url =
-                                                    URL.createObjectURL(blob);
-                                                  const a =
-                                                    document.createElement("a");
-                                                  a.href = url;
-                                                  a.download =
-                                                    doc.name || "document.pdf";
-                                                  document.body.appendChild(a);
-                                                  a.click();
-                                                  document.body.removeChild(a);
-                                                  URL.revokeObjectURL(url);
-                                                })
-                                                .catch((error) => {
-                                                  console.error(
-                                                    "Download failed:",
-                                                    error
-                                                  );
-                                                  alert(
-                                                    "Download failed. The file may be too large or corrupted."
-                                                  );
-                                                });
-                                            }
-                                          }}
-                                        >
-                                          <Download className="h-4 w-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        Download Document
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </div>
-                                </div>
-                              </div>
+                              <ResourceFile key={index} resource={doc} />
                             ))}
                           </div>
                         )}

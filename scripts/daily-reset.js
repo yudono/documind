@@ -121,7 +121,7 @@ async function addDailyBonusCredits() {
           await prisma.userCredit.update({
             where: { id: userCredit.id },
             data: {
-              balance: { increment: bonusCredits },
+              dailyLimit: { increment: bonusCredits },
               totalEarned: { increment: bonusCredits }
             }
           });

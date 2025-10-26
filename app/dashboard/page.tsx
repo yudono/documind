@@ -128,32 +128,36 @@ export default function Dashboard() {
   const summaryStats = [
     {
       label: "Total Documents",
-      value: dashboardData.summaryStats.totalDocuments.toString(),
-      change: dashboardData.summaryStats.documentsChange,
-      trend: dashboardData.summaryStats.documentsChange.startsWith("+")
+      value: String(dashboardData?.summaryStats?.totalDocuments ?? 0),
+      change: dashboardData?.summaryStats?.documentsChange ?? "0",
+      trend: (dashboardData?.summaryStats?.documentsChange ?? "").startsWith(
+        "+"
+      )
         ? "up"
         : "down",
       icon: FileText,
     },
     {
       label: "AI Consultations",
-      value: dashboardData.summaryStats.totalConsultations.toString(),
-      change: dashboardData.summaryStats.consultationsChange,
-      trend: dashboardData.summaryStats.consultationsChange.startsWith("+")
+      value: String(dashboardData?.summaryStats?.totalConsultations ?? 0),
+      change: dashboardData?.summaryStats?.consultationsChange ?? "0",
+      trend: (
+        dashboardData?.summaryStats?.consultationsChange ?? ""
+      ).startsWith("+")
         ? "up"
         : "down",
       icon: MessageSquare,
     },
     {
       label: "Credit Balance",
-      value: dashboardData.summaryStats.creditBalance.toString(),
-      change: dashboardData.summaryStats.creditUsage + " used",
+      value: String(dashboardData?.summaryStats?.creditBalance ?? 0),
+      change: `${dashboardData?.summaryStats?.creditUsage ?? "0"} used`,
       trend: "neutral",
       icon: Coins,
     },
     {
       label: "Credits Spent",
-      value: dashboardData.summaryStats.totalSpent.toString(),
+      value: String(dashboardData?.summaryStats?.totalSpent ?? 0),
       change: "Total usage",
       trend: "neutral",
       icon: CreditCard,
