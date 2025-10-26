@@ -276,9 +276,14 @@ export class LangGraphDocumentAgent {
           );
 
           if (similarChunks && similarChunks.length > 0) {
-            context = similarChunks
-              .map((chunk) => chunk.chunkText)
-              .join("\n\n");
+            const ordered = similarChunks.some(
+              (c: any) => typeof c.timestamp === "number"
+            )
+              ? [...similarChunks].sort(
+                  (a: any, b: any) => (b.timestamp ?? 0) - (a.timestamp ?? 0)
+                )
+              : similarChunks;
+            context = ordered.map((chunk: any) => chunk.chunkText).join("\n\n");
           } else {
             // If no specific docIds available, allow a global semantic search (user-wide)
             if (!primaryDocIds.length) {
@@ -291,8 +296,16 @@ export class LangGraphDocumentAgent {
                     undefined
                   );
                 if (globalChunks && globalChunks.length > 0) {
-                  context = globalChunks
-                    .map((chunk) => chunk.chunkText)
+                  const orderedGlobal = globalChunks.some(
+                    (c: any) => typeof c.timestamp === "number"
+                  )
+                    ? [...globalChunks].sort(
+                        (a: any, b: any) =>
+                          (b.timestamp ?? 0) - (a.timestamp ?? 0)
+                      )
+                    : globalChunks;
+                  context = orderedGlobal
+                    .map((chunk: any) => chunk.chunkText)
                     .join("\n\n");
                 }
               } catch (err) {
@@ -605,8 +618,8 @@ export class LangGraphDocumentAgent {
       const safeContext = clampText(state.context, MAX_CONTEXT_CHARS);
       const safeQuery = clampText(state.query, MAX_QUERY_CHARS);
 
-      console.log("safeContext 2:", safeContext);
-      console.log("safeQuery 2:", safeQuery);
+      // console.log("safeContext 2:", safeContext);
+      // console.log("safeQuery 2:", safeQuery);
 
       const baseSystemText = clampText(
         `You generate structured document content. Respond in Markdown only (no HTML).
@@ -663,8 +676,8 @@ export class LangGraphDocumentAgent {
       const safeContext = clampText(state.context, MAX_CONTEXT_CHARS);
       const safeQuery = clampText(state.query, MAX_QUERY_CHARS);
 
-      console.log("safeContext:", safeContext);
-      console.log("safeQuery:", safeQuery);
+      // console.log("safeContext:", safeContext);
+      // console.log("safeQuery:", safeQuery);
 
       const baseSystemText = clampText(
         `You analyze documents and answer questions using provided context.

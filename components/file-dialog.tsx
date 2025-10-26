@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -34,19 +34,19 @@ interface DocumentItem {
 interface FilesDocumentsDialogProps {
   documents: DocumentItem[]; // optional initial docs
   selectedDocuments: DocumentItem[];
+  setSelectedDocuments: Dispatch<SetStateAction<DocumentItem[]>>;
   onSubmit?: (urls: string[], docs: DocumentItem[]) => void;
 }
 
 export function FilesDocumentsDialog({
   documents,
   selectedDocuments,
+  setSelectedDocuments,
   onSubmit,
 }: FilesDocumentsDialogProps) {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [items, setItems] = useState<DocumentItem[]>(documents || []);
-  const [selected, setSelected] = useState<DocumentItem[]>(
-    selectedDocuments || []
-  );
+
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -73,7 +73,7 @@ export function FilesDocumentsDialog({
     if (doc.type === "folder") {
       setCurrentFolderId(doc.id);
     } else {
-      setSelected((prev) => {
+      setSelectedDocuments((prev) => {
         const exists = prev.some((d) => d.id === doc.id);
         if (exists) {
           return prev.filter((d) => d.id !== doc.id);
@@ -92,11 +92,11 @@ export function FilesDocumentsDialog({
   };
 
   const handleSubmit = () => {
-    const urls = selected
+    const urls = selectedDocuments
       .map((doc) => (doc.url ? String(doc.url) : ""))
       .filter((u) => !!u);
     if (onSubmit) {
-      onSubmit(urls, selected);
+      onSubmit(urls, selectedDocuments);
     }
   };
 
@@ -106,7 +106,7 @@ export function FilesDocumentsDialog({
   );
 
   const removeSelect = (doc: DocumentItem) => {
-    setSelected((prev) => prev.filter((d) => d.id !== doc.id));
+    setSelectedDocuments((prev) => prev.filter((d) => d.id !== doc.id));
   };
 
   return (
@@ -230,7 +230,7 @@ export function FilesDocumentsDialog({
                         </div>
                       ) : (
                         filteredItems.map((doc) => {
-                          const isSelected = selected.some(
+                          const isSelected = selectedDocuments.some(
                             (d) => d.id === doc.id
                           );
                           const ext = doc.url?.split(".").pop() || "unknown";
@@ -279,13 +279,13 @@ export function FilesDocumentsDialog({
               }
             </div>
 
-            {selected.length > 0 && (
+            {selectedDocuments.length > 0 && (
               <div className="pt-2 border-t">
                 <p className="text-sm text-muted-foreground mb-2">
-                  Selected: {selected.length} document(s)
+                  Selected: {selectedDocuments.length} document(s)
                 </p>
                 <div className="flex flex-wrap gap-1">
-                  {selected.map((doc) => (
+                  {selectedDocuments.map((doc) => (
                     <Badge key={doc.id} variant="secondary" className="text-xs">
                       {doc.name}{" "}
                       <X
@@ -309,7 +309,7 @@ export function FilesDocumentsDialog({
           <DialogClose asChild>
             <Button
               size="sm"
-              disabled={selected.length === 0}
+              disabled={selectedDocuments.length === 0}
               onClick={handleSubmit}
             >
               Submit

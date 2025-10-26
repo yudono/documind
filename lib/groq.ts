@@ -77,7 +77,12 @@ export async function generateChatCompletionWithAgent(
     referencedDocs?: { name: string; url: string }[];
   } = {}
 ): Promise<
-  string | { response: string; referencedDocs: { name: string; url: string }[]; documentFile?: any }
+  | string
+  | {
+      response: string;
+      referencedDocs: { name: string; url: string }[];
+      documentFile?: any;
+    }
 > {
   try {
     // Extract the user query from messages (typically the last user message)
@@ -161,6 +166,13 @@ export async function performOCR(
     const isPdfByPath = /\.pdf($|\?)/i.test(pathname);
     const isPdfByType = contentType ? /pdf/i.test(contentType) : false;
 
+    const isDocxByPath = /\.docx($|\?)/i.test(pathname);
+    const isDocxByType = contentType
+      ? /application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document/i.test(
+          contentType
+        )
+      : false;
+
     // If the URL points to a PDF, parse with pdf-parse instead of vision model
     if (isPdfByPath || isPdfByType) {
       try {
@@ -182,8 +194,36 @@ export async function performOCR(
       }
     }
 
-    // If content-type exists and is not image, bail
-    if (contentType && !/^image\//i.test(contentType)) {
+    // If the URL points to a DOCX, parse with mammoth instead of vision model
+    if (isDocxByPath || isDocxByType) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(
+            `Failed to fetch DOCX: ${res.status} ${res.statusText}`
+          );
+        }
+        const arrayBuffer = await res.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const mammoth = await import("mammoth");
+        const result = await mammoth.extractRawText({ buffer });
+        const text = result?.value || "";
+        return text.trim() || "No text extracted";
+      } catch (err) {
+        console.error("DOCX parse error:", err);
+        throw new Error("Failed to extract text from DOCX");
+      }
+    }
+
+    // If content-type exists and is not image/pdf/docx, bail
+    if (
+      contentType &&
+      !/^image\//i.test(contentType) &&
+      !/pdf/i.test(contentType) &&
+      !/openxmlformats-officedocument\.wordprocessingml\.document/i.test(
+        contentType
+      )
+    ) {
       throw new Error(`Unsupported content-type for OCR: ${contentType}`);
     }
 
@@ -206,9 +246,9 @@ export async function performOCR(
     ];
 
     const completion = await groq.chat.completions.create({
-      model: "meta-llama/llama-4-maverick-17b-128e-instruct", // Vision model for OCR
+      model: "meta-llama/llama-4-maverick-17b-128e-instruct",
       messages: messages as any,
-      temperature: 0.1, // Lower temperature for more accurate OCR
+      temperature: 0.1,
       max_completion_tokens: 2048,
       top_p: 1,
       stream: false,

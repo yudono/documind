@@ -89,8 +89,12 @@ interface ChatSession {
 interface Document {
   id: string;
   name: string;
-  type: string;
-  uploadDate: Date;
+  type: "document" | "folder" | string;
+  fileType?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  url?: string | null;
+  size?: number | null;
 }
 
 export default function ChatPage() {
@@ -109,10 +113,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDocuments, setSelectedDocuments] = useState<Document[]>([]);
-  const [showDocumentPicker, setShowDocumentPicker] = useState(false);
   const [showFileUpload, setShowFileUpload] = useState(false);
-  const [useSemanticSearch, setUseSemanticSearch] = useState(true);
-  const [aiFormattingEnabled, setAiFormattingEnabled] = useState(true);
   const [selectedreferencedDocs, setSelectedreferencedDocs] = useState<
     { name: string; url: string }[]
   >([]);
@@ -577,7 +578,12 @@ export default function ChatPage() {
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
-    setSelectedDocuments([]);
+    // Capture current selected documents for context before clearing
+    const docsForContext = selectedDocuments.slice();
+    // Capture current referenced docs before clearing
+    const refsForContext = Array.isArray(selectedreferencedDocs)
+      ? [...selectedreferencedDocs]
+      : [];
 
     // Check if user has enough credits
     if (creditBalance <= 0) {
@@ -615,13 +621,17 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, typingMessage]);
 
     try {
-      // Prepare context from selected documents
+      // Prepare context from selected documents captured earlier
       const context =
-        selectedDocuments.length > 0
-          ? `Referenced documents: ${selectedDocuments
+        docsForContext.length > 0
+          ? `Referenced documents: ${docsForContext
               .map((doc) => doc.name)
               .join(", ")}`
           : undefined;
+
+      // Clear selection after capturing context
+      setSelectedDocuments([]);
+      setSelectedreferencedDocs([]);
 
       // Make API call to the main chat endpoint (which handles credit consumption internally)
       const messageResponse = await fetch("/api/chat", {
@@ -634,7 +644,7 @@ export default function ChatPage() {
           context: context,
           documentRequest: false,
           sessionId: currentSession?.id, // Pass the current session ID
-          referencedDocs: selectedreferencedDocs,
+          referencedDocs: refsForContext,
         }),
       });
 
@@ -1181,6 +1191,7 @@ export default function ChatPage() {
                   <FilesDocumentsDialog
                     documents={documents}
                     selectedDocuments={selectedDocuments as any}
+                    setSelectedDocuments={setSelectedDocuments}
                     onSubmit={(urls, docs) => {
                       // Store referenced docs as objects { name, url }
                       try {
