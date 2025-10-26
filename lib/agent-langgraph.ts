@@ -238,25 +238,6 @@ export class LangGraphDocumentAgent {
           ? [state.sessionId]
           : [];
 
-        // First, deterministically fetch chunks directly by documentId to avoid mixing contexts
-        if (primaryDocIds.length > 0) {
-          for (const docId of primaryDocIds) {
-            try {
-              const directChunks = await milvusService.getChunksByDocumentId(
-                docId,
-                state.userId,
-                8
-              );
-              if (directChunks && directChunks.length > 0) {
-                const text = directChunks.map((c) => c.chunkText).join("\n\n");
-                context = context ? context + "\n\n" + text : text;
-              }
-            } catch (err) {
-              console.warn("Direct fetch by documentId failed:", err);
-            }
-          }
-        }
-
         // Augment query with referenced doc names to improve recall
         const docNameHints = (state.referencedDocs || [])
           .map((d) => d?.name)
@@ -266,44 +247,178 @@ export class LangGraphDocumentAgent {
           .filter((v) => v && v.trim().length)
           .join(" ");
 
-        // Next, semantic search restricted to primaryDocIds; only run if no direct context found
+        // Pilih satu dokumen saja agar konteks tidak bercampur
+        let selectedDocId: string | undefined =
+          primaryDocIds.length === 1 ? primaryDocIds[0] : undefined;
+
+        // Jika banyak kandidat dokumen, pilih yang paling relevan (berdasarkan similarity/timestamp)
+        if (!selectedDocId && primaryDocIds.length > 1) {
+          try {
+            const probe = await milvusService!.searchSimilarChunksByText(
+              retrievalQuery,
+              state.userId,
+              6,
+              primaryDocIds
+            );
+            if (probe && probe.length > 0) {
+              const byDoc: Record<
+                string,
+                { count: number; maxTs: number; maxSim: number }
+              > = {};
+              probe.forEach((r: any) => {
+                const id = r.documentId;
+                const cur = byDoc[id] || { count: 0, maxTs: 0, maxSim: 0 };
+                cur.count++;
+                cur.maxTs = Math.max(cur.maxTs, r.timestamp ?? 0);
+                cur.maxSim = Math.max(cur.maxSim, r.similarity ?? 0);
+                byDoc[id] = cur;
+              });
+              selectedDocId = Object.entries(byDoc).sort((a: any, b: any) => {
+                const sa = a[1];
+                const sb = b[1];
+                if (sb.maxSim !== sa.maxSim) return sb.maxSim - sa.maxSim;
+                if (sb.maxTs !== sa.maxTs) return sb.maxTs - sa.maxTs;
+                return sb.count - sa.count;
+              })[0]?.[0];
+            }
+          } catch (err) {
+            console.warn("Probe similarity failed:", err);
+          }
+        }
+
+        // Jika masih belum bisa memilih, pilih berdasarkan dokumen dengan timestamp terbaru
+        if (!selectedDocId && primaryDocIds.length > 1) {
+          try {
+            const stats = await Promise.all(
+              primaryDocIds.map(async (id) => {
+                try {
+                  const r = await milvusService!.getChunksByDocumentId(
+                    id,
+                    state.userId,
+                    1
+                  );
+                  const ts = r && r.length > 0 ? r[0].timestamp ?? 0 : 0;
+                  return { id, ts };
+                } catch {
+                  return { id, ts: 0 };
+                }
+              })
+            );
+            selectedDocId = stats.sort((a, b) => b.ts - a.ts)[0]?.id;
+          } catch (err) {
+            console.warn("Select latest doc by timestamp failed:", err);
+          }
+        }
+
+        // First, deterministically fetch chunks directly by selected documentId to avoid mixing contexts
+        if (selectedDocId) {
+          try {
+            const directChunks = await milvusService!.getChunksByDocumentId(
+              selectedDocId,
+              state.userId,
+              8
+            );
+            if (directChunks && directChunks.length > 0) {
+              const text = directChunks.map((c) => c.chunkText).join("\n\n");
+              context = text;
+            }
+          } catch (err) {
+            console.warn("Direct fetch by selected documentId failed:", err);
+          }
+        }
+
+        // Next, semantic search restricted to selectedDocId; only run if no direct context found
         if (!context) {
-          const similarChunks = await milvusService.searchSimilarChunksByText(
+          const similarChunks = await milvusService!.searchSimilarChunksByText(
             retrievalQuery,
             state.userId,
             8,
-            primaryDocIds.length ? primaryDocIds : undefined
+            selectedDocId ? [selectedDocId] : undefined
           );
 
           if (similarChunks && similarChunks.length > 0) {
-            const ordered = similarChunks.some(
+            // Jika tidak ada selectedDocId, pilih satu dokumen dari hasil global
+            let finalDocId = selectedDocId;
+            if (!finalDocId) {
+              const byDoc: Record<
+                string,
+                { count: number; maxTs: number; maxSim: number }
+              > = {};
+              similarChunks.forEach((r: any) => {
+                const id = r.documentId;
+                const cur = byDoc[id] || { count: 0, maxTs: 0, maxSim: 0 };
+                cur.count++;
+                cur.maxTs = Math.max(cur.maxTs, r.timestamp ?? 0);
+                cur.maxSim = Math.max(cur.maxSim, r.similarity ?? 0);
+                byDoc[id] = cur;
+              });
+              finalDocId = Object.entries(byDoc).sort((a: any, b: any) => {
+                const sa = a[1];
+                const sb = b[1];
+                if (sb.maxSim !== sa.maxSim) return sb.maxSim - sa.maxSim;
+                if (sb.maxTs !== sa.maxTs) return sb.maxTs - sa.maxTs;
+                return sb.count - sa.count;
+              })[0]?.[0];
+            }
+
+            const filtered = finalDocId
+              ? similarChunks.filter((c: any) => c.documentId === finalDocId)
+              : similarChunks;
+
+            const ordered = filtered.some(
               (c: any) => typeof c.timestamp === "number"
             )
-              ? [...similarChunks].sort(
+              ? [...filtered].sort(
                   (a: any, b: any) => (b.timestamp ?? 0) - (a.timestamp ?? 0)
                 )
-              : similarChunks;
+              : filtered;
             context = ordered.map((chunk: any) => chunk.chunkText).join("\n\n");
           } else {
             // If no specific docIds available, allow a global semantic search (user-wide)
-            if (!primaryDocIds.length) {
+            if (!selectedDocId) {
               try {
                 const globalChunks =
-                  await milvusService.searchSimilarChunksByText(
+                  await milvusService!.searchSimilarChunksByText(
                     retrievalQuery,
                     state.userId,
                     8,
                     undefined
                   );
                 if (globalChunks && globalChunks.length > 0) {
-                  const orderedGlobal = globalChunks.some(
+                  const byDoc: Record<
+                    string,
+                    { count: number; maxTs: number; maxSim: number }
+                  > = {};
+                  globalChunks.forEach((r: any) => {
+                    const id = r.documentId;
+                    const cur = byDoc[id] || { count: 0, maxTs: 0, maxSim: 0 };
+                    cur.count++;
+                    cur.maxTs = Math.max(cur.maxTs, r.timestamp ?? 0);
+                    cur.maxSim = Math.max(cur.maxSim, r.similarity ?? 0);
+                    byDoc[id] = cur;
+                  });
+                  const topDocId = Object.entries(byDoc).sort(
+                    (a: any, b: any) => {
+                      const sa = a[1];
+                      const sb = b[1];
+                      if (sb.maxSim !== sa.maxSim) return sb.maxSim - sa.maxSim;
+                      if (sb.maxTs !== sa.maxTs) return sb.maxTs - sa.maxTs;
+                      return sb.count - sa.count;
+                    }
+                  )[0]?.[0];
+
+                  const filteredGlobal = topDocId
+                    ? globalChunks.filter((c: any) => c.documentId === topDocId)
+                    : globalChunks;
+
+                  const orderedGlobal = filteredGlobal.some(
                     (c: any) => typeof c.timestamp === "number"
                   )
-                    ? [...globalChunks].sort(
+                    ? [...filteredGlobal].sort(
                         (a: any, b: any) =>
                           (b.timestamp ?? 0) - (a.timestamp ?? 0)
                       )
-                    : globalChunks;
+                    : filteredGlobal;
                   context = orderedGlobal
                     .map((chunk: any) => chunk.chunkText)
                     .join("\n\n");
@@ -313,25 +428,23 @@ export class LangGraphDocumentAgent {
               }
             }
 
-            // Fallback: direct fetch by each primaryDocId to ensure OCR context recovery
-            if (!context && primaryDocIds && primaryDocIds.length > 0) {
-              for (const docId of primaryDocIds) {
-                try {
-                  const fallbackChunks =
-                    await milvusService.getChunksByDocumentId(
-                      docId,
-                      state.userId,
-                      5
-                    );
-                  if (fallbackChunks && fallbackChunks.length > 0) {
-                    const text = fallbackChunks
-                      .map((chunk) => chunk.chunkText)
-                      .join("\n\n");
-                    context = context ? context + "\n\n" + text : text;
-                  }
-                } catch (err) {
-                  console.warn("Fallback by documentId failed:", err);
+            // Fallback: direct fetch by selectedDocId to ensure OCR context recovery
+            if (!context && selectedDocId) {
+              try {
+                const fallbackChunks =
+                  await milvusService!.getChunksByDocumentId(
+                    selectedDocId,
+                    state.userId,
+                    5
+                  );
+                if (fallbackChunks && fallbackChunks.length > 0) {
+                  const text = fallbackChunks
+                    .map((chunk) => chunk.chunkText)
+                    .join("\n\n");
+                  context = text;
                 }
+              } catch (err) {
+                console.warn("Fallback by selected documentId failed:", err);
               }
             }
           }
@@ -353,7 +466,7 @@ export class LangGraphDocumentAgent {
     // Final cap on combined context
     context = clampText(context, MAX_CONTEXT_CHARS);
 
-    console.log("Final context:", context);
+    // console.log("Final context:", context);
 
     return {
       context,
