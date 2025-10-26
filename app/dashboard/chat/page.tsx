@@ -969,7 +969,9 @@ export default function ChatPage() {
 
                       {/* Document File Display */}
                       {message.documentFile && (
-                        <ResourceFile resource={message.documentFile} />
+                        <div className={cn("mt-2 flex flex-wrap gap-1")}>
+                          <ResourceFile resource={message.documentFile} />
+                        </div>
                       )}
 
                       {message.referencedDocs && (
@@ -981,9 +983,9 @@ export default function ChatPage() {
                                 expand.includes(message.id)
                                   ? "h-auto"
                                   : "h-[80px] overflow-hidden",
-                                {
-                                  "justify-end": message.role === "user",
-                                }
+                                message.role === "user"
+                                  ? "justify-end"
+                                  : "justify-start"
                               )}
                             >
                               {message.referencedDocs.map((doc, index) => (
