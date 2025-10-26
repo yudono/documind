@@ -213,14 +213,42 @@ export class LangGraphDocumentAgent {
             ? [state.sessionId]
             : undefined;
 
+        // Augment query with referenced doc names to improve recall
+        const docNameHints = (state.referencedDocs || [])
+          .map((d) => d?.name)
+          .filter(Boolean)
+          .join(" ");
+        const retrievalQuery = [state.query, docNameHints]
+          .filter((v) => v && v.trim().length)
+          .join(" ");
+
+        // Increase topK slightly for better coverage
         const similarChunks = await milvusService.searchSimilarChunksByText(
-          state.query,
+          retrievalQuery,
           state.userId,
-          5,
+          8,
           targetDocIds
         );
 
-        context = similarChunks.map((chunk) => chunk.chunkText).join("\n\n");
+        if (similarChunks && similarChunks.length > 0) {
+          context = similarChunks.map((chunk) => chunk.chunkText).join("\n\n");
+        } else if (targetDocIds && targetDocIds.length > 0) {
+          // Fallback: fetch recent chunks for the session/documentId
+          try {
+            const fallbackChunks = await milvusService.getChunksByDocumentId(
+              targetDocIds[0],
+              state.userId,
+              5
+            );
+            if (fallbackChunks && fallbackChunks.length > 0) {
+              context = fallbackChunks
+                .map((chunk) => chunk.chunkText)
+                .join("\n\n");
+            }
+          } catch (err) {
+            console.warn("Fallback retrieval failed:", err);
+          }
+        }
       } catch (error) {
         console.error("Error retrieving context:", error);
       }

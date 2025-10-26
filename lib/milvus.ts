@@ -276,7 +276,7 @@ class MilvusService {
         },
         output_fields: ["id", "document_id", "chunk_text", "chunk_index"],
         expr,
-      };
+      } as any;
 
       const results = await this.client!.search(searchParams);
 
@@ -376,6 +376,42 @@ class MilvusService {
     } catch (error) {
       console.error("Error getting collection stats:", error);
       throw new Error("Failed to get collection statistics");
+    }
+  }
+
+  // New: Fallback query to fetch chunks by documentId when semantic search returns none
+  async getChunksByDocumentId(
+    documentId: string,
+    userId: string,
+    limit: number = 10
+  ): Promise<SearchResult[]> {
+    if (!this.isConnected) {
+      await this.connect();
+    }
+
+    try {
+      await this.client!.loadCollection({ collection_name: this.collectionName });
+      const filter = `document_id == "${documentId}" && user_id == "${userId}"`;
+      const result: any = await (this.client as any).query({
+        collection_name: this.collectionName,
+        output_fields: ["id", "document_id", "chunk_text", "chunk_index"],
+        filter,
+        limit,
+      });
+
+      const rows: any[] = (result?.data || []) as any[];
+      rows.sort((a, b) => (a.chunk_index ?? 0) - (b.chunk_index ?? 0));
+
+      return rows.map((r) => ({
+        id: r.id,
+        documentId: r.document_id,
+        chunkText: r.chunk_text,
+        chunkIndex: r.chunk_index,
+        similarity: 0,
+      }));
+    } catch (error) {
+      console.error("Error querying chunks by documentId:", error);
+      return [];
     }
   }
 
