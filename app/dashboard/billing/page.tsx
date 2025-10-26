@@ -5,46 +5,25 @@ import { useUserCredit } from "@/hooks/useUserCredit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import {
-  CreditCard,
-  Download,
-  Calendar,
-  TrendingUp,
-  FileText,
-  MessageSquare,
-  Zap,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  DollarSign,
-  BarChart3,
-  Users,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   Crown,
-  Star,
-  Plus,
   Coins,
+  Plus,
+  MessageSquare,
+  DollarSign,
+  CreditCard,
+  Loader2,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
 
-interface CreditUsage {
-  category: string;
-  used: number;
-  icon: React.ReactNode;
-}
-
-interface CreditTransaction {
+interface Transaction {
   id: string;
   date: Date;
   amount: number;
@@ -53,78 +32,48 @@ interface CreditTransaction {
   credits: number;
 }
 
-interface Plan {
+interface CreditPackage {
+  id: string;
   name: string;
-  price: number;
-  period: string;
-  features: string[];
+  description: string;
   credits: number;
-  popular?: boolean;
+  price: number;
+  currency: string;
+  isPopular?: boolean;
+  bonusCredits?: number;
+  totalCredits: number;
 }
 
 export default function BillingPage() {
   const [currentPlan] = useState("Pro");
+  const [isTopupOpen, setIsTopupOpen] = useState(false);
+  const [packages, setPackages] = useState<CreditPackage[]>([]);
+
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [packagesLoading, setPackagesLoading] = useState(false);
   const { userCredit, loading, error } = useUserCredit();
-  
+
+  // Env-configured rate and minimum (fallbacks provided)
+  const RATE_IDR_PER_CREDIT = Number(
+    process.env.NEXT_PUBLIC_CREDIT_IDR_PER_CREDIT || 1000
+  );
+  const MIN_TOPUP_IDR = Number(
+    process.env.NEXT_PUBLIC_TOPUP_MIN_AMOUNT_IDR || 50000
+  );
+
+  // Custom amount state
+  const [customAmount, setCustomAmount] = useState<number | "">("");
+
   // Use real credit data or fallback to defaults
   const currentCredits = userCredit?.balance || 0;
   const dailyCredits = userCredit?.dailyLimit || 500;
 
-  // Mock credit usage data
-  const creditUsage: CreditUsage[] = [
-    {
-      category: "Chat Messages",
-      used: 1253,
-      icon: <MessageSquare className="h-4 w-4" />,
-    },
-    {
-      category: "Document Processing",
-      used: 847,
-      icon: <FileText className="h-4 w-4" />,
-    },
-    {
-      category: "AI Analysis",
-      used: 653,
-      icon: <Zap className="h-4 w-4" />,
-    },
-  ];
-
-  // Mock usage analytics data for charts
-  const usageAnalytics = [
-    { date: "Jan", chatMessages: 120, documentProcessing: 80, aiAnalysis: 60 },
-    { date: "Feb", chatMessages: 150, documentProcessing: 95, aiAnalysis: 75 },
-    { date: "Mar", chatMessages: 180, documentProcessing: 110, aiAnalysis: 85 },
-    { date: "Apr", chatMessages: 200, documentProcessing: 130, aiAnalysis: 95 },
-    {
-      date: "May",
-      chatMessages: 220,
-      documentProcessing: 140,
-      aiAnalysis: 105,
-    },
-    {
-      date: "Jun",
-      chatMessages: 250,
-      documentProcessing: 160,
-      aiAnalysis: 120,
-    },
-  ];
-
-  const dailyUsage = [
-    { day: "Mon", usage: 45 },
-    { day: "Tue", usage: 52 },
-    { day: "Wed", usage: 38 },
-    { day: "Thu", usage: 61 },
-    { day: "Fri", usage: 55 },
-    { day: "Sat", usage: 28 },
-    { day: "Sun", usage: 33 },
-  ];
-
-  // Mock credit transaction history
-  const creditTransactions: CreditTransaction[] = [
+  // Sample transaction history
+  const transactions: Transaction[] = [
     {
       id: "1",
       date: new Date("2024-11-15"),
-      amount: 29,
+      amount: 29000,
       type: "purchase",
       description: "Credit Top-up - 1000 Credits",
       credits: 1000,
@@ -148,53 +97,10 @@ export default function BillingPage() {
     {
       id: "4",
       date: new Date("2024-11-01"),
-      amount: 29,
+      amount: 99000,
       type: "purchase",
       description: "Pro Plan - Monthly Credits",
-      credits: 5000,
-    },
-  ];
-
-  // Available plans with credit-based pricing
-  const plans: Plan[] = [
-    {
-      name: "Free",
-      price: 0,
-      period: "month",
-      features: [
-        "100 monthly credits",
-        "Basic AI analysis",
-        "Standard templates",
-        "Email support",
-      ],
-      credits: 100,
-    },
-    {
-      name: "Pro",
-      price: 99000,
-      period: "month",
-      features: [
-        "1,500 credits per month",
-        "Advanced AI analysis",
-        "Premium templates",
-        "AI Chat Assistant",
-        "Priority support",
-      ],
       credits: 1500,
-      popular: true,
-    },
-    {
-      name: "Enterprise",
-      price: 499000,
-      period: "month",
-      features: [
-        "5,000 credits per month",
-        "Custom AI models",
-        "Custom templates",
-        "API access",
-        "24/7 dedicated support",
-      ],
-      credits: 5000,
     },
   ];
 
@@ -234,10 +140,75 @@ export default function BillingPage() {
     }
   };
 
-  const totalUsedCredits = creditUsage.reduce(
-    (sum, usage) => sum + usage.used,
-    0
-  );
+  // Fetch available credit packages
+  const fetchPackages = async () => {
+    setPackagesLoading(true);
+    try {
+      const response = await fetch("/api/credits/packages");
+      if (response.ok) {
+        const data = await response.json();
+        setPackages(data.packages);
+      }
+    } catch (error) {
+      console.error("Error fetching packages:", error);
+    } finally {
+      setPackagesLoading(false);
+    }
+  };
+
+  // Handle top-up with Tripay (supports package or custom amount)
+  const handleTopup = async (
+    paymentMethod: string,
+    customAmountParam?: number
+  ) => {
+    const amt =
+      typeof customAmountParam === "number"
+        ? customAmountParam
+        : typeof customAmount === "number"
+        ? customAmount
+        : 0;
+    if (!amt || amt < MIN_TOPUP_IDR) {
+      alert(`Minimum top-up is Rp ${MIN_TOPUP_IDR.toLocaleString()}`);
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const payload = { customAmount: amt, paymentMethod };
+
+      const response = await fetch("/api/tripay/create-transaction", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Redirect to Tripay payment page
+        window.open(data.transaction.paymentUrl, "_blank");
+        setIsTopupOpen(false);
+        setCustomAmount("");
+      } else {
+        alert(
+          "Failed to create payment transaction: " +
+            (data.error || "Unknown error")
+        );
+      }
+    } catch (error) {
+      console.error("Error creating transaction:", error);
+      alert("Failed to create payment transaction");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Open top-up modal and fetch packages
+  const openTopupModal = () => {
+    setIsTopupOpen(true);
+  };
 
   return (
     <div className="min-h-screen">
@@ -258,8 +229,17 @@ export default function BillingPage() {
       <div className="p-8 space-y-8">
         {/* Credit Balance Overview */}
         <section>
-          <h2 className="text-2xl font-bold mb-6">Credit Overview</h2>
-          <div className="grid gap-6 md:grid-cols-2 mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold">Credit Overview</h2>
+            <Button
+              onClick={openTopupModal}
+              className="flex items-center gap-2"
+            >
+              <CreditCard className="h-4 w-4" />
+              Top Up Credits
+            </Button>
+          </div>
+          <div className="mb-8">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
@@ -288,208 +268,6 @@ export default function BillingPage() {
                 </p>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Crown className="h-5 w-5 mr-2 text-primary" />
-                  Current Plan: {currentPlan}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-2xl font-bold">
-                      Rp
-                      {plans
-                        .find((p) => p.name === currentPlan)
-                        ?.price?.toLocaleString() || 0}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      per{" "}
-                      {plans.find((p) => p.name === currentPlan)?.period ||
-                        "month"}
-                    </p>
-                  </div>
-                  <Badge
-                    variant="secondary"
-                    className="bg-primary/10 text-primary"
-                  >
-                    Active
-                  </Badge>
-                </div>
-                <Button variant="outline" className="w-full" size="sm">
-                  Manage Subscription
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Credit Usage Statistics */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Credit Usage This Month</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {creditUsage.map((usage, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-primary/10 rounded-lg">
-                        {usage.icon}
-                      </div>
-                      <div>
-                        <p className="font-medium">{usage.category}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {usage.used.toLocaleString()} credits used
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">
-                        {usage.used.toLocaleString()}
-                      </p>
-                      <p className="text-sm text-muted-foreground">credits</p>
-                    </div>
-                  </div>
-                ))}
-                <Separator />
-                <div className="flex items-center justify-between font-medium">
-                  <span>Total Used</span>
-                  <span>{totalUsedCredits.toLocaleString()} credits</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Analytics Section */}
-        <section>
-          <h2 className="text-2xl font-bold mb-6">Usage Analytics</h2>
-
-          {/* Usage Overview Cards */}
-          <div className="grid gap-6 md:grid-cols-3 mb-8">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Total Usage This Month
-                </CardTitle>
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {totalUsedCredits.toLocaleString()}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  +12% from last month
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Average Daily Usage
-                </CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {Math.round(totalUsedCredits / 30).toLocaleString()}
-                </div>
-                <p className="text-xs text-muted-foreground">Credits per day</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Most Used Feature
-                </CardTitle>
-                <MessageSquare className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">Chat Messages</div>
-                <p className="text-xs text-muted-foreground">
-                  {creditUsage[0]?.used.toLocaleString()} credits used
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Usage Charts */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Usage Trends Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Usage Trends (Last 6 Months)</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Track your credit usage patterns over time
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={usageAnalytics}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis />
-                      <Tooltip />
-                      <Line
-                        type="monotone"
-                        dataKey="chatMessages"
-                        stroke="#8884d8"
-                        strokeWidth={2}
-                        name="Chat Messages"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="documentProcessing"
-                        stroke="#82ca9d"
-                        strokeWidth={2}
-                        name="Document Processing"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="aiAnalysis"
-                        stroke="#ffc658"
-                        strokeWidth={2}
-                        name="AI Analysis"
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Daily Usage Bar Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Daily Usage (This Week)</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Your credit consumption by day of the week
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dailyUsage}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="day" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar
-                        dataKey="usage"
-                        fill="#8884d8"
-                        name="Credits Used"
-                        radius={[4, 4, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </section>
 
@@ -498,42 +276,48 @@ export default function BillingPage() {
           <h2 className="text-2xl font-bold mb-6">Transaction History</h2>
           <Card>
             <CardHeader>
-              <CardTitle>Credit Transaction History</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Track all your credit purchases and usage
-              </p>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Recent Transactions
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {creditTransactions.map((transaction) => (
+                {transactions.map((transaction) => (
                   <div
                     key={transaction.id}
-                    className="flex items-center justify-between p-4 border rounded-lg"
+                    className="flex items-center justify-between rounded-lg border p-4"
                   >
-                    <div className="flex items-center space-x-4">
-                      <div>{getTransactionBadge(transaction.type)}</div>
-                      <div>
-                        <p className="font-medium">{transaction.description}</p>
-                        <p className="text-sm text-muted-foreground">
+                    <div className="flex items-center gap-4">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          {getTransactionBadge(transaction.type)}
+                          <span className="font-medium">
+                            {transaction.description}
+                          </span>
+                        </div>
+                        <span className="text-sm text-muted-foreground">
                           {formatDate(transaction.date)}
-                        </p>
+                        </span>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p
-                        className={`font-medium ${
-                          transaction.credits > 0
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
-                      >
-                        {transaction.credits > 0 ? "+" : ""}
-                        {transaction.credits.toLocaleString()} credits
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`font-medium ${
+                            transaction.credits > 0
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {transaction.credits > 0 ? "+" : ""}
+                          {transaction.credits} credits
+                        </span>
+                      </div>
                       {transaction.amount > 0 && (
-                        <p className="text-sm text-muted-foreground">
-                          Rp{transaction.amount.toLocaleString()}
-                        </p>
+                        <span className="text-sm text-muted-foreground">
+                          Rp {transaction.amount.toLocaleString()}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -542,6 +326,159 @@ export default function BillingPage() {
             </CardContent>
           </Card>
         </section>
+
+        {/* Top-up Modal */}
+        <Dialog open={isTopupOpen} onOpenChange={setIsTopupOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Top Up Credits
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <p className="text-muted-foreground">
+                Enter a custom amount (min Rp {MIN_TOPUP_IDR.toLocaleString()}).
+              </p>
+
+              {/* Custom amount input */}
+              <div className="space-y-3 border rounded-md p-4">
+                <div className="grid gap-2 md:grid-cols-3 items-center">
+                  <div className="md:col-span-2">
+                    <label className="text-sm font-medium">
+                      Custom Amount (IDR)
+                    </label>
+                    <Input
+                      type="number"
+                      min={MIN_TOPUP_IDR}
+                      placeholder={MIN_TOPUP_IDR.toString()}
+                      value={customAmount === "" ? "" : customAmount}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setCustomAmount(Number.isFinite(val) ? val : "");
+                      }}
+                    />
+                  </div>
+                  <div className="">
+                    <div className="text-sm text-muted-foreground">Credits</div>
+                    <div className="text-xl font-semibold">
+                      {typeof customAmount === "number"
+                        ? Math.floor(customAmount / RATE_IDR_PER_CREDIT)
+                        : 0}
+                    </div>
+                  </div>
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <Button
+                    onClick={() =>
+                      handleTopup(
+                        "BRIVA",
+                        typeof customAmount === "number"
+                          ? customAmount
+                          : undefined
+                      )
+                    }
+                    disabled={
+                      isProcessing ||
+                      !(
+                        typeof customAmount === "number" &&
+                        customAmount >= MIN_TOPUP_IDR
+                      )
+                    }
+                    className="justify-start"
+                    variant="outline"
+                  >
+                    {isProcessing ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <CreditCard className="h-4 w-4 mr-2" />
+                    )}
+                    BRI Virtual Account
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      handleTopup(
+                        "BCAVA",
+                        typeof customAmount === "number"
+                          ? customAmount
+                          : undefined
+                      )
+                    }
+                    disabled={
+                      isProcessing ||
+                      !(
+                        typeof customAmount === "number" &&
+                        customAmount >= MIN_TOPUP_IDR
+                      )
+                    }
+                    className="justify-start"
+                    variant="outline"
+                  >
+                    {isProcessing ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <CreditCard className="h-4 w-4 mr-2" />
+                    )}
+                    BCA Virtual Account
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      handleTopup(
+                        "MANDIRIVA",
+                        typeof customAmount === "number"
+                          ? customAmount
+                          : undefined
+                      )
+                    }
+                    disabled={
+                      isProcessing ||
+                      !(
+                        typeof customAmount === "number" &&
+                        customAmount >= MIN_TOPUP_IDR
+                      )
+                    }
+                    className="justify-start"
+                    variant="outline"
+                  >
+                    {isProcessing ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <CreditCard className="h-4 w-4 mr-2" />
+                    )}
+                    Mandiri Virtual Account
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      handleTopup(
+                        "QRIS",
+                        typeof customAmount === "number"
+                          ? customAmount
+                          : undefined
+                      )
+                    }
+                    disabled={
+                      isProcessing ||
+                      !(
+                        typeof customAmount === "number" &&
+                        customAmount >= MIN_TOPUP_IDR
+                      )
+                    }
+                    className="justify-start"
+                    variant="outline"
+                  >
+                    {isProcessing ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <CreditCard className="h-4 w-4 mr-2" />
+                    )}
+                    QRIS
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
