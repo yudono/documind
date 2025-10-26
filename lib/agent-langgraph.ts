@@ -520,13 +520,18 @@ export class LangGraphDocumentAgent {
     state: AgentState
   ): Promise<Partial<AgentState>> {
     try {
-      // Ask the LLM to classify intent and type with strict JSON output
+      // 1) Heuristik konservatif sebagai gerbang awal: jika tidak jelas, JANGAN generate
+      const heuristicSuggests = this.isDocumentGenerationRequest(state.query);
+      if (!heuristicSuggests) {
+        return { shouldGenerateDoc: false, documentType: undefined };
+      }
+
+      // 2) Minta konfirmasi ke LLM dengan output JSON ketat
       const systemText = clampText(
         `You are a classifier for document generation intent.
-- Decide if the user requests to create/export a document artifact.
-- If yes, choose the single best document type from: "pdf", "docx", "xlsx", "pptx".
+- ONLY approve generation if the user explicitly asks to create/produce/export a document AND mentions a type: "pdf", "docx", "xlsx", or "pptx".
 - Return ONLY a JSON object with keys: "shouldGenerate" (boolean) and "type" ("pdf"|"docx"|"xlsx"|"pptx"|null).
-- If unclear or not a generation request, set "shouldGenerate" to false and "type" to null.`,
+- If it is unclear or just Q&A, set "shouldGenerate" = false and "type" = null.`,
         MAX_SYSTEM_CHARS
       );
       const safeQuery = clampText(state.query, MAX_QUERY_CHARS);
@@ -545,25 +550,30 @@ export class LangGraphDocumentAgent {
       let type: "pdf" | "xlsx" | "docx" | "pptx" | undefined;
 
       try {
-        // Try to extract JSON from the response content robustly
         const jsonText = (() => {
           const start = raw.indexOf("{");
           const end = raw.lastIndexOf("}");
-          if (start !== -1 && end !== -1 && end > start) return raw.slice(start, end + 1);
+          if (start !== -1 && end !== -1 && end > start)
+            return raw.slice(start, end + 1);
           return raw;
         })();
         const parsed = JSON.parse(jsonText);
         shouldGenerate = !!parsed.shouldGenerate;
         const maybeType = parsed.type as string | null | undefined;
-        if (maybeType === "pdf" || maybeType === "docx" || maybeType === "xlsx" || maybeType === "pptx") {
+        if (
+          maybeType === "pdf" ||
+          maybeType === "docx" ||
+          maybeType === "xlsx" ||
+          maybeType === "pptx"
+        ) {
           type = maybeType;
         }
       } catch {
-        // Fallback to heuristics if parsing fails
-        shouldGenerate = this.isDocumentGenerationRequest(state.query);
-        type = shouldGenerate ? this.detectDocumentType(state.query) : undefined;
+        // Jika parsing gagal, tetap konservatif: jangan generate
+        shouldGenerate = false;
       }
 
+      // 3) Hanya generate bila KEDUANYA (heuristik & LLM) menyatakan true
       if (!shouldGenerate) {
         return { shouldGenerateDoc: false, documentType: undefined };
       }
@@ -595,6 +605,9 @@ export class LangGraphDocumentAgent {
       const safeContext = clampText(state.context, MAX_CONTEXT_CHARS);
       const safeQuery = clampText(state.query, MAX_QUERY_CHARS);
 
+      console.log("safeContext 2:", safeContext);
+      console.log("safeQuery 2:", safeQuery);
+
       const baseSystemText = clampText(
         `You generate structured document content. Respond in Markdown only (no HTML).
      - Use headings (#, ##, ###), paragraphs, bullet lists (-) and numbered lists (1.).
@@ -606,9 +619,10 @@ export class LangGraphDocumentAgent {
      - Excel JSON is handled in a separate step; do not emit CSV or JSON here.`,
         MAX_SYSTEM_CHARS
       );
-      const refDoc = (state.referencedDocs && state.referencedDocs.length > 0)
-        ? state.referencedDocs[0]
-        : undefined;
+      const refDoc =
+        state.referencedDocs && state.referencedDocs.length > 0
+          ? state.referencedDocs[0]
+          : undefined;
       const refLine = refDoc
         ? `Current reference document: ${refDoc.name} - ${refDoc.url}`
         : "";
@@ -649,15 +663,19 @@ export class LangGraphDocumentAgent {
       const safeContext = clampText(state.context, MAX_CONTEXT_CHARS);
       const safeQuery = clampText(state.query, MAX_QUERY_CHARS);
 
+      console.log("safeContext:", safeContext);
+      console.log("safeQuery:", safeQuery);
+
       const baseSystemText = clampText(
         `You analyze documents and answer questions using provided context.
      Respond in Markdown. Prefer headings, lists, tables, and code blocks when helpful.
      Do not use HTML unless explicitly requested.`,
         MAX_SYSTEM_CHARS
       );
-      const refDoc = (state.referencedDocs && state.referencedDocs.length > 0)
-        ? state.referencedDocs[0]
-        : undefined;
+      const refDoc =
+        state.referencedDocs && state.referencedDocs.length > 0
+          ? state.referencedDocs[0]
+          : undefined;
       const refLine = refDoc
         ? `Current reference document: ${refDoc.name} - ${refDoc.url}`
         : "";
