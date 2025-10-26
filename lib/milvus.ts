@@ -13,6 +13,7 @@ interface DocumentChunk {
   chunkText: string;
   chunkIndex: number;
   embedding: number[];
+  timestamp?: number;
   metadata?: Record<string, any>;
 }
 
@@ -22,6 +23,7 @@ interface SearchResult {
   chunkText: string;
   chunkIndex: number;
   similarity: number;
+  timestamp?: number;
   metadata?: Record<string, any>;
 }
 
@@ -30,6 +32,7 @@ class MilvusService {
   private collectionName: string = "document_embeddings";
   private isConnected: boolean = false;
   private config: MilvusConfig;
+  private hasTimestampField: boolean = false;
 
   constructor(config: MilvusConfig) {
     this.config = config;
@@ -54,6 +57,20 @@ class MilvusService {
     }
   }
 
+  private async updateFieldPresence(): Promise<void> {
+    try {
+      const desc: any = await (this.client as any).describeCollection({
+        collection_name: this.collectionName,
+      });
+      const fields: any[] = desc.schema?.fields || desc.fields || [];
+      this.hasTimestampField = fields.some((f: any) => f.name === "timestamp");
+    } catch (e) {
+      // If describe fails, assume timestamp not present to be safe
+      this.hasTimestampField = false;
+      console.warn("describeCollection failed, assuming no timestamp field:", e);
+    }
+  }
+
   async createCollection(): Promise<void> {
     if (!this.isConnected) {
       await this.connect();
@@ -70,6 +87,7 @@ class MilvusService {
         await this.client!.loadCollection({
           collection_name: this.collectionName,
         });
+        await this.updateFieldPresence();
         return;
       }
 
@@ -114,8 +132,13 @@ class MilvusService {
             data_type: DataType.VarChar,
             max_length: 100,
           },
+          {
+            name: "timestamp",
+            description: "Insertion time (ms since epoch)",
+            data_type: DataType.Int64,
+          },
         ],
-      };
+      } as any;
 
       await this.client!.createCollection(schema);
 
@@ -133,6 +156,9 @@ class MilvusService {
         collection_name: this.collectionName,
       });
 
+      // Newly created collection surely has timestamp
+      this.hasTimestampField = true;
+
       console.log(`Collection ${this.collectionName} created successfully`);
     } catch (error) {
       console.error("Error creating collection:", error);
@@ -149,19 +175,33 @@ class MilvusService {
     }
 
     try {
-      const data = chunks.map((chunk) => ({
-        id: chunk.id,
-        document_id: chunk.documentId,
-        chunk_text: chunk.chunkText,
-        chunk_index: chunk.chunkIndex,
-        embedding: chunk.embedding,
-        user_id: userId,
-      }));
+      const data = chunks.map((chunk) => {
+        const base: any = {
+          id: chunk.id,
+          document_id: chunk.documentId,
+          chunk_text: chunk.chunkText,
+          chunk_index: chunk.chunkIndex,
+          embedding: chunk.embedding,
+          user_id: userId,
+        };
+        if (this.hasTimestampField) {
+          base.timestamp = chunk.timestamp ?? Date.now();
+        }
+        return base;
+      });
 
       await this.client!.insert({
         collection_name: this.collectionName,
         data,
       });
+
+      // Ensure newly inserted data is queryable immediately
+      if ((this.client as any).flush) {
+        await (this.client as any).flush({
+          collection_names: [this.collectionName],
+        });
+      }
+      await this.client!.loadCollection({ collection_name: this.collectionName });
 
       console.log(`Inserted ${chunks.length} chunks into Milvus`);
     } catch (error) {
@@ -186,6 +226,7 @@ class MilvusService {
 
     // Generate embeddings and create document chunks
     const documentChunks: DocumentChunk[] = [];
+    const ts = Date.now();
 
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
@@ -193,11 +234,12 @@ class MilvusService {
         const embedding = await this.generateEmbeddingForText(chunk);
 
         documentChunks.push({
-          id: `${documentId}_chunk_${i}`,
+          id: `${documentId}_${ts}_${i}`,
           documentId,
           chunkText: chunk,
           chunkIndex: i,
           embedding,
+          timestamp: ts,
         });
       } catch (error) {
         console.error(`Error generating embedding for chunk ${i}:`, error);
@@ -209,6 +251,21 @@ class MilvusService {
     await this.insertDocumentChunks(documentChunks, userId);
 
     return { chunksCount: documentChunks.length };
+  }
+
+  private async generateEmbeddingForText(text: string): Promise<number[]> {
+    // Use OpenAI's text-embedding-3-small model via the embeddings module
+    return await generateEmbedding(text);
+  }
+
+  private simpleHash(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return hash;
   }
 
   private splitTextIntoChunks(
@@ -227,21 +284,6 @@ class MilvusService {
     }
 
     return chunks;
-  }
-
-  private async generateEmbeddingForText(text: string): Promise<number[]> {
-    // Use OpenAI's text-embedding-3-small model via the embeddings module
-    return await generateEmbedding(text);
-  }
-
-  private simpleHash(str: string): number {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return hash;
   }
 
   async searchSimilarChunks(
@@ -265,6 +307,9 @@ class MilvusService {
         expr += ` && document_id in [${docFilter}]`;
       }
 
+      const outputFields = ["id", "document_id", "chunk_text", "chunk_index"];
+      if (this.hasTimestampField) outputFields.push("timestamp");
+
       const searchParams = {
         collection_name: this.collectionName,
         vectors: [queryEmbedding],
@@ -274,7 +319,7 @@ class MilvusService {
           metric_type: MetricType.COSINE,
           params: { nprobe: 10 },
         },
-        output_fields: ["id", "document_id", "chunk_text", "chunk_index"],
+        output_fields: outputFields,
         expr,
       } as any;
 
@@ -290,6 +335,7 @@ class MilvusService {
         chunkText: result.chunk_text,
         chunkIndex: result.chunk_index,
         similarity: result.score,
+        timestamp: result.timestamp,
       }));
     } catch (error) {
       console.error("Error searching similar chunks:", error);
@@ -320,6 +366,55 @@ class MilvusService {
     }
   }
 
+  async getChunksByDocumentId(
+    documentId: string,
+    userId: string,
+    limit: number = 10
+  ): Promise<SearchResult[]> {
+    if (!this.isConnected) {
+      await this.connect();
+    }
+
+    try {
+      await this.client!.loadCollection({ collection_name: this.collectionName });
+      const filter = `document_id == "${documentId}" && user_id == "${userId}"`;
+      const rawLimit = Math.max(limit * 3, 30);
+      const outputFields = ["id", "document_id", "chunk_text", "chunk_index"];
+      if (this.hasTimestampField) outputFields.push("timestamp");
+      const result: any = await (this.client as any).query({
+        collection_name: this.collectionName,
+        output_fields: outputFields,
+        filter,
+        limit: rawLimit,
+      });
+
+      const rows: any[] = (result?.data || []) as any[];
+      if (this.hasTimestampField) {
+        rows.sort((a, b) => {
+          const diffTs = (b.timestamp ?? 0) - (a.timestamp ?? 0);
+          if (diffTs !== 0) return diffTs;
+          return (a.chunk_index ?? 0) - (b.chunk_index ?? 0);
+        });
+      } else {
+        rows.sort((a, b) => (a.chunk_index ?? 0) - (b.chunk_index ?? 0));
+      }
+
+      const sliced = rows.slice(0, limit);
+
+      return sliced.map((r) => ({
+        id: r.id,
+        documentId: r.document_id,
+        chunkText: r.chunk_text,
+        chunkIndex: r.chunk_index,
+        similarity: 0,
+        timestamp: r.timestamp,
+      }));
+    } catch (error) {
+      console.error("Error querying chunks by documentId:", error);
+      return [];
+    }
+  }
+
   async deleteDocumentChunks(
     documentId: string,
     userId: string
@@ -340,87 +435,6 @@ class MilvusService {
     } catch (error) {
       console.error("Error deleting document chunks:", error);
       throw new Error("Failed to delete document chunks");
-    }
-  }
-
-  async deleteUserData(userId: string): Promise<void> {
-    if (!this.isConnected) {
-      await this.connect();
-    }
-
-    try {
-      const expr = `user_id == "${userId}"`;
-
-      await this.client!.delete({
-        collection_name: this.collectionName,
-        filter: expr,
-      });
-
-      console.log(`Deleted all data for user ${userId}`);
-    } catch (error) {
-      console.error("Error deleting user data:", error);
-      throw new Error("Failed to delete user data");
-    }
-  }
-
-  async getCollectionStats(): Promise<any> {
-    if (!this.isConnected) {
-      await this.connect();
-    }
-
-    try {
-      const stats = await this.client!.getCollectionStatistics({
-        collection_name: this.collectionName,
-      });
-      return stats;
-    } catch (error) {
-      console.error("Error getting collection stats:", error);
-      throw new Error("Failed to get collection statistics");
-    }
-  }
-
-  // New: Fallback query to fetch chunks by documentId when semantic search returns none
-  async getChunksByDocumentId(
-    documentId: string,
-    userId: string,
-    limit: number = 10
-  ): Promise<SearchResult[]> {
-    if (!this.isConnected) {
-      await this.connect();
-    }
-
-    try {
-      await this.client!.loadCollection({ collection_name: this.collectionName });
-      const filter = `document_id == "${documentId}" && user_id == "${userId}"`;
-      const result: any = await (this.client as any).query({
-        collection_name: this.collectionName,
-        output_fields: ["id", "document_id", "chunk_text", "chunk_index"],
-        filter,
-        limit,
-      });
-
-      const rows: any[] = (result?.data || []) as any[];
-      rows.sort((a, b) => (a.chunk_index ?? 0) - (b.chunk_index ?? 0));
-
-      return rows.map((r) => ({
-        id: r.id,
-        documentId: r.document_id,
-        chunkText: r.chunk_text,
-        chunkIndex: r.chunk_index,
-        similarity: 0,
-      }));
-    } catch (error) {
-      console.error("Error querying chunks by documentId:", error);
-      return [];
-    }
-  }
-
-  async disconnect(): Promise<void> {
-    if (this.isConnected) {
-      // Note: The Milvus client doesn't have an explicit disconnect method
-      // Connection will be closed when the process ends
-      this.isConnected = false;
-      console.log("Disconnected from Milvus");
     }
   }
 }

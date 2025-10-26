@@ -1316,7 +1316,9 @@ export default function ChatPage() {
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm truncate w-72">
-                            {normalizeText(chatSession.lastMessage)}
+                            {normalizeText(
+                              chatSession.lastMessage || "New Chat"
+                            )}
                           </div>
                           {/* <div className="text-xs text-muted-foreground mt-1 line-clamp-2 w-72">
                             {chatSession.lastMessage}

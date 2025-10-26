@@ -59,6 +59,7 @@ async function saveMemoryEntry(
       chunkText: text,
       chunkIndex: role === "user" ? 0 : role === "assistant" ? 1 : 2,
       embedding,
+      timestamp: Date.now(),
     };
 
     await milvusService.insertDocumentChunks([chunk], userId);
@@ -151,8 +152,10 @@ export class LangGraphDocumentAgent {
     // Bind methods to preserve 'this' context
     const retrieveContextNode = this.retrieveContextNode.bind(this);
     const generateResponseNode = this.generateResponseNode.bind(this);
-    const generateDocumentResponseNode = this.generateDocumentResponseNode.bind(this);
-    const decideDocumentGenerationNode = this.decideDocumentGenerationNode.bind(this);
+    const generateDocumentResponseNode =
+      this.generateDocumentResponseNode.bind(this);
+    const decideDocumentGenerationNode =
+      this.decideDocumentGenerationNode.bind(this);
     const generateDocumentNode = this.generateDocumentNode.bind(this);
     const saveConversationNode = this.saveConversationNode.bind(this);
     const shouldGenerateDocument = this.shouldGenerateDocument.bind(this);
@@ -206,12 +209,53 @@ export class LangGraphDocumentAgent {
           return { ...state, context: "" };
         }
 
-        const targetDocIds =
+        // Determine primaryDocIds: prioritize referencedDocs, then explicit documentIds, lastly sessionId
+        const referencedDocIds = (state.referencedDocs || [])
+          .map((d: any) => {
+            const direct = d?.id || d?.documentId || d?.key;
+            if (direct) return direct;
+            // Try parse id from URL like /api/items/{id}/download
+            try {
+              const u = new URL(d?.url || "", "http://localhost");
+              const match = (u.pathname || "").match(
+                /\/items\/(.+?)\/download/
+              );
+              return match && match[1] ? match[1] : undefined;
+            } catch {
+              return undefined;
+            }
+          })
+          .filter(Boolean);
+        const explicitDocIds =
           state.documentIds && state.documentIds.length
             ? state.documentIds
-            : state.sessionId
-            ? [state.sessionId]
-            : undefined;
+            : [];
+        const primaryDocIds = referencedDocIds.length
+          ? referencedDocIds
+          : explicitDocIds.length
+          ? explicitDocIds
+          : state.sessionId
+          ? [state.sessionId]
+          : [];
+
+        // First, deterministically fetch chunks directly by documentId to avoid mixing contexts
+        if (primaryDocIds.length > 0) {
+          for (const docId of primaryDocIds) {
+            try {
+              const directChunks = await milvusService.getChunksByDocumentId(
+                docId,
+                state.userId,
+                8
+              );
+              if (directChunks && directChunks.length > 0) {
+                const text = directChunks.map((c) => c.chunkText).join("\n\n");
+                context = context ? context + "\n\n" + text : text;
+              }
+            } catch (err) {
+              console.warn("Direct fetch by documentId failed:", err);
+            }
+          }
+        }
 
         // Augment query with referenced doc names to improve recall
         const docNameHints = (state.referencedDocs || [])
@@ -222,31 +266,61 @@ export class LangGraphDocumentAgent {
           .filter((v) => v && v.trim().length)
           .join(" ");
 
-        // Increase topK slightly for better coverage
-        const similarChunks = await milvusService.searchSimilarChunksByText(
-          retrievalQuery,
-          state.userId,
-          8,
-          targetDocIds
-        );
+        // Next, semantic search restricted to primaryDocIds; only run if no direct context found
+        if (!context) {
+          const similarChunks = await milvusService.searchSimilarChunksByText(
+            retrievalQuery,
+            state.userId,
+            8,
+            primaryDocIds.length ? primaryDocIds : undefined
+          );
 
-        if (similarChunks && similarChunks.length > 0) {
-          context = similarChunks.map((chunk) => chunk.chunkText).join("\n\n");
-        } else if (targetDocIds && targetDocIds.length > 0) {
-          // Fallback: fetch recent chunks for the session/documentId
-          try {
-            const fallbackChunks = await milvusService.getChunksByDocumentId(
-              targetDocIds[0],
-              state.userId,
-              5
-            );
-            if (fallbackChunks && fallbackChunks.length > 0) {
-              context = fallbackChunks
-                .map((chunk) => chunk.chunkText)
-                .join("\n\n");
+          if (similarChunks && similarChunks.length > 0) {
+            context = similarChunks
+              .map((chunk) => chunk.chunkText)
+              .join("\n\n");
+          } else {
+            // If no specific docIds available, allow a global semantic search (user-wide)
+            if (!primaryDocIds.length) {
+              try {
+                const globalChunks =
+                  await milvusService.searchSimilarChunksByText(
+                    retrievalQuery,
+                    state.userId,
+                    8,
+                    undefined
+                  );
+                if (globalChunks && globalChunks.length > 0) {
+                  context = globalChunks
+                    .map((chunk) => chunk.chunkText)
+                    .join("\n\n");
+                }
+              } catch (err) {
+                console.warn("Global search retrieval failed:", err);
+              }
             }
-          } catch (err) {
-            console.warn("Fallback retrieval failed:", err);
+
+            // Fallback: direct fetch by each primaryDocId to ensure OCR context recovery
+            if (!context && primaryDocIds && primaryDocIds.length > 0) {
+              for (const docId of primaryDocIds) {
+                try {
+                  const fallbackChunks =
+                    await milvusService.getChunksByDocumentId(
+                      docId,
+                      state.userId,
+                      5
+                    );
+                  if (fallbackChunks && fallbackChunks.length > 0) {
+                    const text = fallbackChunks
+                      .map((chunk) => chunk.chunkText)
+                      .join("\n\n");
+                    context = context ? context + "\n\n" + text : text;
+                  }
+                } catch (err) {
+                  console.warn("Fallback by documentId failed:", err);
+                }
+              }
+            }
           }
         }
       } catch (error) {
@@ -265,6 +339,8 @@ export class LangGraphDocumentAgent {
 
     // Final cap on combined context
     context = clampText(context, MAX_CONTEXT_CHARS);
+
+    console.log("Final context:", context);
 
     return {
       context,
@@ -285,17 +361,37 @@ export class LangGraphDocumentAgent {
         "Extract clear text from this document image. Preserve headings, tables, and lists in plain text. Return only clean text for QA/summarization.";
 
       const results: { url: string; text: string }[] = [];
+      const ocrDocIds: string[] = [];
       for (const doc of selected) {
         const url = doc.url;
         try {
           const text = await performOCR(url, ocrPrompt);
           results.push({ url, text });
-          if (milvusService && state.sessionId) {
+
+          // Derive stable documentId from download URL if possible
+          // Expected pattern: /api/items/{id}/download?type=pdf
+          const itemIdFromUrl = (() => {
+            try {
+              const u = new URL(url, "http://localhost");
+              const pathname = u.pathname || "";
+              const match = pathname.match(/\/items\/(.+?)\/download/);
+              return match && match[1] ? match[1] : undefined;
+            } catch {
+              return undefined;
+            }
+          })();
+
+          const milvusDocId = itemIdFromUrl || state.sessionId;
+          if (milvusDocId) {
+            ocrDocIds.push(milvusDocId);
+          }
+
+          if (milvusService && milvusDocId) {
             try {
               await initializeMilvus();
               const labeled = `OCR from ${url}:\n${text}`;
               await milvusService.processAndInsertDocument(
-                state.sessionId,
+                milvusDocId,
                 labeled,
                 state.userId
               );
@@ -312,8 +408,16 @@ export class LangGraphDocumentAgent {
         return {};
       }
 
+      // Link OCR docIds into state.documentIds to strengthen retrieval
+      const mergedDocIds = Array.from(
+        new Set([...(state.documentIds || []), ...ocrDocIds])
+      );
+
       // Do NOT append full OCR text into context. We rely on Milvus retrieval next.
-      return { referencedDocs: state.referencedDocs };
+      return {
+        referencedDocs: state.referencedDocs,
+        documentIds: mergedDocIds,
+      };
     } catch (error) {
       console.error("Error in OCR node:", error);
       return {};
