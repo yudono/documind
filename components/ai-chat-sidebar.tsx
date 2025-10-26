@@ -218,57 +218,49 @@ export default function AIChatSidebar({
   };
 
   return (
-    <>
-      {isVisible && (
-        <Card
-          className={cn(
-            inline ? "h-full w-full" : "w-80 border-l shadow-lg z-40"
-          )}
-        >
-          <CardHeader className="py-4">
-            <CardTitle className="flex items-center text-lg">
-              <Bot className="h-5 w-5 mr-2 text-blue-600" />
-              AI Assistant
-            </CardTitle>
-          </CardHeader>
+    <Card>
+      <CardHeader className="py-4">
+        <CardTitle className="flex items-center text-lg">
+          <Bot className="h-5 w-5 mr-2 text-blue-600" />
+          AI Assistant
+        </CardTitle>
+      </CardHeader>
 
-          <CardContent className="flex flex-col p-0 h-[calc(100vh-134px)]">
-            <div className="flex-1 overflow-y-auto px-4">
-              <ChatMessageList messages={messages} />
-              <div ref={messagesEndRef} />
+      <CardContent className="flex flex-col p-0 h-[calc(100vh-134px)]">
+        <div className="flex-1 overflow-y-auto px-4">
+          <ChatMessageList messages={messages} />
+          <div ref={messagesEndRef} />
+        </div>
+
+        {previewHtml && (
+          <div className="border-t p-3 bg-muted/30">
+            <div className="text-xs font-semibold mb-2">Preview</div>
+            <div className="max-h-40 overflow-auto border rounded bg-background p-3 text-xs">
+              <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
             </div>
-
-            {previewHtml && (
-              <div className="border-t p-3 bg-muted/30">
-                <div className="text-xs font-semibold mb-2">Preview</div>
-                <div className="max-h-40 overflow-auto border rounded bg-background p-3 text-xs">
-                  <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <Button size="sm" variant="default" onClick={applyPreview}>
-                    Apply to document
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={cancelPreview}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <div className="border-t p-2">
-              <ChatInput
-                value={inputMessage}
-                onChange={setInputMessage}
-                onSend={sendMessage}
-                disabled={isTyping}
-              />
-              <div className="px-3 pb-2 text-[11px] text-muted-foreground">
-                Tips: Minta AI kirim HTML sederhana bila perlu preview.
-              </div>
+            <div className="flex gap-2 mt-2">
+              <Button size="sm" variant="default" onClick={applyPreview}>
+                Apply to document
+              </Button>
+              <Button size="sm" variant="secondary" onClick={cancelPreview}>
+                Cancel
+              </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
-    </>
+          </div>
+        )}
+
+        <div className="border-t p-2">
+          <ChatInput
+            value={inputMessage}
+            onChange={setInputMessage}
+            onSend={sendMessage}
+            disabled={isTyping}
+          />
+          <div className="px-3 pb-2 text-[11px] text-muted-foreground">
+            Tips: Minta AI kirim HTML sederhana bila perlu preview.
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

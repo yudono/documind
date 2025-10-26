@@ -22,7 +22,6 @@ import { useSession } from "next-auth/react";
 
 interface AIChatSidebarTablesProps {
   isVisible: boolean;
-  onToggleVisibility: () => void;
   inline?: boolean;
   onApplyTable: (rows: any[][]) => void;
   tableId?: string;
@@ -31,7 +30,6 @@ interface AIChatSidebarTablesProps {
 
 export default function AIChatSidebarTables({
   isVisible,
-  onToggleVisibility,
   inline = false,
   onApplyTable,
   tableId,
@@ -96,7 +94,9 @@ export default function AIChatSidebarTables({
     }
   }, []);
 
-  const restoreOrCreateSession = useCallback(async (): Promise<string | null> => {
+  const restoreOrCreateSession = useCallback(async (): Promise<
+    string | null
+  > => {
     // Try localStorage first
     try {
       const stored = localStorage.getItem(sessionStorageKey);
@@ -268,71 +268,63 @@ export default function AIChatSidebarTables({
   };
 
   return (
-    <>
-      {isVisible && (
-        <Card
-          className={cn(
-            inline ? "h-full w-full" : "w-80 border-l shadow-lg z-40"
-          )}
-        >
-          <CardHeader className="py-4">
-            <CardTitle className="flex items-center text-lg">
-              <Bot className="h-5 w-5 mr-2 text-blue-600" />
-              AI Assistant (Tables)
-            </CardTitle>
-          </CardHeader>
+    <Card>
+      <CardHeader className="py-4">
+        <CardTitle className="flex items-center text-lg">
+          <Bot className="h-5 w-5 mr-2 text-blue-600" />
+          AI Assistant (Tables)
+        </CardTitle>
+      </CardHeader>
 
-          <CardContent className="flex flex-col p-0 h-[calc(100vh-134px)]">
-            {/* Removed output format selector */}
+      <CardContent className="flex flex-col p-0 h-[calc(100vh-134px)]">
+        {/* Removed output format selector */}
 
-            <div className="flex-1 overflow-y-auto px-4">
-              <ChatMessageList messages={messages} />
-              <div ref={messagesEndRef} />
-            </div>
+        <div className="flex-1 overflow-y-auto px-4">
+          <ChatMessageList messages={messages} />
+          <div ref={messagesEndRef} />
+        </div>
 
-            {previewRows && (
-              <div className="border-t p-3 bg-muted/30">
-                <div className="text-xs font-semibold mb-2">Preview</div>
-                <div className="max-h-40 overflow-auto border rounded bg-background">
-                  <table className="w-full text-xs">
-                    <tbody>
-                      {previewRows.slice(0, 10).map((row, i) => (
-                        <tr key={i} className="border-b">
-                          {row.map((cell, j) => (
-                            <td key={j} className="px-2 py-1 border-r">
-                              {String(cell ?? "")}
-                            </td>
-                          ))}
-                        </tr>
+        {previewRows && (
+          <div className="border-t p-3 bg-muted/30">
+            <div className="text-xs font-semibold mb-2">Preview</div>
+            <div className="max-h-40 overflow-auto border rounded bg-background">
+              <table className="w-full text-xs">
+                <tbody>
+                  {previewRows.slice(0, 10).map((row, i) => (
+                    <tr key={i} className="border-b">
+                      {row.map((cell, j) => (
+                        <td key={j} className="px-2 py-1 border-r">
+                          {String(cell ?? "")}
+                        </td>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <Button size="sm" variant="default" onClick={applyPreview}>
-                    Apply to sheet
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={cancelPreview}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <div className="border-t p-2">
-              <ChatInput
-                value={inputMessage}
-                onChange={setInputMessage}
-                onSend={sendMessage}
-                disabled={isTyping}
-              />
-              <div className="px-3 pb-2 text-[11px] text-muted-foreground">
-                Tips: Minta AI kirim dalam format CSV terbungkus triple backticks.
-              </div>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </CardContent>
-        </Card>
-      )}
-    </>
+            <div className="flex gap-2 mt-2">
+              <Button size="sm" variant="default" onClick={applyPreview}>
+                Apply to sheet
+              </Button>
+              <Button size="sm" variant="secondary" onClick={cancelPreview}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="border-t p-2">
+          <ChatInput
+            value={inputMessage}
+            onChange={setInputMessage}
+            onSend={sendMessage}
+            disabled={isTyping}
+          />
+          <div className="px-3 pb-2 text-[11px] text-muted-foreground">
+            Tips: Minta AI kirim dalam format CSV terbungkus triple backticks.
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

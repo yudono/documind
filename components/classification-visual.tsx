@@ -34,6 +34,7 @@ export type ClassificationVisualProps = {
     error?: string;
   }[];
   dense?: boolean;
+  type?: any;
 };
 
 function isNumeric(n: unknown) {
@@ -241,6 +242,7 @@ function layoutTree(rootNodes: TreeNode[]) {
 }
 
 export default function ClassificationVisual({
+  type,
   headers,
   rows,
   className,
@@ -256,9 +258,13 @@ export default function ClassificationVisual({
     return (
       <Card className={cn("w-full", className)}>
         <CardHeader>
-          <div className="text-lg font-semibold">Classification</div>
+          <div className="text-lg font-semibold">
+            Classification {type.replace("-", " ")}
+          </div>
           <div className="bg-neutral-100 p-4 rounded-lg">
-            <div className="text-sm font-semibold text-neutral-500">Linked Documents</div>
+            <div className="text-sm font-semibold text-neutral-500">
+              Linked Documents
+            </div>
             <div className="flex flex-wrap">
               {linkedResource &&
                 linkedResource.length > 0 &&
@@ -342,8 +348,6 @@ export default function ClassificationVisual({
               </div>
             );
           })}
-
-
         </CardContent>
       </Card>
     );
@@ -355,7 +359,9 @@ export default function ClassificationVisual({
       <CardHeader>
         <div className="text-lg font-semibold">Classification</div>
         <div className="bg-neutral-100 p-4 rounded-lg">
-          <div className="text-sm font-semibold text-neutral-500">Linked Documents</div>
+          <div className="text-sm font-semibold text-neutral-500">
+            Linked Documents
+          </div>
           <div className="flex flex-wrap">
             {linkedResource &&
               linkedResource.length > 0 &&
@@ -371,7 +377,9 @@ export default function ClassificationVisual({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-sm text-muted-foreground">No hierarchical data found.</div>
+        <div className="text-sm text-muted-foreground">
+          No hierarchical data found.
+        </div>
       </CardContent>
     </Card>
   );

@@ -34,6 +34,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import AIChatSidebarTables from "@/components/ai-chat-sidebar-tables";
+import { cn } from "@/lib/utils";
 
 // Basic spreadsheet types
 interface CellMap {
@@ -244,99 +245,107 @@ export default function TablesEditorPage() {
   };
 
   return (
-    <div className="flex h-screen bg-background">
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="border-b p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/dashboard/documents")}
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="text-lg font-semibold border-none bg-transparent px-0 focus-visible:ring-0"
-                placeholder="Table title..."
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              {lastSaved && (
-                <span className="text-sm text-muted-foreground">
-                  {isSaving
-                    ? "Saving..."
-                    : `Saved ${lastSaved.toLocaleTimeString()}`}
-                </span>
-              )}
-              <Button
-                variant="link"
-                className="text-muted-foreground"
-                size="sm"
-                onClick={() => setShowAISidebar((v) => !v)}
-              >
-                <Sparkles className="h-4 w-4" />
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Download className="h-4 w-4 mr-2" /> Export
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={exportXlsx}>XLSX</DropdownMenuItem>
-                  <DropdownMenuItem onClick={exportCsv}>
-                    CSV (active sheet)
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+    <div className="h-screen bg-background">
+      {/* Header */}
+      <div className="border-b p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push("/dashboard/documents")}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="text-lg font-semibold border-none bg-transparent px-0 focus-visible:ring-0"
+              placeholder="Table title..."
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            {lastSaved && (
+              <span className="text-sm text-muted-foreground">
+                {isSaving
+                  ? "Saving..."
+                  : `Saved ${lastSaved.toLocaleTimeString()}`}
+              </span>
+            )}
+            <Button
+              variant="link"
+              className="text-muted-foreground"
+              size="sm"
+              onClick={() => setShowAISidebar((v) => !v)}
+            >
+              <Sparkles className="h-4 w-4" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" /> Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={exportXlsx}>XLSX</DropdownMenuItem>
+                <DropdownMenuItem onClick={exportCsv}>
+                  CSV (active sheet)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleSave(false)}
-                disabled={isSaving}
-              >
-                <Save className="h-4 w-4 mr-2" /> Save
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleSave(false)}
+              disabled={isSaving}
+            >
+              <Save className="h-4 w-4 mr-2" /> Save
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-row w-full">
+        {/* Spreadsheet Grid */}
+        <div className="flex-1">
+          {/* Sheet Tabs & Actions */}
+          <div className="flex items-center justify-between px-4 py-2 border-b">
+            <div className="flex items-center gap-2">
+              {sheets.map((s, i) => (
+                <Button
+                  key={s.id}
+                  variant={"outline"}
+                  className={cn(
+                    i === activeSheetIndex ? "bg-neutral-300 font-bold" : ""
+                  )}
+                  size="sm"
+                  onClick={() => setActiveSheetIndex(i)}
+                >
+                  <SheetIcon className="h-4 w-4 mr-2" /> {s.name}
+                </Button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" size="sm" onClick={addSheet}>
+                <Plus className="h-4 w-4 mr-2" /> Add Sheet
+              </Button>
+              <Button variant="secondary" size="sm" onClick={addRow}>
+                + Row
+              </Button>
+              <Button variant="secondary" size="sm" onClick={addCol}>
+                + Column
               </Button>
             </div>
           </div>
-        </div>
 
-        <div className="flex flex-row">
-          {/* Spreadsheet Grid */}
-          <div className="flex-1 overflow-auto">
-            {/* Sheet Tabs & Actions */}
-            <div className="flex items-center justify-between px-4 py-2 border-b">
-              <div className="flex items-center gap-2">
-                {sheets.map((s, i) => (
-                  <Button
-                    key={s.id}
-                    variant={i === activeSheetIndex ? "default" : "secondary"}
-                    size="sm"
-                    onClick={() => setActiveSheetIndex(i)}
-                  >
-                    <SheetIcon className="h-4 w-4 mr-2" /> {s.name}
-                  </Button>
-                ))}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" size="sm" onClick={addSheet}>
-                  <Plus className="h-4 w-4 mr-2" /> Add Sheet
-                </Button>
-                <Button variant="secondary" size="sm" onClick={addRow}>
-                  + Row
-                </Button>
-                <Button variant="secondary" size="sm" onClick={addCol}>
-                  + Column
-                </Button>
-              </div>
-            </div>
-
+          <div
+            className={cn(
+              "overflow-auto",
+              showAISidebar ? "w-[calc(100vw-600px)]" : " w-[calc(100vw-260px)]"
+            )}
+          >
             <table className="min-w-full border">
               <thead>
                 <tr>
@@ -390,11 +399,17 @@ export default function TablesEditorPage() {
               </tbody>
             </table>
           </div>
+        </div>
 
+        <div
+          className={cn(
+            "w-80 border-l bg-background flex flex-col",
+            !showAISidebar && "hidden"
+          )}
+        >
           {/* AI Sidebar */}
           <AIChatSidebarTables
             isVisible={showAISidebar}
-            onToggleVisibility={() => setShowAISidebar(false)}
             inline={false}
             onApplyTable={applyRowsToActiveSheet}
             tableId={tableId ?? undefined}

@@ -109,7 +109,9 @@ export default function ChartVisual({
     return (
       <Card>
         <CardHeader className="border-b">
-          <div className="text-lg font-semibold">Charts</div>
+          <div className="text-lg font-semibold">
+            Charts {type.replace("-", " ")}
+          </div>
           <div className="bg-neutral-100 p-4 rounded-lg">
             <div className="text-sm font-semibold text-neutral-500">
               Linked Documents

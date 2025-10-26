@@ -59,6 +59,7 @@ import remarkGfm from "remark-gfm";
 import { CodeBlock } from "@/components/ui/code-block";
 import { toast } from "sonner";
 import ResourceFile from "@/components/resource-file";
+import { cn } from "@/lib/utils";
 
 interface Message {
   id: string;
@@ -704,6 +705,10 @@ export default function ChatPage() {
     navigator.clipboard.writeText(content);
   };
 
+  const [expand, setExpand] = useState<string[]>([]);
+
+  console.log(expand);
+
   return (
     <TooltipProvider>
       <div className="flex h-screen bg-background">
@@ -966,14 +971,44 @@ export default function ChatPage() {
                         <ResourceFile resource={message.documentFile} />
                       )}
 
-                      {message.referencedDocs &&
-                        message.referencedDocs.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {message.referencedDocs.map((doc, index) => (
-                              <ResourceFile key={index} resource={doc} />
-                            ))}
-                          </div>
-                        )}
+                      {message.referencedDocs && (
+                        <>
+                          {message.referencedDocs.length > 0 && (
+                            <div
+                              className={cn(
+                                "mt-2 flex flex-wrap gap-1",
+                                expand.includes(message.id)
+                                  ? "h-auto"
+                                  : "h-[80px] overflow-hidden",
+                                {
+                                  "justify-end": message.role === "user",
+                                }
+                              )}
+                            >
+                              {message.referencedDocs.map((doc, index) => (
+                                <ResourceFile key={index} resource={doc} />
+                              ))}
+                            </div>
+                          )}
+                          {message.referencedDocs.length > 3 && (
+                            <div
+                              className="text-xs text-foreground cursor-pointer"
+                              onClick={() => {
+                                // toggle expand
+                                setExpand(
+                                  expand.includes(message.id)
+                                    ? expand.filter((id) => id !== message.id)
+                                    : [...expand, message.id]
+                                );
+                              }}
+                            >
+                              {expand.includes(message.id)
+                                ? "Hide all files"
+                                : "Show all files"}
+                            </div>
+                          )}
+                        </>
+                      )}
 
                       <div
                         className={`flex items-center space-x-2 text-xs text-muted-foreground ${

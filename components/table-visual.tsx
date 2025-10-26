@@ -9,7 +9,6 @@ import {
   TableBody,
   TableCell,
 } from "@/components/ui/table";
-import { twMerge } from "tailwind-merge";
 import {
   Card,
   CardContent,
@@ -18,6 +17,7 @@ import {
   CardTitle,
 } from "./ui/card";
 import ResourceFile from "@/components/resource-file";
+import { cn } from "@/lib/utils";
 
 type TableVisualProps = {
   headers: (string | number)[];
@@ -62,7 +62,7 @@ export default function TableVisual({
         </div>
       </CardHeader>
       <CardContent className="pt-6">
-        <div className={twMerge(`w-full overflow-x-auto`, className ?? "")}>
+        <div className={cn(`w-full overflow-x-auto`, className ?? "")}>
           <Table className={dense ? "text-sm" : "text-base"}>
             <TableHeader>
               <TableRow>

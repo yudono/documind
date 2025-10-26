@@ -110,11 +110,11 @@ import {
 } from "recharts";
 import fileToIcon from "@/lib/fileToIcon";
 import fileSize from "@/lib/fileSize";
-import { twMerge } from "tailwind-merge";
 import CreateFolderDialog from "@/components/create-folder-dialog";
 import TemplateSelectDialog from "@/components/template-select-dialog";
 import UploadingOverlay from "@/components/uploading-overlay";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface AnalysisResult {
   summary: string;
@@ -321,7 +321,7 @@ export default function MyDocumentsPage() {
 
             {/* Unified Items Grid */}
             <div
-              className={twMerge(
+              className={cn(
                 viewMode === "grid"
                   ? "grid grid-cols-1 gap-4 lg:grid-cols-6"
                   : "flex flex-col gap-2"
@@ -333,7 +333,7 @@ export default function MyDocumentsPage() {
                     .fill("")
                     .map((_, index) => (
                       <div
-                        className={twMerge(
+                        className={cn(
                           "animate-pulse w-full bg-muted rounded-lg",
                           viewMode === "grid" ? "h-40" : "h-12"
                         )}
@@ -359,7 +359,7 @@ export default function MyDocumentsPage() {
                   {filteredItems.map((item) => (
                     <div
                       key={`${item.type}-${item.id}`}
-                      className={twMerge(
+                      className={cn(
                         "relative rounded-lg p-4 cursor-pointer transition-all duration-200 group border-2",
                         item.type === "folder"
                           ? "bg-gray-50 hover:bg-blue-100 border-transparent hover:border-blue-200"

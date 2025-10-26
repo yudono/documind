@@ -31,6 +31,7 @@ type ClusteringVisualProps = {
     type?: string;
     error?: string;
   }[];
+  type?: any;
 };
 
 const defaultColors = [
@@ -47,6 +48,7 @@ export default function ClusteringVisual({
   clusters,
   className,
   linkedResource,
+  type,
 }: ClusteringVisualProps) {
   const groups = useMemo(() => {
     const byCluster: Record<string, Point[]> = {};
@@ -74,7 +76,9 @@ export default function ClusteringVisual({
   return (
     <Card>
       <CardHeader className="border-b">
-        <div className="text-lg font-semibold">Clustering</div>
+        <div className="text-lg font-semibold">
+          Clustering {type.replace("-", " ")}
+        </div>
         <div className="bg-neutral-100 p-4 rounded-lg">
           <div className="text-sm font-semibold text-neutral-500">
             Linked Documents

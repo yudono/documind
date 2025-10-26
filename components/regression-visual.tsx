@@ -4,7 +4,13 @@ import React, { useMemo } from "react";
 import { Card, CardContent, CardHeader } from "./ui/card";
 import ResourceFile from "./resource-file";
 import { LineChart, Line, CartesianGrid, XAxis, YAxis } from "recharts";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+} from "@/components/ui/chart";
 
 type Point = { x: number; y: number };
 
@@ -17,6 +23,7 @@ type RegressionVisualProps = {
     type?: string;
     error?: string;
   }[];
+  type?: any;
 };
 
 function leastSquares(points: Point[]) {
@@ -39,11 +46,23 @@ function leastSquares(points: Point[]) {
   return { slope, intercept };
 }
 
-export default function RegressionVisual({ points, className, linkedResource }: RegressionVisualProps) {
-  const { slope, intercept } = useMemo(() => leastSquares(points || []), [points]);
+export default function RegressionVisual({
+  points,
+  className,
+  linkedResource,
+  type,
+}: RegressionVisualProps) {
+  const { slope, intercept } = useMemo(
+    () => leastSquares(points || []),
+    [points]
+  );
 
   const data = useMemo(() => {
-    return (points || []).map((p) => ({ x: p.x, actual: p.y, regression: slope * p.x + intercept }));
+    return (points || []).map((p) => ({
+      x: p.x,
+      actual: p.y,
+      regression: slope * p.x + intercept,
+    }));
   }, [points, slope, intercept]);
 
   const config = {
@@ -54,7 +73,9 @@ export default function RegressionVisual({ points, className, linkedResource }: 
   return (
     <Card>
       <CardHeader className="border-b">
-        <div className="text-lg font-semibold">Regression</div>
+        <div className="text-lg font-semibold">
+          Regression {type.replace("-", " ")}
+        </div>
         <div className="bg-neutral-100 p-4 rounded-lg">
           <div className="text-sm font-semibold text-neutral-500">
             Linked Documents
@@ -74,15 +95,28 @@ export default function RegressionVisual({ points, className, linkedResource }: 
         </div>
       </CardHeader>
       <CardContent className="pt-6">
-        <ChartContainer config={config as any} className={className ?? "w-full h-80"}>
+        <ChartContainer
+          config={config as any}
+          className={className ?? "w-full h-80"}
+        >
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="x" />
             <YAxis />
             <ChartTooltip content={<ChartTooltipContent />} />
             <ChartLegend content={<ChartLegendContent />} />
-            <Line type="monotone" dataKey="actual" stroke={"var(--color-actual)"} dot={false} />
-            <Line type="monotone" dataKey="regression" stroke={"var(--color-regression)"} dot={false} />
+            <Line
+              type="monotone"
+              dataKey="actual"
+              stroke={"var(--color-actual)"}
+              dot={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="regression"
+              stroke={"var(--color-regression)"}
+              dot={false}
+            />
           </LineChart>
         </ChartContainer>
       </CardContent>

@@ -85,6 +85,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import HistoryDialog from "@/components/history-dialog";
 
 interface Message {
   id: string;
@@ -526,7 +527,7 @@ export default function DocumentEditor({
 
   return (
     <TooltipProvider>
-      <div className="flex h-screen bg-background">
+      <div className="h-screen bg-background">
         {/* Main Editor Area */}
         <div className={`flex-1 flex flex-col transition-all duration-300`}>
           {/* Header */}
@@ -663,78 +664,18 @@ export default function DocumentEditor({
             </div>
           </div>
         </div>
-
-        {/* AI Generation Modal */}
-        {/* <AIGenerationModal
-          isOpen={showAIModal}
-          onClose={() => setShowAIModal(false)}
-          onGenerate={handleAIGenerate}
-          generationType={aiGenerationType}
-        /> */}
-
         {/* Version History Dialog */}
-        <Dialog open={showVersionHistory} onOpenChange={setShowVersionHistory}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Version History</DialogTitle>
-              <DialogDescription>
-                View and restore previous versions of your document.
-              </DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="max-h-96">
-              <div className="space-y-4">
-                {versions.map((version) => (
-                  <Card key={version.id}>
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm">
-                          {version.title}
-                        </CardTitle>
-                        <Badge
-                          variant={version.isDraft ? "secondary" : "default"}
-                        >
-                          {version.isDraft ? "Draft" : "Published"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {version.createdAt.toLocaleString()}
-                      </p>
-                    </CardHeader>
-                    <CardContent>
-                      <div
-                        className="text-sm text-muted-foreground line-clamp-3"
-                        dangerouslySetInnerHTML={{
-                          __html: version.content.substring(0, 200) + "...",
-                        }}
-                      />
-                      <div className="flex justify-end mt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            if (editorRef.current) {
-                              editorRef.current.commands.setContent(
-                                version.content
-                              );
-                            }
-                            setShowVersionHistory(false);
-                          }}
-                        >
-                          Restore
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-                {versions.length === 0 && (
-                  <p className="text-center text-muted-foreground py-8">
-                    No version history available yet.
-                  </p>
-                )}
-              </div>
-            </ScrollArea>
-          </DialogContent>
-        </Dialog>
+        <HistoryDialog
+          open={showVersionHistory}
+          onOpenChange={setShowVersionHistory}
+          versions={versions}
+          onRestore={(versionContent) => {
+            if (editorRef.current) {
+              editorRef.current.commands.setContent(versionContent);
+            }
+            setShowVersionHistory(false);
+          }}
+        />
       </div>
     </TooltipProvider>
   );
