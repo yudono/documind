@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { delCache } from '@/lib/cache';
 
 // POST /api/credits/topup - Add credits to user account
 export async function POST(request: NextRequest) {
@@ -82,7 +83,18 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    const creditBalance = Math.max(0, (updatedCredit.dailyLimit || 0) - (updatedCredit.dailyUsed || 0));
+    // Compute available credit balance from earned minus spent (same as chat route)
+    const spendAgg = await prisma.creditTransaction.aggregate({
+      where: { userId: user.id, type: "spend" },
+      _sum: { amount: true },
+    });
+    const totalSpentAbs = Math.abs(spendAgg._sum.amount || 0);
+    const totalEarned = updatedCredit.totalEarned || 0;
+    const creditBalance = Math.max(0, totalEarned - totalSpentAbs);
+
+    // Invalidate caches related to credits and dashboard stats
+    await delCache(`credits:${user.id}`);
+    await delCache(`dashboard:stats:${user.id}`);
 
     return NextResponse.json({
       success: true,

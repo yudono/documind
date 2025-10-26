@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { delCache } from '@/lib/cache';
 
 // GET /api/templates/[id] - Get a specific template
 export async function GET(
@@ -81,6 +82,9 @@ export async function PUT(
       },
     });
 
+    // Invalidate templates list cache so updates reflect
+    await delCache('templates:list');
+
     return NextResponse.json({ template: updatedTemplate });
   } catch (error) {
     console.error('Error updating template:', error);
@@ -122,6 +126,9 @@ export async function DELETE(
     await prisma.template.delete({
       where: { id: params.id },
     });
+
+    // Invalidate templates list cache so deletion reflects
+    await delCache('templates:list');
 
     return NextResponse.json({ message: 'Template deleted successfully' });
   } catch (error) {

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkAndResetUserCredits } from "@/lib/credit-reset";
+import { getCache, setCache, delCache } from "@/lib/cache";
 
 // GET /api/credits - Get user's credit balance
 export async function GET(request: NextRequest) {
@@ -22,6 +23,13 @@ export async function GET(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Try cache first
+    const cacheKey = `credits:${user.id}`;
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
     // Initialize user credit if it doesn't exist
@@ -53,25 +61,27 @@ export async function GET(request: NextRequest) {
     }
 
     // Compute derived values based on the new schema
-    const balance = Math.max(
-      0,
-      (userCredit.dailyLimit || 0) - (userCredit.dailyUsed || 0)
-    );
-
     // Compute totalSpent from transactions to retain response compatibility
     const totalSpentAgg = await prisma.creditTransaction.aggregate({
       where: { userId: user.id, type: "spend" },
       _sum: { amount: true },
     });
     const totalSpent = Math.abs(totalSpentAgg._sum.amount || 0);
+    const totalEarned = userCredit.totalEarned || 0;
+    const balance = Math.max(0, totalEarned - totalSpent);
 
-    return NextResponse.json({
+    const payload = {
       balance,
       dailyLimit: userCredit.dailyLimit,
       totalEarned: userCredit.totalEarned,
       totalSpent,
       lastResetDate: userCredit.lastResetDate,
-    });
+    };
+
+    // Cache result
+    await setCache(cacheKey, payload);
+
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("Error fetching credit balance:", error);
     return NextResponse.json(
@@ -123,11 +133,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Check if user has sufficient available credits for today
-    const available = Math.max(
-      0,
-      (userCredit.dailyLimit || 0) - (userCredit.dailyUsed || 0)
-    );
+    // Check if user has sufficient available credits
+    // Compute current balance from totalEarned minus spent transactions
+    const spentAgg = await prisma.creditTransaction.aggregate({
+      where: { userId: user.id, type: "spend" },
+      _sum: { amount: true },
+    });
+    const totalSpentAbs = Math.abs(spentAgg._sum.amount || 0);
+    const totalEarned = userCredit.totalEarned || 0;
+    const available = Math.max(0, totalEarned - totalSpentAbs);
+    
     if (available < amount) {
       return NextResponse.json(
         { error: "Insufficient credits" },
@@ -135,7 +150,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Consume credits in a transaction: increment dailyUsed
+    // Consume credits in a transaction: increment dailyUsed and record transaction
     const [updatedCredit] = await prisma.$transaction([
       prisma.userCredit.update({
         where: { userId: user.id },
@@ -154,10 +169,17 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    const newBalance = Math.max(
-      0,
-      (updatedCredit.dailyLimit || 0) - (updatedCredit.dailyUsed || 0)
-    );
+    // Compute new balance from totalEarned minus spent transactions
+    const spentAfterAgg = await prisma.creditTransaction.aggregate({
+      where: { userId: user.id, type: "spend" },
+      _sum: { amount: true },
+    });
+    const totalSpentAfterAbs = Math.abs(spentAfterAgg._sum.amount || 0);
+    const newBalance = Math.max(0, (updatedCredit.totalEarned || 0) - totalSpentAfterAbs);
+
+    // Invalidate related caches
+    await delCache(`credits:${user.id}`);
+    await delCache(`dashboard:stats:${user.id}`);
 
     return NextResponse.json({
       success: true,

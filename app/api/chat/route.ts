@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { generateChatWithAgent } from "@/lib/groq";
 import { prisma } from "@/lib/prisma";
 import { milvusService, initializeMilvus } from "@/lib/milvus";
+import { delCache, delByPattern, getCache, setCache } from "@/lib/cache";
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,6 +54,9 @@ export async function POST(request: NextRequest) {
           },
         },
       });
+
+      // Invalidate sessions list cache
+      await delByPattern(`chat:sessions:${user.id}:*`);
 
       // Return the newly created session
       return NextResponse.json({ chatSession: createdSession });
@@ -137,6 +141,9 @@ export async function POST(request: NextRequest) {
       });
       // use created session for downstream operations
       currentSessionId = createdSession.id;
+
+      // Invalidate sessions list cache
+      await delByPattern(`chat:sessions:${user.id}:*`);
     }
 
     // Prepare referenced docs as objects { name, url }
@@ -303,6 +310,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Invalidate caches impacted by new message and credit spend
+    await delCache(`credits:${user.id}`);
+    await delCache(`dashboard:stats:${user.id}`);
+    await delCache(`chat:messages:${user.id}:${currentSessionId}`);
+    await delByPattern(`chat:sessions:${user.id}:*`);
+
     // Get updated credit balance
     const updatedCredit = await prisma.userCredit.findUnique({
       where: { userId: user.id },
@@ -388,6 +401,12 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      const cacheKey = `chat:messages:${user.id}:${sessionId}`;
+      const cached = await getCache(cacheKey);
+      if (cached) {
+        return NextResponse.json(cached);
+      }
+
       const messages = await prisma.chatMessage.findMany({
         where: { sessionId },
         orderBy: { createdAt: "asc" },
@@ -422,7 +441,7 @@ export async function GET(request: NextRequest) {
         })
       );
 
-      return NextResponse.json({
+      const payload = {
         chatSession: {
           id: chatSession.id,
           title: chatSession.title,
@@ -430,7 +449,10 @@ export async function GET(request: NextRequest) {
           updatedAt: chatSession.updatedAt,
         },
         messages: messagesWithFiles,
-      });
+      };
+
+      await setCache(cacheKey, payload);
+      return NextResponse.json(payload);
     }
 
     // Otherwise, list sessions for the user; supports optional filters
@@ -440,6 +462,12 @@ export async function GET(request: NextRequest) {
     const whereClause: any = { userId: user.id };
     if (documentId) whereClause.documentId = documentId;
     if (type) whereClause.type = type;
+
+    const cacheKey = `chat:sessions:${user.id}:${documentId || "all"}:${type || "all"}`;
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
 
     const chatSessions = await prisma.chatSession.findMany({
       where: whereClause,
@@ -451,7 +479,9 @@ export async function GET(request: NextRequest) {
       orderBy: { updatedAt: "desc" },
     });
 
-    return NextResponse.json({ chatSessions });
+    const payload = { chatSessions };
+    await setCache(cacheKey, payload);
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("Error in chat GET:", error);
     return NextResponse.json(
@@ -505,6 +535,9 @@ export async function PUT(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    // Invalidate sessions caches
+    await delByPattern(`chat:sessions:${user.id}:*`);
 
     const updatedSession = await prisma.chatSession.findFirst({
       where: { id: sessionId, userId: user.id },
@@ -575,6 +608,10 @@ export async function DELETE(request: NextRequest) {
     await prisma.chatSession.delete({
       where: { id: sessionId },
     });
+
+    // Invalidate chat caches
+    await delCache(`chat:messages:${user.id}:${sessionId}`);
+    await delByPattern(`chat:sessions:${user.id}:*`);
 
     return NextResponse.json({ message: "Chat session deleted successfully" });
   } catch (error) {

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { milvusService, initializeMilvus } from "@/lib/milvus";
+import { delCache } from "@/lib/cache";
 
 // DELETE /api/chat-sessions/[id] - Delete a specific chat session and its data
 export async function DELETE(
@@ -46,6 +47,11 @@ export async function DELETE(
     await prisma.chatSession.delete({
       where: { id: params.id },
     });
+
+    // Invalidate related caches: sessions list, session messages, dashboard stats
+    await delCache(`chat:sessions:${user.id}`);
+    await delCache(`chat:messages:${user.id}:${params.id}`);
+    await delCache(`dashboard:stats:${user.id}`);
 
     return NextResponse.json({ message: "Chat session deleted successfully" });
   } catch (error) {

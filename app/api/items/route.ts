@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCache, setCache, delByPattern, delCache } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,6 +35,12 @@ export async function GET(request: NextRequest) {
       whereClause.type = type;
     }
 
+    const cacheKey = `items:${(session.user as any).id}:${parentId || "root"}:${type || "all"}:${deleted || "false"}`;
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
     const items = await prisma.item.findMany({
       where: whereClause,
       include: {
@@ -51,6 +58,9 @@ export async function GET(request: NextRequest) {
         { name: "asc" }, // Then alphabetical
       ],
     });
+
+    const payload = items;
+    await setCache(cacheKey, payload);
 
     return NextResponse.json(items);
   } catch (error) {
@@ -165,6 +175,10 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // Invalidate items caches and dashboard stats
+    await delByPattern(`items:${(session.user as any).id}:*`);
+    await delCache(`dashboard:stats:${(session.user as any).id}`);
 
     return NextResponse.json(item, { status: 201 });
   } catch (error) {

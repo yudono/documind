@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getSignedDownloadUrl } from "@/lib/s3";
+import { delByPattern, delCache } from "@/lib/cache";
 
 export const runtime = "nodejs";
 
@@ -242,6 +243,10 @@ export async function PUT(
       },
     });
 
+    // Invalidate items caches and dashboard stats after update
+    await delByPattern(`items:${(session.user as any).id}:*`);
+    await delCache(`dashboard:stats:${(session.user as any).id}`);
+
     return NextResponse.json(updatedItem);
   } catch (error) {
     console.error("Error updating item:", error);
@@ -296,14 +301,18 @@ export async function DELETE(
       await prisma.item.delete({
         where: { id: params.id },
       });
-      return NextResponse.json({ message: "Item deleted successfully" });
     } else {
       await prisma.item.update({
         where: { id: params.id },
         data: { deleteAt: new Date() },
       });
-      return NextResponse.json({ message: "Item moved to trash" });
     }
+
+    // Invalidate items caches and dashboard stats after delete/move to trash
+    await delByPattern(`items:${(session.user as any).id}:*`);
+    await delCache(`dashboard:stats:${(session.user as any).id}`);
+
+    return NextResponse.json({ message: permanently ? "Item deleted successfully" : "Item moved to trash" });
   } catch (error) {
     console.error("Error deleting item:", error);
     return NextResponse.json(

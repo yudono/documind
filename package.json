@@ -111,6 +111,7 @@
     "html2canvas": "^1.4.1",
     "html2pptxgenjs": "^0.0.3",
     "input-otp": "^1.2.4",
+    "ioredis": "^5.8.2",
     "jspdf": "^3.0.3",
     "lodash.throttle": "^4.1.1",
     "lowlight": "^3.3.0",

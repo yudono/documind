@@ -108,13 +108,20 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ error: 'User credit record not found' }, { status: 404 });
         }
 
-        const currentBalance = Math.max(0, (currentCredit.dailyLimit || 0) - (currentCredit.dailyUsed || 0));
+        // Compute current balance from totalEarned minus spent transactions
+        const spentAgg = await prisma.creditTransaction.aggregate({
+          where: { userId: userId, type: "spend" },
+          _sum: { amount: true },
+        });
+        const totalSpentAbs = Math.abs(spentAgg._sum.amount || 0);
+        const totalEarned = currentCredit.totalEarned || 0;
+        const currentBalance = Math.max(0, totalEarned - totalSpentAbs);
         const difference = balance - currentBalance;
 
-        // Adjust dailyUsed so that derived balance equals requested balance
-        const newDailyUsed = Math.max(0, (currentCredit.dailyLimit || 0) - balance);
+        // Adjust totalEarned to achieve the requested balance
+        const newTotalEarned = Math.max(0, balance + totalSpentAbs);
         updateData = {
-          dailyUsed: newDailyUsed,
+          totalEarned: newTotalEarned,
         };
 
         transactionData = {

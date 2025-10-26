@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getCache, setCache, delCache } from '@/lib/cache';
 
 // GET /api/templates - Get all templates
 export async function GET(request: NextRequest) {
@@ -20,6 +21,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    const cacheKey = `templates:list`;
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
     const templates = await prisma.template.findMany({
       select: {
         id: true,
@@ -32,6 +39,9 @@ export async function GET(request: NextRequest) {
         createdAt: 'desc',
       },
     });
+
+    const payload = { templates };
+    await setCache(cacheKey, payload);
 
     return NextResponse.json({ templates });
   } catch (error) {
@@ -78,6 +88,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Invalidate templates cache
+    await delCache('templates:list');
+
     return NextResponse.json({ template }, { status: 201 });
   } catch (error) {
     console.error('Error creating template:', error);
@@ -121,6 +134,9 @@ export async function DELETE(request: NextRequest) {
         id: { in: templateIds },
       },
     });
+
+    // Invalidate templates cache
+    await delCache('templates:list');
 
     return NextResponse.json({
       message: `${deletedTemplates.count} template(s) deleted successfully`,

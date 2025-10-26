@@ -139,10 +139,16 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const availableToday = Math.max(
-      0,
-      (userCredit.dailyLimit || 0) - (userCredit.dailyUsed || 0)
-    );
+    // Check if user has sufficient available credits
+    // Compute current balance from totalEarned minus spent transactions
+    const spentAgg = await prisma.creditTransaction.aggregate({
+      where: { userId: user.id, type: "spend" },
+      _sum: { amount: true },
+    });
+    const totalSpentAbs = Math.abs(spentAgg._sum.amount || 0);
+    const totalEarned = userCredit.totalEarned || 0;
+    const availableToday = Math.max(0, totalEarned - totalSpentAbs);
+    
     if (availableToday < 1) {
       return NextResponse.json(
         { error: "Insufficient credits" },
@@ -170,15 +176,17 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    // Get updated credit balance
+    // Get updated credit balance from totalEarned minus spent transactions
     const updatedCredit = await prisma.userCredit.findUnique({
       where: { userId: user.id },
     });
 
-    const creditBalance = Math.max(
-      0,
-      (updatedCredit?.dailyLimit || 0) - (updatedCredit?.dailyUsed || 0)
-    );
+    const spentAfterAgg = await prisma.creditTransaction.aggregate({
+      where: { userId: user.id, type: "spend" },
+      _sum: { amount: true },
+    });
+    const totalSpentAfterAbs = Math.abs(spentAfterAgg._sum.amount || 0);
+    const creditBalance = Math.max(0, (updatedCredit?.totalEarned || 0) - totalSpentAfterAbs);
 
     return NextResponse.json({
       creditBalance,

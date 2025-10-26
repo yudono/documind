@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCache, setCache } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,6 +21,13 @@ export async function GET(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Try cache first
+    const cacheKey = `dashboard:stats:${user.id}`;
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
     // Get document statistics
@@ -100,18 +108,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Derive balance and totalSpent from schema-compatible fields/transactions
-    const balance = Math.max(
-      0,
-      (userCredit.dailyLimit || 0) - (userCredit.dailyUsed || 0)
-    );
     const totalSpentAgg = await prisma.creditTransaction.aggregate({
       where: { userId: user.id, type: "spend" },
       _sum: { amount: true },
     });
     const totalSpent = Math.abs(totalSpentAgg._sum.amount || 0);
+    const totalEarned = userCredit.totalEarned || 0;
+    const balance = Math.max(0, totalEarned - totalSpent);
 
     // Get monthly activity data for charts
-    const monthlyData = [];
+    const monthlyData = [] as any[];
     for (let i = 5; i >= 0; i--) {
       const monthStart = new Date(
         new Date().getFullYear(),
@@ -213,7 +219,7 @@ export async function GET(request: NextRequest) {
         ? (((userCredit.dailyLimit - balance) / userCredit.dailyLimit) * 100).toFixed(1)
         : "0.0";
 
-    return NextResponse.json({
+    const payload = {
       summaryStats: {
         totalDocuments,
         documentsChange: `${+documentsChange >= 0 ? "+" : ""}${documentsChange}%`,
@@ -235,7 +241,12 @@ export async function GET(request: NextRequest) {
         totalSpent: totalSpent,
         lastResetDate: userCredit.lastResetDate,
       },
-    });
+    };
+
+    // Cache result
+    await setCache(cacheKey, payload);
+
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("Error fetching dashboard stats:", error);
     return NextResponse.json(
