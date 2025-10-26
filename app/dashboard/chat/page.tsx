@@ -60,6 +60,7 @@ import { CodeBlock } from "@/components/ui/code-block";
 import { toast } from "sonner";
 import ResourceFile from "@/components/resource-file";
 import { cn } from "@/lib/utils";
+import { normalizeText } from "@/lib/normalize-text";
 
 interface Message {
   id: string;
@@ -1276,7 +1277,7 @@ export default function ChatPage() {
 
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-2">
-              {isLoadingSessions && (
+              {isLoadingSessions ? (
                 <div className="space-y-2">
                   {[...Array(6)].map((_, i) => (
                     <Card
@@ -1286,7 +1287,6 @@ export default function ChatPage() {
                       <CardContent className="p-3">
                         <div className="space-y-2 animate-pulse">
                           <div className="h-4 w-1/2 bg-muted rounded" />
-                          <div className="h-3 w-3/4 bg-muted rounded" />
                           <div className="flex items-center mt-2 space-x-2">
                             <div className="h-3 w-16 bg-muted rounded" />
                             <Separator orientation="vertical" className="h-3" />
@@ -1297,8 +1297,7 @@ export default function ChatPage() {
                     </Card>
                   ))}
                 </div>
-              )}
-              {!isLoadingSessions &&
+              ) : (
                 chatSessions.map((chatSession) => (
                   <Card
                     key={chatSession.id}
@@ -1314,12 +1313,12 @@ export default function ChatPage() {
                     <CardContent className="p-3">
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">
-                            {chatSession.title}
+                          <div className="font-medium text-sm truncate w-72">
+                            {normalizeText(chatSession.lastMessage)}
                           </div>
-                          <div className="text-xs text-muted-foreground mt-1 line-clamp-2 w-72">
+                          {/* <div className="text-xs text-muted-foreground mt-1 line-clamp-2 w-72">
                             {chatSession.lastMessage}
-                          </div>
+                          </div> */}
                           <div className="w-full flex items-center mt-2 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3 mr-1" />
                             {formatDate(chatSession.timestamp)}
@@ -1346,7 +1345,8 @@ export default function ChatPage() {
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                ))
+              )}
             </div>
           </ScrollArea>
         </div>
