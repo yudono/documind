@@ -100,7 +100,13 @@ export async function GET(
 
     const urlObj = new URL(request.url);
     const typeParam = urlObj.searchParams.get("type");
-    const targetType = (typeParam === "pdf" ? "pdf" : "docx") as "docx" | "pdf";
+    const targetType = (typeParam === "pdf"
+      ? "pdf"
+      : typeParam === "xlsx"
+      ? "xlsx"
+      : typeParam === "pptx"
+      ? "pptx"
+      : "docx") as "docx" | "pdf" | "xlsx" | "pptx";
 
     const document = await prisma.item.findFirst({
       where: {
@@ -140,6 +146,10 @@ export async function GET(
             ? "application/pdf"
             : ext === "docx"
             ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            : ext === "xlsx"
+            ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            : ext === "pptx"
+            ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
             : res.headers.get("content-type") || "application/octet-stream";
 
         return new Response(arrayBuffer, {
@@ -158,7 +168,13 @@ export async function GET(
         const mime =
           ext === "pdf"
             ? "application/pdf"
-            : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            : ext === "docx"
+            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            : ext === "xlsx"
+            ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            : ext === "pptx"
+            ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            : "application/octet-stream";
 
         const u8 =
           buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
@@ -190,6 +206,14 @@ export async function GET(
     }
 
     const exportHtml = normalizeHtmlForExport(html);
+
+    // Guard: XLSX/PPTX require stored files; cannot regenerate from HTML
+    if (targetType === "xlsx" || targetType === "pptx") {
+      return NextResponse.json(
+        { error: "Requested type is only available for stored files" },
+        { status: 400 }
+      );
+    }
 
     if (targetType === "pdf") {
       const { Document, Page, renderToBuffer } = await import(

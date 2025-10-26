@@ -5,6 +5,7 @@ import { generateChatWithAgent } from "@/lib/groq";
 import { prisma } from "@/lib/prisma";
 import { milvusService, initializeMilvus } from "@/lib/milvus";
 import { delCache, delByPattern, getCache, setCache } from "@/lib/cache";
+import { uploadToS3, generateFileKey } from "@/lib/s3";
 
 export async function POST(request: NextRequest) {
   try {
@@ -217,25 +218,57 @@ export async function POST(request: NextRequest) {
         try {
           // Validate buffer size (limit to 10MB for data URLs)
           const bufferSize = agentResponse.documentFile.buffer.length;
-          console.log(`PDF buffer size: ${bufferSize} bytes`);
+          console.log(`Generated file buffer size: ${bufferSize} bytes`);
 
           if (bufferSize > 10 * 1024 * 1024) {
-            throw new Error("PDF file too large for data URL");
+            throw new Error("File too large for data URL");
           }
 
-          // Convert PDF buffer to base64 data URL for download
+          // Convert file buffer to base64 data URL for download
           const base64Data =
             agentResponse.documentFile.buffer.toString("base64");
 
           // Validate base64 encoding
           if (!base64Data || base64Data.length === 0) {
-            throw new Error("Failed to encode PDF to base64");
+            throw new Error("Failed to encode file to base64");
           }
 
           // Persist generated document content as Item so download link remains stable
           const safeName = (
             agentResponse.documentFile.filename || "AI_Generated_Document"
-          ).replace(/\.pdf$|\.docx$/i, "");
+          ).replace(/\.(pdf|docx|xlsx|pptx)$/i, "");
+
+          // Determine file extension from mime type (fallback to filename)
+          const mime = agentResponse.documentFile.mimeType;
+          const filename = agentResponse.documentFile.filename || "";
+          const extFromMime = (() => {
+            switch (mime) {
+              case "application/pdf":
+                return "pdf";
+              case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                return "docx";
+              case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+                return "xlsx";
+              case "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+                return "pptx";
+              default:
+                return null;
+            }
+          })();
+          const ext =
+            extFromMime ||
+            (filename.split(".").pop() || "").toLowerCase() ||
+            "bin";
+
+          // Upload the generated buffer to storage (S3/local)
+          const keyPrefix = `documents/${ext}`;
+          const fileKey = generateFileKey(`${safeName}.${ext}`, keyPrefix);
+          const uploadResult = await uploadToS3(
+            agentResponse.documentFile.buffer,
+            fileKey,
+            mime || "application/octet-stream"
+          );
+
           const createdItem = await prisma.item.create({
             data: {
               name: safeName,
@@ -244,19 +277,17 @@ export async function POST(request: NextRequest) {
               fileType: agentResponse.documentFile.mimeType,
               size: bufferSize,
               content: JSON.stringify({ html: response }),
+              url: uploadResult.url,
+              key: uploadResult.key,
             },
           });
 
           // Build stable download URL via documents download route
-          const isPdf =
-            agentResponse.documentFile.mimeType === "application/pdf";
-          const downloadUrl = `/api/items/${createdItem.id}/download?type=${
-            isPdf ? "pdf" : "docx"
-          }`;
+          const downloadUrl = `/api/items/${createdItem.id}/download?type=${ext}`;
 
           documentFile = {
-            name: `${safeName}.${isPdf ? "pdf" : "docx"}`,
-            type: agentResponse.documentFile.mimeType,
+            name: `${safeName}.${ext}`,
+            type: mime,
             size: bufferSize,
             url: downloadUrl,
             generatedAt: new Date().toISOString(),
@@ -424,13 +455,28 @@ export async function GET(request: NextRequest) {
             if (ref && typeof ref === "object" && ref.url) {
               const url = ref.url;
               const name = ref.name || "Document";
+              const extParam = (() => {
+                try {
+                  const u = new URL(url, "http://localhost");
+                  return u.searchParams.get("type");
+                } catch {
+                  return null;
+                }
+              })();
               return {
                 ...msg,
                 documentFile: {
                   name,
-                  type: url.includes("type=docx")
-                    ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    : "application/pdf",
+                  type:
+                    extParam === "pdf"
+                      ? "application/pdf"
+                      : extParam === "docx"
+                      ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      : extParam === "xlsx"
+                      ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      : extParam === "pptx"
+                      ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                      : "application/octet-stream",
                   downloadUrl: url,
                   url,
                 },
@@ -463,7 +509,9 @@ export async function GET(request: NextRequest) {
     if (documentId) whereClause.documentId = documentId;
     if (type) whereClause.type = type;
 
-    const cacheKey = `chat:sessions:${user.id}:${documentId || "all"}:${type || "all"}`;
+    const cacheKey = `chat:sessions:${user.id}:${documentId || "all"}:${
+      type || "all"
+    }`;
     const cached = await getCache(cacheKey);
     if (cached) {
       return NextResponse.json(cached);
