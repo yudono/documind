@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUserCredit } from "@/hooks/useUserCredit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,25 +32,21 @@ interface Transaction {
   credits: number;
 }
 
-interface CreditPackage {
+// Define API transaction shape returned by /api/credits/transactions
+interface ApiCreditTransaction {
   id: string;
-  name: string;
+  type: string;
+  amount: number;
   description: string;
-  credits: number;
-  price: number;
-  currency: string;
-  isPopular?: boolean;
-  bonusCredits?: number;
-  totalCredits: number;
+  metadata?: Record<string, any> | null;
+  createdAt: string;
 }
 
 export default function BillingPage() {
   const [currentPlan] = useState("Pro");
   const [isTopupOpen, setIsTopupOpen] = useState(false);
-  const [packages, setPackages] = useState<CreditPackage[]>([]);
 
   const [isProcessing, setIsProcessing] = useState(false);
-  const [packagesLoading, setPackagesLoading] = useState(false);
   const { userCredit, loading, error } = useUserCredit();
 
   // Env-configured rate and minimum (fallbacks provided)
@@ -63,46 +59,30 @@ export default function BillingPage() {
 
   // Custom amount state
   const [customAmount, setCustomAmount] = useState<number | "">("");
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
+
+  // Transactions fetched from API
+  const [transactions, setTransactions] = useState<ApiCreditTransaction[]>([]);
+
+  const fetchTransactions = async () => {
+    try {
+      const res = await fetch("/api/credits/transactions");
+      if (res.ok) {
+        const data = await res.json();
+        setTransactions(data.transactions || []);
+      }
+    } catch (e) {
+      console.error("Error fetching credit transactions:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchTransactions();
+  }, []);
 
   // Use real credit data or fallback to defaults
   const currentCredits = userCredit?.balance || 0;
   const dailyCredits = userCredit?.dailyLimit || 500;
-
-  // Sample transaction history
-  const transactions: Transaction[] = [
-    {
-      id: "1",
-      date: new Date("2024-11-15"),
-      amount: 29000,
-      type: "purchase",
-      description: "Credit Top-up - 1000 Credits",
-      credits: 1000,
-    },
-    {
-      id: "2",
-      date: new Date("2024-11-14"),
-      amount: 0,
-      type: "usage",
-      description: "Chat conversation with AI",
-      credits: -25,
-    },
-    {
-      id: "3",
-      date: new Date("2024-11-14"),
-      amount: 0,
-      type: "usage",
-      description: "Document analysis",
-      credits: -50,
-    },
-    {
-      id: "4",
-      date: new Date("2024-11-01"),
-      amount: 99000,
-      type: "purchase",
-      description: "Pro Plan - Monthly Credits",
-      credits: 1500,
-    },
-  ];
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString("en-US", {
@@ -137,22 +117,6 @@ export default function BillingPage() {
         );
       default:
         return <Badge variant="secondary">{type}</Badge>;
-    }
-  };
-
-  // Fetch available credit packages
-  const fetchPackages = async () => {
-    setPackagesLoading(true);
-    try {
-      const response = await fetch("/api/credits/packages");
-      if (response.ok) {
-        const data = await response.json();
-        setPackages(data.packages);
-      }
-    } catch (error) {
-      console.error("Error fetching packages:", error);
-    } finally {
-      setPackagesLoading(false);
     }
   };
 
@@ -191,6 +155,8 @@ export default function BillingPage() {
         window.open(data.transaction.paymentUrl, "_blank");
         setIsTopupOpen(false);
         setCustomAmount("");
+        setSelectedChannel(null);
+        fetchTransactions();
       } else {
         alert(
           "Failed to create payment transaction: " +
@@ -208,6 +174,26 @@ export default function BillingPage() {
   // Open top-up modal and fetch packages
   const openTopupModal = () => {
     setIsTopupOpen(true);
+    fetchChannels();
+  };
+
+  const [channels, setChannels] = useState<
+    Array<{ code: string; name: string; image: string }>
+  >([]);
+  const [channelsLoading, setChannelsLoading] = useState(false);
+  const fetchChannels = async () => {
+    setChannelsLoading(true);
+    try {
+      const res = await fetch("/api/tripay/channels");
+      if (res.ok) {
+        const data = await res.json();
+        setChannels(data.channels || []);
+      }
+    } catch (e) {
+      console.error("Error fetching channels:", e);
+    } finally {
+      setChannelsLoading(false);
+    }
   };
 
   return (
@@ -297,7 +283,7 @@ export default function BillingPage() {
                           </span>
                         </div>
                         <span className="text-sm text-muted-foreground">
-                          {formatDate(transaction.date)}
+                          {formatDate(new Date(transaction.createdAt))}
                         </span>
                       </div>
                     </div>
@@ -305,18 +291,23 @@ export default function BillingPage() {
                       <div className="flex items-center gap-2">
                         <span
                           className={`font-medium ${
-                            transaction.credits > 0
+                            transaction.amount > 0
                               ? "text-green-600"
                               : "text-red-600"
                           }`}
                         >
-                          {transaction.credits > 0 ? "+" : ""}
-                          {transaction.credits} credits
+                          {transaction.amount > 0 ? "+" : ""}
+                          {transaction.amount} credits
                         </span>
                       </div>
-                      {transaction.amount > 0 && (
+                      {(transaction.metadata?.amountIdr ||
+                        transaction.metadata?.price) && (
                         <span className="text-sm text-muted-foreground">
-                          Rp {transaction.amount.toLocaleString()}
+                          Rp{" "}
+                          {(
+                            (transaction.metadata?.amountIdr ||
+                              transaction.metadata?.price) as number
+                          ).toLocaleString()}
                         </span>
                       )}
                     </div>
@@ -370,10 +361,42 @@ export default function BillingPage() {
                   </div>
                 </div>
                 <div className="grid gap-2 md:grid-cols-2">
+                  {channelsLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span className="ml-2">Loading payment methods...</span>
+                    </div>
+                  ) : channels.length > 0 ? (
+                    channels.map((ch) => (
+                      <Button
+                        key={ch.code}
+                        onClick={() => setSelectedChannel(ch.code)}
+                        disabled={isProcessing}
+                        className="justify-start"
+                        variant={
+                          selectedChannel === ch.code ? "default" : "outline"
+                        }
+                      >
+                        <img
+                          src={ch.image}
+                          alt={ch.name}
+                          className="h-4 w-4 mr-2"
+                        />
+                        {ch.name}
+                      </Button>
+                    ))
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      No payment methods available.
+                    </div>
+                  )}
+                </div>
+                <div className="pt-2 flex justify-end">
                   <Button
                     onClick={() =>
+                      selectedChannel &&
                       handleTopup(
-                        "BRIVA",
+                        selectedChannel,
                         typeof customAmount === "number"
                           ? customAmount
                           : undefined
@@ -381,98 +404,17 @@ export default function BillingPage() {
                     }
                     disabled={
                       isProcessing ||
+                      !selectedChannel ||
                       !(
                         typeof customAmount === "number" &&
                         customAmount >= MIN_TOPUP_IDR
                       )
                     }
-                    className="justify-start"
-                    variant="outline"
                   >
                     {isProcessing ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <CreditCard className="h-4 w-4 mr-2" />
-                    )}
-                    BRI Virtual Account
-                  </Button>
-                  <Button
-                    onClick={() =>
-                      handleTopup(
-                        "BCAVA",
-                        typeof customAmount === "number"
-                          ? customAmount
-                          : undefined
-                      )
-                    }
-                    disabled={
-                      isProcessing ||
-                      !(
-                        typeof customAmount === "number" &&
-                        customAmount >= MIN_TOPUP_IDR
-                      )
-                    }
-                    className="justify-start"
-                    variant="outline"
-                  >
-                    {isProcessing ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <CreditCard className="h-4 w-4 mr-2" />
-                    )}
-                    BCA Virtual Account
-                  </Button>
-                  <Button
-                    onClick={() =>
-                      handleTopup(
-                        "MANDIRIVA",
-                        typeof customAmount === "number"
-                          ? customAmount
-                          : undefined
-                      )
-                    }
-                    disabled={
-                      isProcessing ||
-                      !(
-                        typeof customAmount === "number" &&
-                        customAmount >= MIN_TOPUP_IDR
-                      )
-                    }
-                    className="justify-start"
-                    variant="outline"
-                  >
-                    {isProcessing ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <CreditCard className="h-4 w-4 mr-2" />
-                    )}
-                    Mandiri Virtual Account
-                  </Button>
-                  <Button
-                    onClick={() =>
-                      handleTopup(
-                        "QRIS",
-                        typeof customAmount === "number"
-                          ? customAmount
-                          : undefined
-                      )
-                    }
-                    disabled={
-                      isProcessing ||
-                      !(
-                        typeof customAmount === "number" &&
-                        customAmount >= MIN_TOPUP_IDR
-                      )
-                    }
-                    className="justify-start"
-                    variant="outline"
-                  >
-                    {isProcessing ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <CreditCard className="h-4 w-4 mr-2" />
-                    )}
-                    QRIS
+                    ) : null}
+                    Submit
                   </Button>
                 </div>
               </div>

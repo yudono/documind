@@ -92,12 +92,23 @@ export async function GET(request: NextRequest) {
       userCredit = await prisma.userCredit.create({
         data: {
           userId: user.id,
-          balance: 500,
           dailyLimit: 500,
+          dailyUsed: 0,
           lastResetDate: new Date(),
         },
       });
     }
+
+    // Derive balance and totalSpent from schema-compatible fields/transactions
+    const balance = Math.max(
+      0,
+      (userCredit.dailyLimit || 0) - (userCredit.dailyUsed || 0)
+    );
+    const totalSpentAgg = await prisma.creditTransaction.aggregate({
+      where: { userId: user.id, type: "spend" },
+      _sum: { amount: true },
+    });
+    const totalSpent = Math.abs(totalSpentAgg._sum.amount || 0);
 
     // Get monthly activity data for charts
     const monthlyData = [];
@@ -199,26 +210,18 @@ export async function GET(request: NextRequest) {
 
     const creditUsagePercentage =
       userCredit.dailyLimit > 0
-        ? (
-            ((userCredit.dailyLimit - userCredit.balance) /
-              userCredit.dailyLimit) *
-            100
-          ).toFixed(1)
+        ? (((userCredit.dailyLimit - balance) / userCredit.dailyLimit) * 100).toFixed(1)
         : "0.0";
 
     return NextResponse.json({
       summaryStats: {
         totalDocuments,
-        documentsChange: `${
-          +documentsChange >= 0 ? "+" : ""
-        }${documentsChange}%`,
+        documentsChange: `${+documentsChange >= 0 ? "+" : ""}${documentsChange}%`,
         totalConsultations,
-        consultationsChange: `${
-          +consultationsChange >= 0 ? "+" : ""
-        }${consultationsChange}%`,
-        creditBalance: userCredit.balance,
+        consultationsChange: `${+consultationsChange >= 0 ? "+" : ""}${consultationsChange}%`,
+        creditBalance: balance,
         creditUsage: `${creditUsagePercentage}%`,
-        totalSpent: userCredit.totalSpent || 0,
+        totalSpent: totalSpent,
       },
       monthlyData,
       documentTypes: documentTypes.map((dt) => ({
@@ -226,10 +229,10 @@ export async function GET(request: NextRequest) {
         count: dt._count.type,
       })),
       userCredit: {
-        balance: userCredit.balance,
+        balance: balance,
         dailyLimit: userCredit.dailyLimit,
         totalEarned: userCredit.totalEarned || 0,
-        totalSpent: userCredit.totalSpent || 0,
+        totalSpent: totalSpent,
         lastResetDate: userCredit.lastResetDate,
       },
     });

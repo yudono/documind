@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 // GET /api/subscriptions - Get available subscription plans and user's current subscription
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     // Get all active subscription plans
@@ -29,21 +29,25 @@ export async function GET(request: NextRequest) {
         isActive: true,
       },
       orderBy: {
-        price: 'asc',
+        price: "asc",
       },
     });
 
     // Get user's current subscription (if any)
     // For now, we'll assume free plan if no subscription exists
     const currentPlan = {
-      id: 'free',
-      name: 'Free Plan',
-      description: 'Basic features with daily credit limit',
+      id: "free",
+      name: "Free Plan",
+      description: "Basic features with daily credit limit",
       price: 0,
-      currency: 'USD',
-      billingPeriod: 'monthly',
+      currency: "USD",
+      billingPeriod: "monthly",
       creditsPerMonth: 500,
-      features: ['500 daily credits', 'Basic chat functionality', 'Document upload'],
+      features: [
+        "500 daily credits",
+        "Basic chat functionality",
+        "Document upload",
+      ],
       isActive: true,
     };
 
@@ -54,24 +58,44 @@ export async function GET(request: NextRequest) {
         description: plan.description,
         price: plan.price,
         currency: plan.currency,
-        billingPeriod: 'monthly', // Default billing period
+        billingPeriod: "monthly", // Default billing period
         creditsPerMonth: plan.monthlyCredits, // Use monthlyCredits from schema
         features: plan.features,
         isPopular: false, // Default value since isPopular doesn't exist in SubscriptionPlan
       })),
       currentPlan,
-      userCredit: user.userCredit ? {
-        balance: user.userCredit.balance,
-        dailyLimit: user.userCredit.dailyLimit,
-        totalEarned: user.userCredit.totalEarned,
-        totalSpent: user.userCredit.totalSpent,
-      } : null,
+      userCredit: user.userCredit
+        ? {
+            balance: Math.max(
+              0,
+              (user.userCredit.dailyLimit || 0) -
+                (user.userCredit.dailyUsed || 0)
+            ),
+            dailyLimit: user.userCredit.dailyLimit,
+            totalEarned: user.userCredit.totalEarned,
+            // Compute totalSpent from transactions
+            totalSpent: (
+              await prisma.creditTransaction.aggregate({
+                where: { userId: user.id, type: "spend" },
+                _sum: { amount: true },
+              })
+            )._sum.amount
+              ? Math.abs(
+                  (
+                    await prisma.creditTransaction.aggregate({
+                      where: { userId: user.id, type: "spend" },
+                      _sum: { amount: true },
+                    })
+                  )._sum.amount as number
+                )
+              : 0,
+          }
+        : null,
     });
-
   } catch (error) {
-    console.error('Error fetching subscriptions:', error);
+    console.error("Error fetching subscriptions:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -81,9 +105,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
@@ -94,14 +118,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     const { planId, paymentMethod, transactionId } = await request.json();
 
     if (!planId || !paymentMethod || !transactionId) {
       return NextResponse.json(
-        { error: 'Plan ID, payment method, and transaction ID are required' },
+        { error: "Plan ID, payment method, and transaction ID are required" },
         { status: 400 }
       );
     }
@@ -113,7 +137,7 @@ export async function POST(request: NextRequest) {
 
     if (!plan || !plan.isActive) {
       return NextResponse.json(
-        { error: 'Invalid or inactive subscription plan' },
+        { error: "Invalid or inactive subscription plan" },
         { status: 400 }
       );
     }
@@ -124,8 +148,8 @@ export async function POST(request: NextRequest) {
       userCredit = await prisma.userCredit.create({
         data: {
           userId: user.id,
-          balance: 0,
-          dailyLimit: plan.monthlyCredits || 500,
+          dailyLimit: plan.dailyCredits || 500,
+          dailyUsed: 0,
           lastResetDate: new Date(),
         },
       });
@@ -139,15 +163,16 @@ export async function POST(request: NextRequest) {
       prisma.userCredit.update({
         where: { userId: user.id },
         data: {
-          balance: { increment: plan.monthlyCredits || 0 },
-          dailyLimit: plan.monthlyCredits || 500,
+          // Set daily limit based on plan's dailyCredits
+          dailyLimit: plan.dailyCredits || 500,
+          // Award monthly credits to totalEarned
           totalEarned: { increment: plan.monthlyCredits || 0 },
         },
       }),
       prisma.creditTransaction.create({
         data: {
           userId: user.id,
-          type: 'earn',
+          type: "earn",
           amount: plan.monthlyCredits || 0,
           description: `Subscription: ${plan.name}`,
           reference: transactionId,
@@ -156,7 +181,7 @@ export async function POST(request: NextRequest) {
             planName: plan.name,
             paymentMethod,
             price: plan.price,
-            billingPeriod: 'monthly',
+            billingPeriod: "monthly",
             subscriptionEndDate: subscriptionEndDate.toISOString(),
           },
         },
@@ -177,11 +202,10 @@ export async function POST(request: NextRequest) {
         amount: plan.monthlyCredits,
       },
     });
-
   } catch (error) {
-    console.error('Error subscribing to plan:', error);
+    console.error("Error subscribing to plan:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

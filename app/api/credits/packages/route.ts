@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
         credits: pkg.credits,
         price: pkg.price,
         currency: pkg.currency,
-        isPopular: pkg.isPopular,
+        // Removed isPopular since it's not in the schema
         bonusCredits: pkg.bonusCredits,
         totalCredits: pkg.credits + (pkg.bonusCredits || 0),
       })),
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       credits,
       price,
       currency = 'USD',
-      isPopular = false,
+      // Removed isPopular since it's not in the schema
       bonusCredits = 0,
     } = await request.json();
 
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
         credits,
         price,
         currency,
-        isPopular,
+        // Removed isPopular since it's not in the schema
         bonusCredits,
         isActive: true,
       },

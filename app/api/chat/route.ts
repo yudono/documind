@@ -97,23 +97,23 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const availableToday = Math.max(0, (userCredit.dailyLimit || 0) - (userCredit.dailyUsed || 0));
-    if (availableToday < 1) {
+    // Compute available credit balance from earned minus spent
+    const spendAgg = await prisma.creditTransaction.aggregate({
+      where: { userId: user.id, type: "spend" },
+      _sum: { amount: true },
+    });
+    const totalSpentAbs = Math.abs(spendAgg._sum.amount || 0);
+    const totalEarned = userCredit.totalEarned || 0;
+    const availableCredits = Math.max(0, totalEarned - totalSpentAbs);
+    if (availableCredits < 1) {
       return NextResponse.json(
         { error: "Insufficient credits" },
         { status: 400 }
       );
     }
 
-    // Consume 1 credit for the chat request
+    // Consume 1 credit for the chat request (record spend transaction)
     await prisma.$transaction([
-      prisma.userCredit.update({
-        where: { userId: user.id },
-        data: {
-          dailyUsed: { increment: 1 },
-          totalSpent: { increment: 1 },
-        },
-      }),
       prisma.creditTransaction.create({
         data: {
           userId: user.id,
@@ -308,7 +308,16 @@ export async function POST(request: NextRequest) {
       where: { userId: user.id },
     });
 
-    const creditBalance = Math.max(0, (updatedCredit?.dailyLimit || 0) - (updatedCredit?.dailyUsed || 0));
+    // Balance = totalEarned - totalSpent (abs)
+    const spendAggAfter = await prisma.creditTransaction.aggregate({
+      where: { userId: user.id, type: "spend" },
+      _sum: { amount: true },
+    });
+    const totalSpentAfterAbs = Math.abs(spendAggAfter._sum.amount || 0);
+    const creditBalance = Math.max(
+      0,
+      (updatedCredit?.totalEarned || 0) - totalSpentAfterAbs
+    );
 
     return NextResponse.json({
       success: true,
