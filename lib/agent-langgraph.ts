@@ -520,12 +520,55 @@ export class LangGraphDocumentAgent {
     state: AgentState
   ): Promise<Partial<AgentState>> {
     try {
-      const shouldGenerate = this.isDocumentGenerationRequest(state.query);
+      // Ask the LLM to classify intent and type with strict JSON output
+      const systemText = clampText(
+        `You are a classifier for document generation intent.
+- Decide if the user requests to create/export a document artifact.
+- If yes, choose the single best document type from: "pdf", "docx", "xlsx", "pptx".
+- Return ONLY a JSON object with keys: "shouldGenerate" (boolean) and "type" ("pdf"|"docx"|"xlsx"|"pptx"|null).
+- If unclear or not a generation request, set "shouldGenerate" to false and "type" to null.`,
+        MAX_SYSTEM_CHARS
+      );
+      const safeQuery = clampText(state.query, MAX_QUERY_CHARS);
+      const messages = [
+        new SystemMessage(systemText),
+        new HumanMessage(`Query:\n${safeQuery}`),
+      ];
+
+      const response = await this.llm.invoke(messages);
+      const raw =
+        typeof response.content === "string"
+          ? response.content
+          : JSON.stringify(response.content);
+
+      let shouldGenerate = false;
+      let type: "pdf" | "xlsx" | "docx" | "pptx" | undefined;
+
+      try {
+        // Try to extract JSON from the response content robustly
+        const jsonText = (() => {
+          const start = raw.indexOf("{");
+          const end = raw.lastIndexOf("}");
+          if (start !== -1 && end !== -1 && end > start) return raw.slice(start, end + 1);
+          return raw;
+        })();
+        const parsed = JSON.parse(jsonText);
+        shouldGenerate = !!parsed.shouldGenerate;
+        const maybeType = parsed.type as string | null | undefined;
+        if (maybeType === "pdf" || maybeType === "docx" || maybeType === "xlsx" || maybeType === "pptx") {
+          type = maybeType;
+        }
+      } catch {
+        // Fallback to heuristics if parsing fails
+        shouldGenerate = this.isDocumentGenerationRequest(state.query);
+        type = shouldGenerate ? this.detectDocumentType(state.query) : undefined;
+      }
+
       if (!shouldGenerate) {
         return { shouldGenerateDoc: false, documentType: undefined };
       }
 
-      const documentType = this.detectDocumentType(state.query);
+      const documentType = type ?? this.detectDocumentType(state.query);
       return { shouldGenerateDoc: true, documentType };
     } catch (error) {
       console.error("Error in document generation decision:", error);
@@ -552,12 +595,25 @@ export class LangGraphDocumentAgent {
       const safeContext = clampText(state.context, MAX_CONTEXT_CHARS);
       const safeQuery = clampText(state.query, MAX_QUERY_CHARS);
 
+      const baseSystemText = clampText(
+        `You generate structured document content. Respond in Markdown only (no HTML).
+     - Use headings (#, ##, ###), paragraphs, bullet lists (-) and numbered lists (1.).
+     - Use tables with pipe syntax when helpful: | Header | Header |\n| --- | --- |\n| Cell | Cell |
+     - Use **bold**, *italic*, > blockquotes, and fenced code blocks (three backticks).
+     - Do NOT include CSS, raw HTML, or inline styles unless explicitly requested.
+     - If no relevant document context is found, explicitly say so and write helpful general content for the request.
+     - Keep Markdown concise, well-structured, and readable.
+     - Excel JSON is handled in a separate step; do not emit CSV or JSON here.`,
+        MAX_SYSTEM_CHARS
+      );
+      const refDoc = (state.referencedDocs && state.referencedDocs.length > 0)
+        ? state.referencedDocs[0]
+        : undefined;
+      const refLine = refDoc
+        ? `Current reference document: ${refDoc.name} - ${refDoc.url}`
+        : "";
       const systemText = clampText(
-        `You generate structured document content. Output clean HTML only (no CSS).
-     - Use semantic tags: <h1>, <h2>, <p>, <ul>/<ol>, <li>, <table>/<tr>/<th>/<td>, <strong>, <em>, <blockquote>, <code>, <pre><code>.
-     - Do NOT use Markdown.
-     - If no document context is relevant, state that and write general content.
-     - Excel JSON is handled in a separate step.`,
+        [baseSystemText, refLine].filter(Boolean).join("\n"),
         MAX_SYSTEM_CHARS
       );
 
@@ -593,10 +649,20 @@ export class LangGraphDocumentAgent {
       const safeContext = clampText(state.context, MAX_CONTEXT_CHARS);
       const safeQuery = clampText(state.query, MAX_QUERY_CHARS);
 
-      const systemText = clampText(
+      const baseSystemText = clampText(
         `You analyze documents and answer questions using provided context.
      Respond in Markdown. Prefer headings, lists, tables, and code blocks when helpful.
      Do not use HTML unless explicitly requested.`,
+        MAX_SYSTEM_CHARS
+      );
+      const refDoc = (state.referencedDocs && state.referencedDocs.length > 0)
+        ? state.referencedDocs[0]
+        : undefined;
+      const refLine = refDoc
+        ? `Current reference document: ${refDoc.name} - ${refDoc.url}`
+        : "";
+      const systemText = clampText(
+        [baseSystemText, refLine].filter(Boolean).join("\n"),
         MAX_SYSTEM_CHARS
       );
 
