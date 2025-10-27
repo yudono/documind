@@ -21,13 +21,177 @@ const MAX_SYSTEM_CHARS = 2500;
 const MAX_EXCEL_CONTENT_CHARS = 6000;
 
 function clampText(input: string | undefined, max: number): string {
+  // Keep for safety in non-context fields; avoid using for context packing
   const text = (input || "").trim();
   if (text.length <= max) return text;
-  const headLen = Math.floor(max * 0.6);
-  const tailLen = Math.max(0, max - headLen - 20);
-  return (
-    text.slice(0, headLen) + "\n... [truncated] ...\n" + text.slice(-tailLen)
+  return text.slice(0, max);
+}
+
+// Helper: pack multiple context segments without truncating individual segments
+// Ensures diversity (doc-wise and time-wise) and prioritizes relevant conversation memory
+type ContextSegment = {
+  source: "conversation" | "doc" | "global" | "ocr";
+  documentId?: string;
+  text: string;
+  similarity?: number;
+  timestamp?: number;
+  priorityBoost?: number; // optional manual boost
+};
+
+function normalizeRange(values: number[]): (v?: number) => number {
+  const valid = values.filter((v) => typeof v === "number" && !isNaN(v));
+  const min = valid.length ? Math.min(...valid) : 0;
+  const max = valid.length ? Math.max(...valid) : 1;
+  const span = Math.max(1, max - min);
+  return (v?: number) => {
+    if (typeof v !== "number" || isNaN(v)) return 0;
+    return (v - min) / span;
+  };
+}
+
+function packContextSegments(
+  segments: ContextSegment[],
+  maxChars: number
+): string {
+  if (!segments.length) return "";
+
+  // Deduplicate by normalized text
+  const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
+  const seen = new Set<string>();
+  const deduped = segments.filter((s) => {
+    const key = norm(s.text).slice(0, 512);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Compute normalization helpers
+  const simNormalizer = normalizeRange(
+    deduped.map((s) => (typeof s.similarity === "number" ? s.similarity! : 0))
   );
+  const tsNormalizer = normalizeRange(
+    deduped.map((s) => (typeof s.timestamp === "number" ? s.timestamp! : 0))
+  );
+
+  // Score: relevance + recency + source-aware boost
+  const scored = deduped.map((s) => {
+    const sim = simNormalizer(s.similarity);
+    const rec = tsNormalizer(s.timestamp);
+    const sourceBoost =
+      s.source === "conversation" ? 0.15 : s.source === "ocr" ? 0.05 : 0;
+    const manual = s.priorityBoost ?? 0;
+    const score = 0.7 * sim + 0.25 * rec + sourceBoost + manual;
+    return { ...s, score } as ContextSegment & { score: number };
+  });
+
+  // Fairness across time: compute median timestamp and enforce mix
+  const timestamps = scored
+    .map((s) => (typeof s.timestamp === "number" ? s.timestamp! : 0))
+    .sort((a, b) => a - b);
+  const medianTs = timestamps.length
+    ? timestamps[Math.floor(timestamps.length / 2)]
+    : 0;
+
+  const recent: (ContextSegment & { score: number })[] = [];
+  const older: (ContextSegment & { score: number })[] = [];
+  scored.forEach((s) => {
+    if ((s.timestamp ?? 0) >= medianTs) recent.push(s);
+    else older.push(s);
+  });
+
+  recent.sort((a, b) => b.score - a.score);
+  older.sort((a, b) => b.score - a.score);
+
+  // Build packed content up to maxChars, keep segments intact
+  const perDocLimit = 6;
+  const docCount: Record<string, number> = {};
+  const chosen: (ContextSegment & { score: number })[] = [];
+  let total = 0;
+  let iRecent = 0;
+  let iOlder = 0;
+  const targetOlderRatio = 0.4; // ensure older memory included
+
+  while (
+    total < maxChars &&
+    (iRecent < recent.length || iOlder < older.length)
+  ) {
+    const currentOlderRatio = chosen.length
+      ? chosen.filter((c) => (c.timestamp ?? 0) < medianTs).length /
+        chosen.length
+      : 0;
+    const pickOlder =
+      currentOlderRatio < targetOlderRatio && iOlder < older.length;
+    const pool = pickOlder ? older : recent;
+    const idx = pickOlder ? iOlder : iRecent;
+    const cand = pool[idx];
+    if (!cand) break;
+
+    const docKey = cand.documentId || `${cand.source}`;
+    const used = docCount[docKey] || 0;
+    const fits = total + cand.text.length + 4 <= maxChars;
+    if (used < perDocLimit && fits) {
+      chosen.push(cand);
+      docCount[docKey] = used + 1;
+      total += cand.text.length + 4; // include separators
+    }
+    if (pickOlder) iOlder++;
+    else iRecent++;
+  }
+
+  // Assemble with light labels to help the LLM
+  const parts = chosen.map((c) => {
+    const label =
+      c.source === "conversation"
+        ? "[Conversation]"
+        : c.source === "ocr"
+        ? "[OCR]"
+        : c.source === "global"
+        ? "[Global]"
+        : `[Doc:${c.documentId || "unknown"}]`;
+    return `${label}\n${c.text}`;
+  });
+  return parts.join("\n\n");
+}
+
+// Small utility: map with limited concurrency (used for OCR batching)
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length) as any;
+  let idx = 0;
+  const workers = new Array(Math.max(1, concurrency)).fill(0).map(async () => {
+    while (true) {
+      const current = idx++;
+      if (current >= items.length) break;
+      results[current] = await mapper(items[current], current);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+// Helper: build conversation transcript from Prisma for a session (last 12 messages, capped)
+async function buildConversationContextFromSession(
+  sessionId: string
+): Promise<string> {
+  try {
+    const messages = await prisma.chatMessage.findMany({
+      where: { sessionId },
+      orderBy: { createdAt: "asc" },
+      select: { role: true, content: true },
+    });
+    const last = messages.slice(Math.max(0, messages.length - 12));
+    const transcript = last
+      .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+      .join("\n");
+    // Do not cap here; packing will handle max size without truncating segments
+    return transcript;
+  } catch (e) {
+    console.warn("Failed to build conversation context in agent:", e);
+    return "";
+  }
 }
 
 // Helper: simpan satu entri memori (user/assistant) ke Milvus
@@ -193,12 +357,25 @@ export class LangGraphDocumentAgent {
     state: AgentState
   ): Promise<Partial<AgentState>> {
     let context = "";
+    const segments: ContextSegment[] = [];
 
     if (state.useSemanticSearch) {
       try {
         if (!milvusService) {
           console.warn("Milvus not configured - skipping context retrieval");
-          return { ...state, context: "" };
+          // Still attempt to use conversationContext if present
+          if (state.conversationContext) {
+            segments.push({
+              source: "conversation",
+              documentId: state.sessionId,
+              text: state.conversationContext,
+              priorityBoost: 0.1,
+            });
+          }
+          return {
+            ...state,
+            context: packContextSegments(segments, MAX_CONTEXT_CHARS),
+          };
         }
 
         // Try init Milvus but fail gracefully
@@ -243,7 +420,11 @@ export class LangGraphDocumentAgent {
           .map((d) => d?.name)
           .filter(Boolean)
           .join(" ");
-        const retrievalQuery = [state.query, docNameHints]
+        const retrievalQuery = [
+          state.query,
+          docNameHints,
+          state.conversationContext,
+        ]
           .filter((v) => v && v.trim().length)
           .join(" ");
 
@@ -316,11 +497,18 @@ export class LangGraphDocumentAgent {
             const directChunks = await milvusService!.getChunksByDocumentId(
               selectedDocId,
               state.userId,
-              8
+              12
             );
             if (directChunks && directChunks.length > 0) {
-              const text = directChunks.map((c) => c.chunkText).join("\n\n");
-              context = text;
+              for (const c of directChunks) {
+                segments.push({
+                  source: "doc",
+                  documentId: selectedDocId,
+                  text: c.chunkText,
+                  similarity: 0.5,
+                  timestamp: (c as any).timestamp ?? 0,
+                });
+              }
             }
           } catch (err) {
             console.warn("Direct fetch by selected documentId failed:", err);
@@ -328,11 +516,11 @@ export class LangGraphDocumentAgent {
         }
 
         // Next, semantic search restricted to selectedDocId; only run if no direct context found
-        if (!context) {
+        if (!segments.length) {
           const similarChunks = await milvusService!.searchSimilarChunksByText(
             retrievalQuery,
             state.userId,
-            8,
+            12,
             selectedDocId ? [selectedDocId] : undefined
           );
 
@@ -372,7 +560,15 @@ export class LangGraphDocumentAgent {
                   (a: any, b: any) => (b.timestamp ?? 0) - (a.timestamp ?? 0)
                 )
               : filtered;
-            context = ordered.map((chunk: any) => chunk.chunkText).join("\n\n");
+            for (const chunk of ordered) {
+              segments.push({
+                source: "doc",
+                documentId: chunk.documentId,
+                text: chunk.chunkText,
+                similarity: (chunk as any).similarity ?? 0,
+                timestamp: (chunk as any).timestamp ?? 0,
+              });
+            }
           } else {
             // If no specific docIds available, allow a global semantic search (user-wide)
             if (!selectedDocId) {
@@ -381,7 +577,7 @@ export class LangGraphDocumentAgent {
                   await milvusService!.searchSimilarChunksByText(
                     retrievalQuery,
                     state.userId,
-                    8,
+                    12,
                     undefined
                   );
                 if (globalChunks && globalChunks.length > 0) {
@@ -419,9 +615,15 @@ export class LangGraphDocumentAgent {
                           (b.timestamp ?? 0) - (a.timestamp ?? 0)
                       )
                     : filteredGlobal;
-                  context = orderedGlobal
-                    .map((chunk: any) => chunk.chunkText)
-                    .join("\n\n");
+                  for (const chunk of orderedGlobal) {
+                    segments.push({
+                      source: "global",
+                      documentId: chunk.documentId,
+                      text: chunk.chunkText,
+                      similarity: (chunk as any).similarity ?? 0,
+                      timestamp: (chunk as any).timestamp ?? 0,
+                    });
+                  }
                 }
               } catch (err) {
                 console.warn("Global search retrieval failed:", err);
@@ -429,19 +631,24 @@ export class LangGraphDocumentAgent {
             }
 
             // Fallback: direct fetch by selectedDocId to ensure OCR context recovery
-            if (!context && selectedDocId) {
+            if (!segments.length && selectedDocId) {
               try {
                 const fallbackChunks =
                   await milvusService!.getChunksByDocumentId(
                     selectedDocId,
                     state.userId,
-                    5
+                    8
                   );
                 if (fallbackChunks && fallbackChunks.length > 0) {
-                  const text = fallbackChunks
-                    .map((chunk) => chunk.chunkText)
-                    .join("\n\n");
-                  context = text;
+                  for (const chunk of fallbackChunks) {
+                    segments.push({
+                      source: "doc",
+                      documentId: selectedDocId,
+                      text: (chunk as any).chunkText,
+                      similarity: 0.3,
+                      timestamp: (chunk as any).timestamp ?? 0,
+                    });
+                  }
                 }
               } catch (err) {
                 console.warn("Fallback by selected documentId failed:", err);
@@ -449,22 +656,54 @@ export class LangGraphDocumentAgent {
             }
           }
         }
+
+        // Additionally retrieve conversation memory from Milvus by sessionId
+        if (state.sessionId) {
+          try {
+            const convChunks = await milvusService!.searchSimilarChunksByText(
+              retrievalQuery,
+              state.userId,
+              10,
+              [state.sessionId]
+            );
+            for (const chunk of convChunks || []) {
+              segments.push({
+                source: "conversation",
+                documentId: state.sessionId,
+                text: (chunk as any).chunkText,
+                similarity: (chunk as any).similarity ?? 0,
+                timestamp: (chunk as any).timestamp ?? 0,
+                priorityBoost: 0.1,
+              });
+            }
+          } catch (err) {
+            console.warn("Conversation retrieval failed:", err);
+          }
+        }
       } catch (error) {
         console.error("Error retrieving context:", error);
       }
     }
 
-    // Add conversation context if provided, but cap it too
+    // Add raw conversationContext lines as separate segments to avoid truncation
     if (state.conversationContext) {
-      const safeConv = clampText(
-        state.conversationContext,
-        Math.floor(MAX_CONTEXT_CHARS / 3)
-      );
-      context = safeConv + (context ? "\n\n" + context : "");
+      const lines = state.conversationContext
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+      for (const line of lines) {
+        segments.push({
+          source: "conversation",
+          documentId: state.sessionId,
+          text: line,
+          similarity: 0.4,
+          priorityBoost: 0.05,
+        });
+      }
     }
 
-    // Final cap on combined context
-    context = clampText(context, MAX_CONTEXT_CHARS);
+    // Pack all segments into final context without truncating individual segments
+    context = packContextSegments(segments, MAX_CONTEXT_CHARS);
 
     // console.log("Final context:", context);
 
@@ -486,37 +725,73 @@ export class LangGraphDocumentAgent {
       const ocrPrompt =
         "Extract clear text from this document image. Preserve headings, tables, and lists in plain text. Return only clean text for QA/summarization.";
 
-      const results: { url: string; text: string }[] = [];
-      const ocrDocIds: string[] = [];
-      for (const doc of selected) {
-        const url = doc.url;
+      // Init Milvus once (if configured) before batch inserts
+      if (milvusService) {
         try {
-          const text = await performOCR(url, ocrPrompt);
-          results.push({ url, text });
+          await initializeMilvus();
+        } catch (e) {
+          console.warn("Milvus init failed prior to OCR inserts:", e);
+        }
+      }
 
-          // Derive stable documentId from download URL if possible
-          // Expected pattern: /api/items/{id}/download?type=pdf
-          const itemIdFromUrl = (() => {
-            try {
-              const u = new URL(url, "http://localhost");
-              const pathname = u.pathname || "";
-              const match = pathname.match(/\/items\/(.+?)\/download/);
-              return match && match[1] ? match[1] : undefined;
-            } catch {
-              return undefined;
-            }
-          })();
+      const OCR_CONCURRENCY = 2;
 
-          const milvusDocId = itemIdFromUrl || state.sessionId;
-          if (milvusDocId) {
-            ocrDocIds.push(milvusDocId);
+      // Step 1: Run OCR in parallel with limited concurrency
+      const ocrResults = await mapWithConcurrency(
+        selected,
+        OCR_CONCURRENCY,
+        async (doc) => {
+          const url = doc.url;
+          try {
+            const text = await performOCR(url, ocrPrompt);
+
+            // Derive stable documentId from download URL if possible
+            const itemIdFromUrl = (() => {
+              try {
+                const u = new URL(url, "http://localhost");
+                const pathname = u.pathname || "";
+                const match = pathname.match(/\/items\/(.+?)\/download/);
+                return match && match[1] ? match[1] : undefined;
+              } catch {
+                return undefined;
+              }
+            })();
+
+            const milvusDocId = itemIdFromUrl || state.sessionId;
+            return { url, text, milvusDocId };
+          } catch (err) {
+            console.error("OCR failed for", url, err);
+            return {
+              url,
+              text: "",
+              milvusDocId: undefined as string | undefined,
+            };
           }
+        }
+      );
 
-          if (milvusService && milvusDocId) {
+      const successful = ocrResults.filter(
+        (r) => r.text && r.text.trim().length
+      );
+      if (!successful.length) {
+        return {};
+      }
+
+      const ocrDocIds = successful
+        .map((r) => r.milvusDocId)
+        .filter((v): v is string => Boolean(v));
+
+      // Step 2: Insert OCR texts into Milvus in parallel (each handles its own batching)
+      if (milvusService) {
+        const ms = milvusService!; // narrow to non-null within this block
+        await mapWithConcurrency(
+          successful,
+          OCR_CONCURRENCY,
+          async ({ url, text, milvusDocId }) => {
+            if (!milvusDocId) return;
             try {
-              await initializeMilvus();
               const labeled = `OCR from ${url}:\n${text}`;
-              await milvusService.processAndInsertDocument(
+              await ms.processAndInsertDocument(
                 milvusDocId,
                 labeled,
                 state.userId
@@ -525,13 +800,7 @@ export class LangGraphDocumentAgent {
               console.warn("Milvus insert failed for OCR:", e);
             }
           }
-        } catch (err) {
-          console.error("OCR failed for", url, err);
-        }
-      }
-
-      if (!results.length) {
-        return {};
+        );
       }
 
       // Link OCR docIds into state.documentIds to strengthen retrieval
@@ -728,8 +997,8 @@ export class LangGraphDocumentAgent {
     state: AgentState
   ): Promise<Partial<AgentState>> {
     try {
-      const safeContext = clampText(state.context, MAX_CONTEXT_CHARS);
-      const safeQuery = clampText(state.query, MAX_QUERY_CHARS);
+      const safeContext = state.context; // context already packed
+      const safeQuery = state.query;
 
       // console.log("safeContext 2:", safeContext);
       // console.log("safeQuery 2:", safeQuery);
@@ -786,8 +1055,8 @@ export class LangGraphDocumentAgent {
     state: AgentState
   ): Promise<Partial<AgentState>> {
     try {
-      const safeContext = clampText(state.context, MAX_CONTEXT_CHARS);
-      const safeQuery = clampText(state.query, MAX_QUERY_CHARS);
+      const safeContext = state.context; // context already packed
+      const safeQuery = state.query;
 
       // console.log("safeContext:", safeContext);
       // console.log("safeQuery:", safeQuery);
@@ -1533,14 +1802,29 @@ export class LangGraphDocumentAgent {
    */
   async processQuery(input: AgentInput): Promise<AgentOutput> {
     try {
+      // Resolve conversation context: use provided value or build from Prisma by sessionId (no truncation)
+      let effectiveConversationContext = (
+        input.conversationContext || ""
+      ).trim();
+      if (
+        (!effectiveConversationContext ||
+          !effectiveConversationContext.trim()) &&
+        input.sessionId
+      ) {
+        const built = await buildConversationContextFromSession(
+          input.sessionId
+        );
+        effectiveConversationContext = built;
+      }
+
       // Initialize state
       const initialState: AgentState = {
         query: input.query,
         userId: input.userId,
         sessionId: input.sessionId,
-        useSemanticSearch: input.useSemanticSearch,
+        useSemanticSearch: input.useSemanticSearch ?? true,
         documentIds: input.documentIds,
-        conversationContext: input.conversationContext,
+        conversationContext: effectiveConversationContext,
         context: "",
         aiResponse: "",
         documentFile: undefined,

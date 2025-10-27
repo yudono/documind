@@ -138,8 +138,28 @@ export default function PluginPage() {
 
         <div className="p-8 relative h-[calc(100vh-80px)] overflow-auto">
           {loading ? (
-            <div className="text-center text-muted-foreground">
-              Loading plugins...
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* skeleton */}
+              {Array(6)
+                .fill(0)
+                .map((_, index) => (
+                  <Card key={index} className="animate-pulse bg-white">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-md bg-muted"></div>
+                        <div>
+                          <div className="h-4 bg-muted/50 w-24"></div>
+                          <div className="h-3 bg-muted/50 w-16"></div>
+                        </div>
+                      </div>
+                      <div className="w-8 h-8 rounded-md bg-muted"></div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-4 bg-muted/50 w-full"></div>
+                      <div className="h-4 bg-muted/50 w-full mt-2"></div>
+                    </CardContent>
+                  </Card>
+                ))}
             </div>
           ) : plugins.length === 0 ? (
             <div className="text-center text-muted-foreground">

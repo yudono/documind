@@ -39,6 +39,10 @@ import {
   YAxis,
   CartesianGrid,
   ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
 
 interface DashboardStats {
@@ -138,17 +142,6 @@ export default function Dashboard() {
       icon: FileText,
     },
     {
-      label: "AI Consultations",
-      value: String(dashboardData?.summaryStats?.totalConsultations ?? 0),
-      change: dashboardData?.summaryStats?.consultationsChange ?? "0",
-      trend: (
-        dashboardData?.summaryStats?.consultationsChange ?? ""
-      ).startsWith("+")
-        ? "up"
-        : "down",
-      icon: MessageSquare,
-    },
-    {
       label: "Credit Balance",
       value: String(dashboardData?.summaryStats?.creditBalance ?? 0),
       change: `${dashboardData?.summaryStats?.creditUsage ?? "0"} used`,
@@ -161,6 +154,13 @@ export default function Dashboard() {
       change: "Total usage",
       trend: "neutral",
       icon: CreditCard,
+    },
+    {
+      label: "Daily Limit",
+      value: String(dashboardData?.userCredit?.dailyLimit ?? 0),
+      change: `${dashboardData?.userCredit?.balance ?? 0} remaining`,
+      trend: "neutral",
+      icon: Activity,
     },
   ];
 
@@ -182,6 +182,15 @@ export default function Dashboard() {
       color: "hsl(var(--chart-1))",
     },
   };
+
+  const PIE_COLORS = [
+    "hsl(var(--chart-1))",
+    "hsl(var(--chart-2))",
+    "hsl(var(--chart-3))",
+    "hsl(var(--chart-4))",
+    "hsl(var(--chart-5))",
+    "hsl(var(--chart-6))",
+  ];
 
   return (
     <div className="min-h-screen">
@@ -205,6 +214,7 @@ export default function Dashboard() {
           {summaryStats.map((stat) => {
             const Icon = stat.icon;
             const isPositive = stat.trend === "up";
+            const isNeutral = stat.trend === "neutral";
             return (
               <Card key={stat.label}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -216,17 +226,28 @@ export default function Dashboard() {
                 <CardContent>
                   <div className="text-2xl font-bold mb-1">{stat.value}</div>
                   <div className="flex items-center text-xs">
-                    {isPositive ? (
-                      <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
-                    ) : (
-                      <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
-                    )}
+                    {!isNeutral &&
+                      (isPositive ? (
+                        <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
+                      ) : (
+                        <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
+                      ))}
                     <span
-                      className={isPositive ? "text-green-500" : "text-red-500"}
+                      className={
+                        isNeutral
+                          ? "text-slate-500"
+                          : isPositive
+                          ? "text-green-500"
+                          : "text-red-500"
+                      }
                     >
                       {stat.change}
                     </span>
-                    <span className="text-slate-500 ml-1">from last month</span>
+                    {!isNeutral && (
+                      <span className="text-slate-500 ml-1">
+                        from last month
+                      </span>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -280,143 +301,49 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Document Types Bar Chart */}
+          {/* Document Types Pie Chart */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
                 <BarChart3 className="h-5 w-5 mr-2" />
-                Document Types Distribution
+                Document Type Summary
               </CardTitle>
               <CardDescription>
-                Breakdown of your documents by type
+                Breakdown of your documents by category (xlsx, doc, image, etc)
               </CardDescription>
             </CardHeader>
             <CardContent>
               <ChartContainer config={chartConfig} className="h-[300px]">
-                <BarChart data={dashboardData.documentTypes}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="type" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar
-                    dataKey="count"
-                    fill="var(--color-count)"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Pie
+                      data={dashboardData.documentTypes}
+                      dataKey="count"
+                      nameKey="type"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      label
+                    >
+                      {dashboardData.documentTypes.map(
+                        (entry: any, index: number) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={PIE_COLORS[index % PIE_COLORS.length]}
+                          />
+                        )
+                      )}
+                    </Pie>
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
               </ChartContainer>
             </CardContent>
           </Card>
         </div>
 
-        {/* Credit Usage Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Coins className="h-5 w-5 mr-2" />
-              Credit Usage Overview
-            </CardTitle>
-            <CardDescription>
-              Your current credit status and usage
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Current Balance</span>
-                <span className="text-2xl font-bold text-green-600">
-                  {dashboardData.userCredit.balance}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Daily Limit</span>
-                <span className="text-lg font-semibold">
-                  {dashboardData.userCredit.dailyLimit}
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-600 h-2 rounded-full"
-                  style={{
-                    width: `${
-                      (dashboardData.userCredit.balance /
-                        dashboardData.userCredit.dailyLimit) *
-                      100
-                    }%`,
-                  }}
-                ></div>
-              </div>
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>
-                  Total Earned: {dashboardData.userCredit.totalEarned}
-                </span>
-                <span>Total Spent: {dashboardData.userCredit.totalSpent}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Activity className="h-5 w-5 mr-2" />
-              Quick Actions
-            </CardTitle>
-            <CardDescription>Access your most used features</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Link href="/dashboard/documents">
-                <div className="group p-4 rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all cursor-pointer">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="p-2 rounded-lg bg-blue-500 text-white">
-                      <FileText className="h-4 w-4" />
-                    </div>
-                    <h3 className="font-medium text-slate-900 group-hover:text-primary">
-                      Manage Documents
-                    </h3>
-                  </div>
-                  <p className="text-sm text-slate-600">
-                    Upload, organize, and analyze your business documents
-                  </p>
-                </div>
-              </Link>
-
-              <Link href="/dashboard/chat">
-                <div className="group p-4 rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all cursor-pointer">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="p-2 rounded-lg bg-green-500 text-white">
-                      <MessageSquare className="h-4 w-4" />
-                    </div>
-                    <h3 className="font-medium text-slate-900 group-hover:text-primary">
-                      AI Consultation
-                    </h3>
-                  </div>
-                  <p className="text-sm text-slate-600">
-                    Get AI-powered business insights and recommendations
-                  </p>
-                </div>
-              </Link>
-
-              <Link href="/dashboard/billing">
-                <div className="group p-4 rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all cursor-pointer">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="p-2 rounded-lg bg-purple-500 text-white">
-                      <BarChart3 className="h-4 w-4" />
-                    </div>
-                    <h3 className="font-medium text-slate-900 group-hover:text-primary">
-                      Analytics & Billing
-                    </h3>
-                  </div>
-                  <p className="text-sm text-slate-600">
-                    View detailed analytics and manage your subscription
-                  </p>
-                </div>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Credit Usage Card removed: summary moved to top summary cards */}
       </div>
     </div>
   );

@@ -180,17 +180,81 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Get document types distribution
-    const documentTypes = await prisma.item.groupBy({
-      by: ["type"],
+    // Get document types distribution (category summary: xlsx, doc, ppt, pdf, image, csv, txt, other)
+    const toCategory = (fileType?: string | null, name?: string) => {
+      const ft = (fileType || "").toLowerCase();
+      const ext = (name?.split(".").pop() || "").toLowerCase();
+
+      // Excel
+      if (
+        ft.includes("vnd.openxmlformats-officedocument.spreadsheetml.sheet") ||
+        ft.includes("vnd.ms-excel") ||
+        ["xls", "xlsx"].includes(ext)
+      )
+        return "xlsx";
+
+      // Word
+      if (
+        ft.includes("msword") ||
+        ft.includes("vnd.openxmlformats-officedocument.wordprocessingml.document") ||
+        ["doc", "docx"].includes(ext)
+      )
+        return "doc";
+
+      // PowerPoint
+      if (
+        ft.includes("vnd.ms-powerpoint") ||
+        ft.includes("vnd.openxmlformats-officedocument.presentationml.presentation") ||
+        ["ppt", "pptx"].includes(ext)
+      )
+        return "ppt";
+
+      // PDF
+      if (ft.includes("application/pdf") || ext === "pdf") return "pdf";
+
+      // CSV
+      if (ft.includes("text/csv") || ft.includes("application/csv") || ext === "csv") return "csv";
+
+      // Text
+      if (ft.startsWith("text/") || ext === "txt") return "txt";
+
+      // Image
+      if (ft.startsWith("image/") || ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tif", "tiff", "svg"].includes(ext))
+        return "image";
+
+      return "other";
+    };
+
+    // Aggregate by fileType first for efficiency
+    const fileTypeGroups = await prisma.item.groupBy({
+      by: ["fileType"],
       where: {
         userId: user.id,
         type: "document",
       },
-      _count: {
-        type: true,
-      },
+      _count: { fileType: true },
     });
+
+    const categoryCounts: Record<string, number> = {};
+    for (const g of fileTypeGroups) {
+      const cat = toCategory(g.fileType);
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + (g._count.fileType || 0);
+    }
+
+    // For items with null fileType, fall back to name extension categorization
+    const unknownTypeItems = await prisma.item.findMany({
+      where: { userId: user.id, type: "document", fileType: null },
+      select: { name: true },
+    });
+    for (const it of unknownTypeItems) {
+      const cat = toCategory(null, it.name || undefined);
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    }
+
+    const documentTypes = Object.entries(categoryCounts)
+      .map(([type, count]) => ({ type, count }))
+      .filter((x) => x.count > 0)
+      .sort((a, b) => b.count - a.count);
 
     // Calculate percentage changes
     const documentsChange =
@@ -230,10 +294,7 @@ export async function GET(request: NextRequest) {
         totalSpent: totalSpent,
       },
       monthlyData,
-      documentTypes: documentTypes.map((dt) => ({
-        type: dt.type,
-        count: dt._count.type,
-      })),
+      documentTypes,
       userCredit: {
         balance: balance,
         dailyLimit: userCredit.dailyLimit,

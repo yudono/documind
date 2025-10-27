@@ -67,7 +67,10 @@ class MilvusService {
     } catch (e) {
       // If describe fails, assume timestamp not present to be safe
       this.hasTimestampField = false;
-      console.warn("describeCollection failed, assuming no timestamp field:", e);
+      console.warn(
+        "describeCollection failed, assuming no timestamp field:",
+        e
+      );
     }
   }
 
@@ -201,7 +204,9 @@ class MilvusService {
           collection_names: [this.collectionName],
         });
       }
-      await this.client!.loadCollection({ collection_name: this.collectionName });
+      await this.client!.loadCollection({
+        collection_name: this.collectionName,
+      });
 
       console.log(`Inserted ${chunks.length} chunks into Milvus`);
     } catch (error) {
@@ -224,33 +229,55 @@ class MilvusService {
       throw new Error("No valid text chunks found");
     }
 
-    // Generate embeddings and create document chunks
-    const documentChunks: DocumentChunk[] = [];
+    // Batch processing to reduce memory footprint and avoid long single inserts
     const ts = Date.now();
+    const batchInsertSize = 64; // number of chunks per insert call
+    const embedConcurrency = 3; // limit embedding generation parallelism
+    let totalInserted = 0;
 
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      try {
-        const embedding = await this.generateEmbeddingForText(chunk);
+    for (let start = 0; start < chunks.length; start += batchInsertSize) {
+      const slice = chunks.slice(start, start + batchInsertSize);
 
-        documentChunks.push({
-          id: `${documentId}_${ts}_${i}`,
+      // Generate embeddings for this batch with limited concurrency
+      const embeddings: Array<number[] | null> = await this.mapWithConcurrency(
+        slice,
+        embedConcurrency,
+        async (chunk, idx) => {
+          try {
+            const emb = await this.generateEmbeddingForText(chunk);
+            return emb;
+          } catch (error) {
+            console.error(
+              `Error generating embedding for chunk ${start + idx}:`,
+              error
+            );
+            return null; // Skip failed embeddings but continue
+          }
+        }
+      );
+
+      const batchChunks: DocumentChunk[] = [];
+      for (let j = 0; j < slice.length; j++) {
+        const emb = embeddings[j];
+        if (!emb) continue;
+        const globalIndex = start + j;
+        batchChunks.push({
+          id: `${documentId}_${ts}_${globalIndex}`,
           documentId,
-          chunkText: chunk,
-          chunkIndex: i,
-          embedding,
+          chunkText: slice[j],
+          chunkIndex: globalIndex,
+          embedding: emb,
           timestamp: ts,
         });
-      } catch (error) {
-        console.error(`Error generating embedding for chunk ${i}:`, error);
-        // Continue with other chunks even if one fails
+      }
+
+      if (batchChunks.length > 0) {
+        await this.insertDocumentChunks(batchChunks, userId);
+        totalInserted += batchChunks.length;
       }
     }
 
-    // Insert chunks into Milvus
-    await this.insertDocumentChunks(documentChunks, userId);
-
-    return { chunksCount: documentChunks.length };
+    return { chunksCount: totalInserted };
   }
 
   private async generateEmbeddingForText(text: string): Promise<number[]> {
@@ -258,14 +285,26 @@ class MilvusService {
     return await generateEmbedding(text);
   }
 
-  private simpleHash(str: string): number {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return hash;
+  // Utility: Map with limited concurrency
+  private async mapWithConcurrency<T, R>(
+    items: T[],
+    concurrency: number,
+    mapper: (item: T, index: number) => Promise<R>
+  ): Promise<R[]> {
+    const results: R[] = new Array(items.length) as any;
+    let idx = 0;
+
+    const workers = new Array(Math.max(1, concurrency))
+      .fill(0)
+      .map(async () => {
+        while (true) {
+          const current = idx++;
+          if (current >= items.length) break;
+          results[current] = await mapper(items[current], current);
+        }
+      });
+    await Promise.all(workers);
+    return results;
   }
 
   private splitTextIntoChunks(
@@ -298,7 +337,9 @@ class MilvusService {
 
     try {
       // Ensure collection is loaded before performing search
-      await this.client!.loadCollection({ collection_name: this.collectionName });
+      await this.client!.loadCollection({
+        collection_name: this.collectionName,
+      });
 
       // Build filter expression
       let expr = `user_id == "${userId}"`;
@@ -376,7 +417,9 @@ class MilvusService {
     }
 
     try {
-      await this.client!.loadCollection({ collection_name: this.collectionName });
+      await this.client!.loadCollection({
+        collection_name: this.collectionName,
+      });
       const filter = `document_id == "${documentId}" && user_id == "${userId}"`;
       const rawLimit = Math.max(limit * 3, 30);
       const outputFields = ["id", "document_id", "chunk_text", "chunk_index"];
