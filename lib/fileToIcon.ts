@@ -20,6 +20,7 @@ const availableIcons = [
   "ISO",
   "JAVA",
   "JPG",
+  "JPEG",
   "MDB",
   "MID",
   "MOV",

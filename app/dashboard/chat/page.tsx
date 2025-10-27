@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import SpeechRecognition, {
+  useSpeechRecognition,
+} from "react-speech-recognition";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,7 +55,8 @@ import {
   Brain,
   Settings,
   FileDown,
-  Coins, // Add Coins icon for credits
+  Coins,
+  Square, // Add Coins icon for credits
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -97,12 +101,28 @@ interface Document {
   size?: number | null;
 }
 
+// Speech recognition types shim
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRecognition = any;
+
 export default function ChatPage() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const router = useRouter();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Speech recognition refs/state
+  const [isRecording, setIsRecording] = useState(false);
+  const {
+    transcript,
+    listening,
+    resetTranscript,
+    browserSupportsSpeechRecognition,
+    interimTranscript,
+    finalTranscript,
+  } = useSpeechRecognition();
+  const supportsSpeech =
+    typeof window !== "undefined" && Boolean(browserSupportsSpeechRecognition);
 
   // Template mode state
   const [isTemplateMode, setIsTemplateMode] = useState(false);
@@ -574,9 +594,34 @@ export default function ChatPage() {
       .filter((d) => !!d.name && !!d.url);
   };
 
+  // Speech recognition types shim
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type AnyRecognition = any;
+
+  // Reflect listening state onto our local UI state
+  useEffect(() => {
+    setIsRecording(listening);
+  }, [listening]);
+
+  // Auto-send when a final transcript is available; update input for interim
+  useEffect(() => {
+    const finalText = (finalTranscript as unknown as string) || "";
+    if (finalText && finalText.trim().length > 0) {
+      // sendMessage(finalText.trim());
+      resetTranscript();
+      return;
+    }
+    const interim =
+      (interimTranscript as unknown as string) || transcript || "";
+    if (interim && interim.trim().length > 0) {
+      setInput(interim.trim());
+    }
+  }, [finalTranscript, interimTranscript, transcript]);
+
   // Send message function with credit consumption
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+  const sendMessage = async (overrideContent?: string) => {
+    const contentToSend = overrideContent ?? input;
+    if (!contentToSend.trim() || isLoading) return;
 
     // Capture current selected documents for context before clearing
     const docsForContext = selectedDocuments.slice();
@@ -600,14 +645,14 @@ export default function ChatPage() {
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
-      content: input,
+      content: contentToSend,
       role: "user",
       timestamp: new Date(),
       referencedDocs: selectedreferencedDocs,
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+    if (!overrideContent) setInput("");
     setIsLoading(true);
 
     // Add typing indicator
@@ -690,6 +735,58 @@ export default function ChatPage() {
     }
   };
 
+  // Speech recording controls
+  const ensureMicPermission = async (): Promise<boolean> => {
+    if (!navigator?.mediaDevices?.getUserMedia) return true; // skip preflight if unavailable
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      return true;
+    } catch (err: any) {
+      const name = err?.name || "";
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        toast.error(
+          "Akses mikrofon ditolak. Izinkan mikrofon lalu reload halaman."
+        );
+      } else if (name === "NotFoundError") {
+        toast.error("Perangkat mikrofon tidak ditemukan.");
+      } else {
+        toast.error("Tidak bisa mengakses mikrofon.");
+      }
+      return false;
+    }
+  };
+
+  const startRecording = async () => {
+    if (!supportsSpeech) {
+      toast.error("Browser tidak mendukung speech recognition.");
+      return;
+    }
+    const ok = await ensureMicPermission();
+    if (!ok) return;
+    try {
+      await SpeechRecognition.startListening({
+        continuous: false,
+        language: "id-ID",
+      });
+    } catch (e) {
+      console.warn("Failed to start recognition:", e);
+      toast.error("Tidak bisa mulai rekam.");
+      setIsRecording(false);
+    }
+  };
+
+  const stopRecording = () => {
+    try {
+      SpeechRecognition.stopListening();
+    } catch {}
+    setIsRecording(false);
+  };
+
+  const toggleRecording = () => {
+    if (listening) stopRecording();
+    else startRecording();
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -717,8 +814,6 @@ export default function ChatPage() {
   };
 
   const [expand, setExpand] = useState<string[]>([]);
-
-  console.log(expand);
 
   return (
     <TooltipProvider>
@@ -1186,7 +1281,7 @@ export default function ChatPage() {
                 </div>
               )}
 
-              <div className="flex items-end space-x-2">
+              <div className="flex items-center space-x-2">
                 <div className="flex space-x-1">
                   <FilesDocumentsDialog
                     documents={documents}
@@ -1239,16 +1334,29 @@ export default function ChatPage() {
                     rows={1}
                   />
                   <Button
-                    variant="ghost"
+                    variant={isRecording ? "destructive" : "ghost"}
                     size="sm"
-                    className="absolute right-2 top-2"
+                    className="absolute right-1 top-1"
+                    onClick={toggleRecording}
+                    disabled={!supportsSpeech}
+                    title={
+                      !supportsSpeech
+                        ? "Browser tidak mendukung speech recognition"
+                        : isRecording
+                        ? "Stop recording"
+                        : "Start recording"
+                    }
                   >
-                    <Mic className="h-4 w-4" />
+                    {isRecording ? (
+                      <Square className="h-4 w-4" />
+                    ) : (
+                      <Mic className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
 
                 <Button
-                  onClick={sendMessage}
+                  onClick={() => sendMessage()}
                   disabled={!input.trim() || isLoading}
                   size="sm"
                 >
