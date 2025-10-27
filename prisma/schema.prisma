@@ -56,6 +56,9 @@ model User {
   creditTransactions CreditTransaction[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  // Relations to plugins
+  userPlugins   UserPlugin[]
 }
 
 model VerificationToken {
@@ -234,4 +237,31 @@ model Item {
   
   @@index([userId, parentId])
   @@index([type])
+}
+
+// Plugin models
+model Plugin {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  href      String
+  description String? // optional description for plugin
+  isActive  Boolean  @default(true) // global availability
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userPlugins UserPlugin[]
+}
+
+model UserPlugin {
+  id        String   @id @default(cuid())
+  userId    String
+  pluginId  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plugin Plugin @relation(fields: [pluginId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, pluginId])
 }

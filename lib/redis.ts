@@ -9,7 +9,7 @@ export function getRedis(): Redis {
       throw new Error("REDIS_URL is not set in environment variables");
     }
     redisClient = new Redis(url, {
-      maxRetriesPerRequest: 2,
+      maxRetriesPerRequest: 20,
       enableReadyCheck: true,
       lazyConnect: true,
     });
@@ -22,7 +22,9 @@ export async function disconnectRedis() {
     try {
       await redisClient.quit();
     } catch (e) {
-      try { await redisClient.disconnect(); } catch {}
+      try {
+        await redisClient.disconnect();
+      } catch {}
     }
     redisClient = null;
   }

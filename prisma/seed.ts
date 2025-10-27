@@ -240,6 +240,77 @@ async function main() {
   }
 
   console.log("✅ Subscription plans seeded successfully!");
+
+  // Plugin seeding (new)
+  console.log("🌱 Starting plugin seeding...");
+  const plugins = [
+    {
+      name: "n8n automation",
+      href: "/dashboard/n8n",
+      description: "Automate workflows and orchestrate integrations using n8n.",
+    },
+    {
+      name: "Whatsapp gateway",
+      href: "/dashboard/whatsapp",
+      description:
+        "Connect WhatsApp messaging gateway for notifications and chat.",
+    },
+    {
+      name: "Odoo Conector",
+      href: "/dashboard/odoo",
+      description:
+        "Sync data with Odoo ERP: customers, invoices, products, and more.",
+    },
+    {
+      name: "Sap Conector",
+      href: "/dashboard/sap",
+      description:
+        "Integrate with SAP systems for enterprise workflows and data.",
+    },
+    {
+      name: "Drive Integration",
+      href: "/dashboard/drive",
+      description:
+        "Access and manage files from cloud drive within the dashboard.",
+    },
+    {
+      name: "Form Integration",
+      href: "/dashboard/forms",
+      description: "Create and process forms; route submissions to workflows.",
+    },
+  ].map((p) => ({
+    ...p,
+    slug: p.href.split("/").filter(Boolean).pop()!,
+  }));
+
+  for (const p of plugins) {
+    const existing = await prisma.plugin.findUnique({
+      where: { slug: p.slug },
+    });
+    if (existing) {
+      await prisma.plugin.update({
+        where: { id: existing.id },
+        data: {
+          name: p.name,
+          href: p.href,
+          description: p.description,
+          isActive: true,
+        },
+      });
+    } else {
+      await prisma.plugin.create({
+        data: {
+          name: p.name,
+          slug: p.slug,
+          href: p.href,
+          description: p.description,
+          isActive: true,
+        },
+      });
+    }
+  }
+  console.log(`✅ Plugins seeded: ${plugins.map((p) => p.slug).join(", ")}`);
+
   console.log("🎉 Database seeded successfully!");
 }
 
