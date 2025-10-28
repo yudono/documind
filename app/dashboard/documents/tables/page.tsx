@@ -187,7 +187,9 @@ export default function TablesEditorPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(url);
+        // Prefer same-origin proxy to avoid CORS/mixed-content on deploy
+        const proxied = `/api/proxy/fetch?url=${encodeURIComponent(url)}`;
+        const res = await fetch(proxied);
         if (!res.ok) throw new Error(`Failed to fetch XLSX: ${res.status}`);
         const ct = (res.headers.get("content-type") || "").toLowerCase();
         const isXlsxContent =
