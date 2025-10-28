@@ -38,7 +38,7 @@ export async function generateChatCompletion(
     const {
       model = "llama-3.3-70b-versatile",
       temperature = 0.7,
-      max_tokens = 1024,
+      max_tokens = 2048,
       top_p = 1,
       stream = false,
     } = options;
@@ -278,24 +278,25 @@ export async function analyzeDocument(
     switch (analysisType) {
       case "summary":
         systemPrompt =
-          "You are a document analysis expert. Provide clear, concise summaries of documents.";
-        userPrompt = `Please provide a comprehensive summary of the following document content:\n\n${content}`;
+          "You are a document analysis expert. Provide clear, concise summaries grounded strictly in the provided content. If information is missing, state it explicitly. Prefer the same language/style as the input.";
+        userPrompt = `Summarize the document below.\n- Be accurate and avoid assumptions.\n- Use headings and bullet points if helpful.\n\n${content}`;
         break;
       case "key_points":
         systemPrompt =
-          "You are a document analysis expert. Extract key points and important information from documents.";
-        userPrompt = `Please extract the key points and important information from the following document:\n\n${content}`;
+          "You are a document analysis expert. Extract key points grounded in the provided content. Avoid hallucinations. Prefer concise bullets.";
+        userPrompt = `List the key points and important information from the document below.\n\n${content}`;
         break;
       case "questions":
         systemPrompt =
-          "You are a document analysis expert. Generate relevant questions based on document content.";
-        userPrompt = `Based on the following document content, generate relevant questions that could help with understanding or further exploration:\n\n${content}`;
+          "You are a document analysis expert. Generate relevant, targeted questions based only on the provided content. Do not introduce external assumptions.";
+        userPrompt = `Generate targeted questions to deepen understanding of the following content:\n\n${content}`;
         break;
       case "custom":
-        systemPrompt = "You are a helpful document analysis assistant.";
+        systemPrompt =
+          "You are a helpful document analysis assistant. Ground every answer strictly in the provided content. If insufficient, state limitations.";
         userPrompt =
           customPrompt ||
-          `Analyze the following document content:\n\n${content}`;
+          `Analyze the following document content and respond accurately:\n\n${content}`;
         break;
     }
 
@@ -312,7 +313,7 @@ export async function analyzeDocument(
 
     return await generateChatCompletion(messages, {
       temperature: 0.3,
-      max_tokens: 1500,
+      max_tokens: 2000,
     });
   } catch (error) {
     console.error("Error analyzing document:", error);
@@ -345,9 +346,11 @@ export async function generateDocument(
       }
     };
 
-    const systemPrompt = `You are a professional document generator specializing in ${fileType.toUpperCase()} documents. ${getFileTypePrompt(
-      fileType
-    )} Ensure the document is complete, properly structured, and ready for professional use.`;
+    const systemPrompt = `You are a professional document generator specializing in ${fileType.toUpperCase()} documents.
+${getFileTypePrompt(fileType)}
+- Ground content strictly on provided data; do not hallucinate.
+- Use clear structure, headings, lists, and tables when relevant.
+- Preserve language/style consistent with the input data.`;
 
     const userPrompt = `Generate a ${templateType} document in ${fileType.toUpperCase()} format using the following information:
     
@@ -397,7 +400,7 @@ ${
 
     return await generateChatCompletion(messages, {
       temperature: 0.2,
-      max_tokens: 3000, // Increased for more comprehensive documents
+      max_tokens: 3000, // Allow comprehensive output while staying within window
     });
   } catch (error) {
     console.error("Error generating document:", error);

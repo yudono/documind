@@ -14,11 +14,15 @@ import Html from "react-pdf-html";
 import { performOCR } from "./groq";
 import { generateEmbedding } from "./embeddings";
 
-// Safety limits for prompts and context to avoid oversized LLM requests
-const MAX_QUERY_CHARS = 4000;
-const MAX_CONTEXT_CHARS = 8000;
-const MAX_SYSTEM_CHARS = 2500;
-const MAX_EXCEL_CONTENT_CHARS = 6000;
+// Safety limits for prompts and context to avoid oversized LLM requests (fixed, enlarged)
+const MAX_QUERY_CHARS = 12000;
+const MAX_CONTEXT_CHARS = 28000;
+const MAX_SYSTEM_CHARS = 4000;
+const MAX_EXCEL_CONTENT_CHARS = 12000;
+// Configurable output token limit for agent responses (fallback 4096)
+const DEFAULT_OUTPUT_TOKENS = Number(
+  process.env.GROQ_MAX_OUTPUT_TOKENS || "4096"
+);
 
 function clampText(input: string | undefined, max: number): string {
   // Keep for safety in non-context fields; avoid using for context packing
@@ -151,6 +155,68 @@ function packContextSegments(
     return `${label}\n${c.text}`;
   });
   return parts.join("\n\n");
+}
+
+// Derive a readable document title from query and referenced docs
+function deriveTitleFromState(state: AgentState): string {
+  try {
+    const names = (state.referencedDocs || [])
+      .map((d: any) => d?.name)
+      .filter(Boolean);
+    if (names.length) {
+      const title = names[0] as string;
+      return toTitleCase(clampText(title, 80));
+    }
+
+    const base = (state.query || "").trim();
+    if (base) {
+      // Take first sentence or up to 80 chars
+      const firstSentence = base.split(/[\.!?\n]/)[0] || base;
+      // ES5-safe: hapus karakter non-alfanumerik kecuali spasi, dash, underscore
+      // Hindari Unicode property escapes (\p{...}) dan flag 'u'
+      const cleaned = firstSentence.replace(/[^\w\s-]/g, "");
+      const t = cleaned.length >= 8 ? cleaned : base;
+      return toTitleCase(clampText(t, 80));
+    }
+
+    return "AI Generated Document";
+  } catch {
+    return "AI Generated Document";
+  }
+}
+
+function toTitleCase(s: string): string {
+  return s
+    .split(/\s+/)
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ");
+}
+
+// Helper: choose best document id from Milvus probe results
+function selectBestDocIdFromProbe(
+  probe: Array<{ documentId: string; timestamp?: number; similarity?: number }>
+): string | undefined {
+  if (!probe || !probe.length) return undefined;
+  const byDoc: Record<
+    string,
+    { count: number; maxTs: number; maxSim: number }
+  > = {};
+  probe.forEach((r: any) => {
+    const id = r.documentId;
+    const cur = byDoc[id] || { count: 0, maxTs: 0, maxSim: 0 };
+    cur.count++;
+    cur.maxTs = Math.max(cur.maxTs, r.timestamp ?? 0);
+    cur.maxSim = Math.max(cur.maxSim, r.similarity ?? 0);
+    byDoc[id] = cur;
+  });
+  const best = Object.entries(byDoc).sort((a: any, b: any) => {
+    const sa = a[1];
+    const sb = b[1];
+    if (sb.maxSim !== sa.maxSim) return sb.maxSim - sa.maxSim;
+    if (sb.maxTs !== sa.maxTs) return sb.maxTs - sa.maxTs;
+    return sb.count - sa.count;
+  })[0];
+  return best?.[0];
 }
 
 // Small utility: map with limited concurrency (used for OCR batching)
@@ -316,8 +382,6 @@ export class LangGraphDocumentAgent {
     // Bind methods to preserve 'this' context
     const retrieveContextNode = this.retrieveContextNode.bind(this);
     const generateResponseNode = this.generateResponseNode.bind(this);
-    const generateDocumentResponseNode =
-      this.generateDocumentResponseNode.bind(this);
     const decideDocumentGenerationNode =
       this.decideDocumentGenerationNode.bind(this);
     const generateDocumentNode = this.generateDocumentNode.bind(this);
@@ -329,7 +393,6 @@ export class LangGraphDocumentAgent {
       .addNode("retrieveContext", retrieveContextNode)
       .addNode("ocrDocuments", ocrDocumentsNode)
       .addNode("generateResponse", generateResponseNode)
-      .addNode("generateDocumentResponse", generateDocumentResponseNode)
       .addNode("decideDocumentGeneration", decideDocumentGenerationNode)
       .addNode("generateDocument", generateDocumentNode)
       .addNode("saveConversation", saveConversationNode)
@@ -339,10 +402,9 @@ export class LangGraphDocumentAgent {
       .addEdge("retrieveContext", "generateResponse")
       .addEdge("generateResponse", "decideDocumentGeneration")
       .addConditionalEdges("decideDocumentGeneration", shouldGenerateDocument, {
-        generateDocumentResponse: "generateDocumentResponse",
+        generateDocument: "generateDocument",
         saveConversation: "saveConversation",
       })
-      .addEdge("generateDocumentResponse", "generateDocument")
       .addEdge("generateDocument", "saveConversation")
       .addEdge("saveConversation", END);
 
@@ -441,27 +503,7 @@ export class LangGraphDocumentAgent {
               6,
               primaryDocIds
             );
-            if (probe && probe.length > 0) {
-              const byDoc: Record<
-                string,
-                { count: number; maxTs: number; maxSim: number }
-              > = {};
-              probe.forEach((r: any) => {
-                const id = r.documentId;
-                const cur = byDoc[id] || { count: 0, maxTs: 0, maxSim: 0 };
-                cur.count++;
-                cur.maxTs = Math.max(cur.maxTs, r.timestamp ?? 0);
-                cur.maxSim = Math.max(cur.maxSim, r.similarity ?? 0);
-                byDoc[id] = cur;
-              });
-              selectedDocId = Object.entries(byDoc).sort((a: any, b: any) => {
-                const sa = a[1];
-                const sb = b[1];
-                if (sb.maxSim !== sa.maxSim) return sb.maxSim - sa.maxSim;
-                if (sb.maxTs !== sa.maxTs) return sb.maxTs - sa.maxTs;
-                return sb.count - sa.count;
-              })[0]?.[0];
-            }
+            selectedDocId = selectBestDocIdFromProbe(probe as any);
           } catch (err) {
             console.warn("Probe similarity failed:", err);
           }
@@ -935,7 +977,12 @@ export class LangGraphDocumentAgent {
         new HumanMessage(`Query:\n${safeQuery}`),
       ];
 
-      const response = await this.llm.invoke(messages);
+      // Keep classifier concise and efficient
+      const classifierLlm = this.llm.bind({
+        max_completion_tokens: 256,
+        temperature: 0,
+      });
+      const response = await classifierLlm.invoke(messages);
       const raw =
         typeof response.content === "string"
           ? response.content
@@ -985,68 +1032,13 @@ export class LangGraphDocumentAgent {
    * Conditional function to determine next node based on document generation decision
    */
   private shouldGenerateDocument(state: AgentState): string {
-    return state.shouldGenerateDoc
-      ? "generateDocumentResponse"
-      : "saveConversation";
+    return state.shouldGenerateDoc ? "generateDocument" : "saveConversation";
   }
 
   /**
    * Generate HTML-formatted response for document creation
    */
-  private async generateDocumentResponseNode(
-    state: AgentState
-  ): Promise<Partial<AgentState>> {
-    try {
-      const safeContext = state.context; // context already packed
-      const safeQuery = state.query;
-
-      // console.log("safeContext 2:", safeContext);
-      // console.log("safeQuery 2:", safeQuery);
-
-      const baseSystemText = clampText(
-        `You generate structured document content. Respond in Markdown only (no HTML).
-     - Use headings (#, ##, ###), paragraphs, bullet lists (-) and numbered lists (1.).
-     - Use tables with pipe syntax when helpful: | Header | Header |\n| --- | --- |\n| Cell | Cell |
-     - Use **bold**, *italic*, > blockquotes, and fenced code blocks (three backticks).
-     - Do NOT include CSS, raw HTML, or inline styles unless explicitly requested.
-     - If no relevant document context is found, explicitly say so and write helpful general content for the request.
-     - Keep Markdown concise, well-structured, and readable.
-     - Excel JSON is handled in a separate step; do not emit CSV or JSON here.`,
-        MAX_SYSTEM_CHARS
-      );
-      const refDoc =
-        state.referencedDocs && state.referencedDocs.length > 0
-          ? state.referencedDocs[0]
-          : undefined;
-      const refLine = refDoc
-        ? `Current reference document: ${refDoc.name} - ${refDoc.url}`
-        : "";
-      const systemText = clampText(
-        [baseSystemText, refLine].filter(Boolean).join("\n"),
-        MAX_SYSTEM_CHARS
-      );
-
-      const messages = [
-        new SystemMessage(systemText),
-        new HumanMessage(
-          `${
-            safeContext ? `Context:\n${safeContext}\n\n` : ""
-          }Request:\n${safeQuery}`
-        ),
-      ];
-
-      const response = await this.llm.invoke(messages);
-      const aiResponse = response.content as string;
-
-      return {
-        aiResponse,
-        finalResponse: aiResponse,
-      };
-    } catch (error) {
-      console.error("Error generating document response:", error);
-      throw new Error("Failed to generate document response");
-    }
-  }
+  // generateDocumentResponseNode removed: generation now routed directly to generateDocument
 
   /**
    * Generate HTML-formatted response for document creation
@@ -1088,7 +1080,11 @@ export class LangGraphDocumentAgent {
         ),
       ];
 
-      const response = await this.llm.invoke(messages);
+      // Bind explicit output token limit to produce longer answers
+      const boundLlm = this.llm.bind({
+        max_completion_tokens: DEFAULT_OUTPUT_TOKENS,
+      });
+      const response = await boundLlm.invoke(messages);
       const aiResponse = response.content as string;
 
       return {
@@ -1411,7 +1407,10 @@ export class LangGraphDocumentAgent {
 
      Provide only the HTML content (no explanations):`;
 
-    const htmlResponse = await this.llm.invoke(docxPrompt);
+    // Allow ample HTML output for DOCX generation
+    const htmlResponse = await this.llm
+      .bind({ max_completion_tokens: DEFAULT_OUTPUT_TOKENS })
+      .invoke(docxPrompt);
     let htmlContent = htmlResponse.content as string;
 
     // Add comprehensive CSS styling for better document appearance
@@ -1580,7 +1579,10 @@ export class LangGraphDocumentAgent {
 
      Provide only the HTML content (no explanations):`;
 
-    const htmlResponse = await this.llm.invoke(htmlPrompt);
+    // Allow ample HTML output for PPTX generation
+    const htmlResponse = await this.llm
+      .bind({ max_completion_tokens: DEFAULT_OUTPUT_TOKENS })
+      .invoke(htmlPrompt);
     let htmlContent = htmlResponse.content as string;
 
     // Clean up the HTML content
@@ -1697,7 +1699,7 @@ export class LangGraphDocumentAgent {
     state: AgentState
   ): Promise<Partial<AgentState>> {
     try {
-      const title = "AI Generated Document";
+      const title = deriveTitleFromState(state);
       const documentType = state.documentType || "pdf";
 
       console.log(`Generating ${documentType.toUpperCase()} document...`);
@@ -1822,7 +1824,7 @@ export class LangGraphDocumentAgent {
         query: input.query,
         userId: input.userId,
         sessionId: input.sessionId,
-        useSemanticSearch: input.useSemanticSearch ?? true,
+        useSemanticSearch: true,
         documentIds: input.documentIds,
         conversationContext: effectiveConversationContext,
         context: "",
