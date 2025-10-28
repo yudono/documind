@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -167,6 +167,9 @@ interface Template {
 
 export default function MyDocumentsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const currentFolderId = searchParams.get("folderId");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Unified state management
@@ -175,7 +178,6 @@ export default function MyDocumentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -359,7 +361,10 @@ export default function MyDocumentsPage() {
 
   // Navigate to folder
   const navigateToFolder = (folderId: string | null) => {
-    setCurrentFolderId(folderId);
+    // navigating searchparams folderId
+    const params = new URLSearchParams(searchParams);
+    params.set("folderId", folderId || "");
+    router.push(`?${params.toString()}`);
   };
 
   return (

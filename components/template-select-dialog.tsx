@@ -48,7 +48,7 @@ export default function TemplateSelectDialog({
         setLoading(false);
       }
     };
-    fetchTemplates();
+    // fetchTemplates();
   }, [open]);
 
   return (
@@ -64,6 +64,12 @@ export default function TemplateSelectDialog({
         {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 max-h-[calc(100vh-200px)] overflow-auto">
+          <div onClick={() => onSelect(null)} className=" cursor-pointer group">
+            <div className="flex flex-col h-48 items-center justify-center border rounded-lg p-4 group-hover:border-2 group-hover:border-blue-500 rounded-lg">
+              <File className="w-10 h-10 text-blue-600" />
+            </div>
+            <div className="mt-2 text-sm text-center">Blank</div>
+          </div>
           {/* Templates */}
           {loading ? (
             Array(8)
@@ -74,22 +80,9 @@ export default function TemplateSelectDialog({
                   className="animate-pulse h-48 border rounded-lg bg-muted"
                 />
               ))
-          ) : templates.length === 0 ? (
-            <div className="col-span-full text-center text-sm text-muted-foreground">
-              No templates found.
-            </div>
           ) : (
             <>
               {/* Blank template tile (top-left) */}
-              <div
-                onClick={() => onSelect(null)}
-                className=" cursor-pointer group"
-              >
-                <div className="flex flex-col h-48 items-center justify-center border rounded-lg p-4 group-hover:border-2 group-hover:border-blue-500 rounded-lg">
-                  <File className="w-10 h-10 text-blue-600" />
-                </div>
-                <div className="mt-2 text-sm text-center">Blank</div>
-              </div>
               {templates.map((t) => (
                 <div
                   key={t.id}

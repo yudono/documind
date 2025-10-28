@@ -35,7 +35,9 @@ export async function GET(request: NextRequest) {
       whereClause.type = type;
     }
 
-    const cacheKey = `items:${(session.user as any).id}:${parentId || "root"}:${type || "all"}:${deleted || "false"}`;
+    const cacheKey = `items:${(session.user as any).id}:${parentId || "root"}:${
+      type || "all"
+    }:${deleted || "false"}`;
     const cached = await getCache(cacheKey);
     if (cached) {
       return NextResponse.json(cached);
@@ -116,6 +118,7 @@ export async function POST(request: NextRequest) {
         parentId: parentId || null,
         userId: (session.user as any).id,
         type,
+        deleteAt: null,
       },
     });
 

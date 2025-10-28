@@ -2,27 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { uploadToS3, generateFileKey } from "@/lib/s3";
-import HTMLtoDOCX from "html-to-docx";
+import { uploadToS3, generateFileKey, deleteFromS3 } from "@/lib/s3";
+// import HTMLtoDOCX from "html-to-docx";
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || !(session.user as any).id) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const userId = (session.user as any).id;
-    const { id, title, content, isDraft } = await request.json();
+    const { id, title, content, url, key } = await request.json();
 
     // Validate required fields
-    if (!title || !content) {
+    if (!title) {
       return NextResponse.json(
-        { error: "Title and content are required" },
+        { error: "Title are required" },
         { status: 400 }
       );
     }
@@ -32,18 +29,18 @@ export async function POST(request: NextRequest) {
     let docxUploadResult = null;
 
     // Generate DOCX from HTML content
-    try {
-      docxBuffer = await HTMLtoDOCX(content);
-      
-      // Upload DOCX to S3
-      if (docxBuffer) {
-        const docxKey = generateFileKey(`${title}.docx`, 'documents/docx');
-        docxUploadResult = await uploadToS3(docxBuffer, docxKey, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      }
-    } catch (error) {
-      console.error("Error generating DOCX:", error);
-      // Continue without DOCX if generation fails
-    }
+    // try {
+    //   docxBuffer = await HTMLtoDOCX(content);
+
+    //   // Upload DOCX to S3
+    //   if (docxBuffer) {
+    //     const docxKey = generateFileKey(`${title}.docx`, 'documents/docx');
+    //     docxUploadResult = await uploadToS3(docxBuffer, docxKey, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    //   }
+    // } catch (error) {
+    //   console.error("Error generating DOCX:", error);
+    //   // Continue without DOCX if generation fails
+    // }
 
     if (id) {
       // Check if document exists and belongs to user
@@ -62,6 +59,11 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // remove old file from storage using object key (not URL)
+      if (existingDocument.key) {
+        await deleteFromS3(existingDocument.key);
+      }
+
       // Update existing document
       document = await prisma.item.update({
         where: {
@@ -69,34 +71,12 @@ export async function POST(request: NextRequest) {
         },
         data: {
           name: title,
-          content: JSON.stringify({
-            html: content,
-            isDraft,
-            lastModified: new Date().toISOString(),
-          }),
-          url: docxUploadResult?.url || existingDocument.url,
-          key: docxUploadResult?.key || existingDocument.key,
+          content: "{}",
+          url: url,
+          key: key,
           updatedAt: new Date(),
         },
       });
-
-      // Create history entry if not a draft
-      if (!isDraft) {
-        await prisma.item.create({
-          data: {
-            name: `${title} - Version ${new Date().toISOString()}`,
-            type: "document_history",
-            userId: userId,
-            parentId: document.id,
-            content: JSON.stringify({
-              html: content,
-              originalDocumentId: document.id,
-              createdAt: new Date().toISOString(),
-              isDraft: false,
-            }),
-          },
-        });
-      }
     } else {
       // Create new document
       document = await prisma.item.create({
@@ -104,34 +84,11 @@ export async function POST(request: NextRequest) {
           name: title,
           type: "document",
           userId: userId,
-          content: JSON.stringify({
-            html: content,
-            isDraft,
-            createdAt: new Date().toISOString(),
-            lastModified: new Date().toISOString(),
-          }),
-          url: docxUploadResult?.url,
-          key: docxUploadResult?.key,
+          content: "{}",
+          url: url,
+          key: key,
         },
       });
-
-      // Create initial history entry if not a draft
-      if (!isDraft) {
-        await prisma.item.create({
-          data: {
-            name: `${title} - Initial Version`,
-            type: "document_history",
-            userId: userId,
-            parentId: document.id,
-            content: JSON.stringify({
-              html: content,
-              originalDocumentId: document.id,
-              createdAt: new Date().toISOString(),
-              isDraft: false,
-            }),
-          },
-        });
-      }
     }
 
     const documentData = document.content ? JSON.parse(document.content) : {};
@@ -140,10 +97,8 @@ export async function POST(request: NextRequest) {
       id: document.id,
       title: document.name,
       content: documentData.html || content,
-      isDraft: documentData.isDraft || isDraft,
       lastModified: documentData.lastModified,
     });
-
   } catch (error) {
     console.error("Error saving document:", error);
     return NextResponse.json(

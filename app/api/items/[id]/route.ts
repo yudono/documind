@@ -39,134 +39,6 @@ export async function GET(
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
     }
 
-    // If this is a document and it lacks HTML content, try to convert from original file
-    if (item.type === "document") {
-      const hasContent = !!item.content && (() => {
-        try {
-          const parsed = JSON.parse(item.content as string);
-          return !!parsed?.html && String(parsed.html).trim().length > 0;
-        } catch {
-          return false;
-        }
-      })();
-
-      if (!hasContent) {
-        try {
-          // Determine source URL: prefer signed URL via key, otherwise use stored url
-          let sourceUrl: string | null = null;
-          if (item.key) {
-            sourceUrl = await getSignedDownloadUrl(item.key);
-          } else if (item.url) {
-            // Ensure absolute URL if relative
-            try {
-              sourceUrl = new URL(item.url, request.url).toString();
-            } catch {
-              sourceUrl = item.url;
-            }
-          }
-
-          if (sourceUrl) {
-            const res = await fetch(sourceUrl);
-            if (!res.ok) {
-              throw new Error(`Failed to fetch original file: ${res.status} ${res.statusText}`);
-            }
-            const arrayBuffer = await res.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-
-            // Detect mime from fileType or url extension
-            const mime = item.fileType || (() => {
-              try {
-                const u = new URL(sourceUrl!);
-                const ext = u.pathname.split(".").pop()?.toLowerCase();
-                if (ext === "pdf") return "application/pdf";
-                if (ext === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-                return "application/octet-stream";
-              } catch {
-                return "application/octet-stream";
-              }
-            })();
-
-            let generatedHtml = "";
-
-            if (mime.includes("pdf")) {
-              // Convert PDF to text then wrap as HTML
-              const pdfParse = (await import("pdf-parse")).default;
-              const parsed = await pdfParse(buffer);
-              const text = parsed?.text || "";
-              const paragraphs = text
-                .split(/\n\s*\n/g)
-                .map((p) => p.trim())
-                .filter((p) => p.length > 0);
-              generatedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${paragraphs
-                .map((p) => `<p>${escapeHtml(p)}</p>`)
-                .join("")}</body></html>`;
-            } else if (
-              mime.includes("word") ||
-              mime.includes("officedocument") ||
-              mime.includes("docx")
-            ) {
-              // Convert DOCX to HTML using mammoth
-              const mammoth = await import("mammoth");
-              const result = await (mammoth as any).convertToHtml(
-                { arrayBuffer },
-                {
-                  styleMap: [
-                    'p[style-name="Heading 1"] => h1',
-                    'p[style-name="Heading 2"] => h2',
-                    'p[style-name="Heading 3"] => h3',
-                  ],
-                } as any
-              );
-              const docxHtml = result?.value || "";
-              generatedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${docxHtml}</body></html>`;
-            }
-
-            if (generatedHtml && generatedHtml.trim().length > 0) {
-              const nowIso = new Date().toISOString();
-              const updated = await prisma.item.update({
-                where: { id: item.id },
-                data: {
-                  content: JSON.stringify({
-                    html: generatedHtml,
-                    isDraft: false,
-                    createdAt: item.createdAt?.toISOString?.() || nowIso,
-                    lastModified: nowIso,
-                  }),
-                  updatedAt: new Date(),
-                },
-              });
-
-              // Also create initial history entry if none exists
-              const existingHistoryCount = await prisma.item.count({
-                where: { parentId: item.id, type: "document_history" },
-              });
-              if (existingHistoryCount === 0) {
-                await prisma.item.create({
-                  data: {
-                    name: `${item.name} - Initial Version`,
-                    type: "document_history",
-                    userId: item.userId,
-                    parentId: item.id,
-                    content: JSON.stringify({
-                      html: generatedHtml,
-                      originalDocumentId: item.id,
-                      createdAt: nowIso,
-                      isDraft: false,
-                    }),
-                  },
-                });
-              }
-
-              return NextResponse.json(updated);
-            }
-          }
-        } catch (e) {
-          console.error("Error converting original file to HTML:", e);
-          // Fall back to returning item as-is if conversion fails
-        }
-      }
-    }
-
     return NextResponse.json(item);
   } catch (error) {
     console.error("Error fetching item:", error);
@@ -218,7 +90,9 @@ export async function PUT(
       if (conflictingItem) {
         return NextResponse.json(
           {
-            error: `${existingItem.type === "folder" ? "Folder" : "Document"} with this name already exists`,
+            error: `${
+              existingItem.type === "folder" ? "Folder" : "Document"
+            } with this name already exists`,
           },
           { status: 409 }
         );
@@ -268,7 +142,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const permanently = request.nextUrl?.searchParams.get("permanently") === "true";
+    const permanently =
+      request.nextUrl?.searchParams.get("permanently") === "true";
 
     // Check if item exists and belongs to user
     const existingItem = await prisma.item.findFirst({
@@ -312,7 +187,11 @@ export async function DELETE(
     await delByPattern(`items:${(session.user as any).id}:*`);
     await delCache(`dashboard:stats:${(session.user as any).id}`);
 
-    return NextResponse.json({ message: permanently ? "Item deleted successfully" : "Item moved to trash" });
+    return NextResponse.json({
+      message: permanently
+        ? "Item deleted successfully"
+        : "Item moved to trash",
+    });
   } catch (error) {
     console.error("Error deleting item:", error);
     return NextResponse.json(

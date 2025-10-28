@@ -23,6 +23,7 @@ import {
   Bot,
   Sparkle,
   Sparkles,
+  X,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import {
@@ -98,6 +99,14 @@ export default function TablesEditorPage() {
     });
   };
 
+  const removeSheet = (idx: number) => {
+    setSheets((prev) => {
+      const next = [...prev];
+      next.splice(idx, 1);
+      return next;
+    });
+  };
+
   // Load existing table if id is present
   useEffect(() => {
     const id = params.get("id");
@@ -134,17 +143,20 @@ export default function TablesEditorPage() {
   };
 
   const addSheet = () => {
-    const idx = sheets.length + 1;
-    setSheets((prev) => [
-      ...prev,
-      {
-        id: `sheet-${idx}`,
-        name: `Sheet${idx}`,
+    setSheets((prev) => {
+      const nextIndex = prev.length + 1;
+      const newSheet: SheetData = {
+        id:
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `sheet-${Date.now()}`,
+        name: `Sheet${nextIndex}`,
         rows: 20,
         cols: 10,
         cells: {},
-      },
-    ]);
+      };
+      return [...prev, newSheet];
+    });
     setActiveSheetIndex(sheets.length);
   };
 
@@ -321,20 +333,32 @@ export default function TablesEditorPage() {
                     i === activeSheetIndex ? "bg-neutral-300 font-bold" : ""
                   )}
                   size="sm"
-                  onClick={() => setActiveSheetIndex(i)}
                 >
-                  <SheetIcon className="h-4 w-4 mr-2" /> {s.name}
+                  <span onClick={() => setActiveSheetIndex(i)}>{s.name}</span>
+                  <X
+                    size={16}
+                    onClick={() => {
+                      if (sheets.length - 1 === i) {
+                        setActiveSheetIndex(0);
+                      } else {
+                        setActiveSheetIndex(Math.max(0, i - 1));
+                      }
+                      if (sheets.length <= 1) return;
+                      removeSheet(i);
+                    }}
+                    className="cursor-pointer ml-2"
+                  />
                 </Button>
               ))}
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm" onClick={addSheet}>
+              <Button variant="outline" size="sm" onClick={addSheet}>
                 <Plus className="h-4 w-4 mr-2" /> Add Sheet
               </Button>
-              <Button variant="secondary" size="sm" onClick={addRow}>
+              <Button variant="outline" size="sm" onClick={addRow}>
                 + Row
               </Button>
-              <Button variant="secondary" size="sm" onClick={addCol}>
+              <Button variant="outline" size="sm" onClick={addCol}>
                 + Column
               </Button>
             </div>
