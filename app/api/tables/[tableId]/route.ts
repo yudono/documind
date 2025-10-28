@@ -27,13 +27,9 @@ export async function GET(
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
-    const data = item.content ? JSON.parse(item.content) : {};
     return NextResponse.json({
-      id: item.id,
+      ...item,
       title: item.name,
-      content: data,
-      isDraft: data.isDraft,
-      lastModified: data.lastModified,
     });
   } catch (error) {
     console.error("Error loading table:", error);

@@ -115,6 +115,8 @@ import TemplateSelectDialog from "@/components/template-select-dialog";
 import UploadingOverlay from "@/components/uploading-overlay";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import ImagePreviewDialog from "@/components/image-preview-dialog";
+import PdfPreviewDialog from "@/components/pdf-preview-dialog";
 
 interface AnalysisResult {
   summary: string;
@@ -186,6 +188,10 @@ export default function MyDocumentsPage() {
   >("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewTitle, setPreviewTitle] = useState<string>("");
 
   // Load items using unified endpoint
   const loadItems = useCallback(async () => {
@@ -618,15 +624,44 @@ export default function MyDocumentsPage() {
                         onClick={() => {
                           if (item.type === "folder") {
                             navigateToFolder(item.id);
-                          } else if (item.type === "table") {
-                            router.push(
-                              `/dashboard/documents/tables?id=${item.id}`
-                            );
-                          } else {
-                            router.push(
-                              `/dashboard/documents/document?id=${item.id}`
-                            );
+                            return;
                           }
+
+                          const name = item.name || "";
+                          const ext = (name.split(".").pop() || "").toLowerCase();
+                          const mime = (item.fileType || "").toLowerCase();
+
+                          const isExcel = ["xlsx", "xls"].includes(ext) ||
+                            mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+                            mime === "application/vnd.ms-excel";
+                          const isWord = ["docx", "doc"].includes(ext) ||
+                            mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+                            mime === "application/msword";
+                          const isImage = ["png", "jpg", "jpeg", "webp", "svg", "gif"].includes(ext) ||
+                            mime.startsWith("image/");
+                          const isPdf = ext === "pdf" || mime === "application/pdf";
+
+                          if (isExcel || item.type === "table") {
+                            router.push(`/dashboard/documents/tables?id=${item.id}`);
+                            return;
+                          }
+                          if (isWord) {
+                            router.push(`/dashboard/documents/document?id=${item.id}`);
+                            return;
+                          }
+                          if (isImage) {
+                            setPreviewUrl(item.url || null);
+                            setPreviewTitle(name);
+                            setImagePreviewOpen(true);
+                            return;
+                          }
+                          if (isPdf) {
+                            setPreviewUrl(item.url || null);
+                            setPreviewTitle(name);
+                            setPdfPreviewOpen(true);
+                            return;
+                          }
+                          router.push(`/dashboard/documents/document?id=${item.id}`);
                         }}
                       >
                         {item.type === "folder" ? (
@@ -688,6 +723,19 @@ export default function MyDocumentsPage() {
                 </>
               )}
             </div>
+            {/* Preview Dialogs */}
+            <ImagePreviewDialog
+              open={imagePreviewOpen}
+              onOpenChange={setImagePreviewOpen}
+              url={previewUrl}
+              title={previewTitle}
+            />
+            <PdfPreviewDialog
+              open={pdfPreviewOpen}
+              onOpenChange={setPdfPreviewOpen}
+              url={previewUrl}
+              title={previewTitle}
+            />
           </div>
         </div>
       </div>

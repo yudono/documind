@@ -65,6 +65,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import HistoryDialog from "@/components/history-dialog";
+import { toast } from "sonner";
 
 interface Message {
   id: string;
@@ -91,28 +92,28 @@ export default function CreateDocumentPage() {
   const mode = !!documentId ? "edit" : "create";
 
   const [documentItem, setDocumentItem] = useState<{
-    id: string;
-    name: string;
+    id: any;
+    title: string;
     type: string;
-    userId: string;
-    parentId: any;
-    fileType: string;
-    size: number;
-    content: string;
+    userId?: string;
+    parentId?: any;
+    fileType?: string;
+    size?: number;
+    content?: string;
     url: any;
     key: any;
-    bucket: any;
-    summary: any;
-    keyPoints: any;
-    sentiment: any;
-    topics: any;
-    milvusCollectionId: any;
-    color: string;
-    deleteAt: any;
-    createdAt: string;
-    updatedAt: string;
-    parent: any;
-    children: any[];
+    bucket?: any;
+    summary?: any;
+    keyPoints?: any;
+    sentiment?: any;
+    topics?: any;
+    milvusCollectionId?: any;
+    color?: string;
+    deleteAt?: any;
+    createdAt?: string;
+    updatedAt?: string;
+    parent?: any;
+    children?: any[];
   } | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -362,7 +363,7 @@ export default function CreateDocumentPage() {
       } as any);
       const DOCX_MIME =
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-      const named = documentItem?.name.split(".")[0] || "Untitled";
+      const named = documentItem?.title.split(".")[0] || "Untitled";
       const filename = `${named}.docx`;
       const formData = new FormData();
       const docxFile = new File([result], filename, {
@@ -388,15 +389,17 @@ export default function CreateDocumentPage() {
         },
         body: JSON.stringify({
           id: documentId,
-          title: documentItem?.name || "Untitled",
+          title: documentItem?.title || "Untitled",
           content: "", // tidak pakai exportHtml; kita simpan file DOCX hasil edit
           url: uploadedUrl,
           key: uploadKey,
+          type: "document",
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
+        toast.success("Document saved successfully");
 
         // setLastSaved(new Date());
         // Add to version history
@@ -408,9 +411,12 @@ export default function CreateDocumentPage() {
         //   isDraft: false,
         // };
         // setVersions((prev) => [newVersion, ...prev]);
+      } else {
+        throw new Error(await response.text());
       }
     } catch (error) {
-      console.error("Save failed:", error);
+      toast.error("Save failed");
+      // console.error("Save failed:", error);
     } finally {
       setIsSaving(false);
     }
@@ -481,14 +487,21 @@ export default function CreateDocumentPage() {
                 Back
               </Button>
               <Input
-                value={documentItem?.name || "Untitled"}
-                onChange={(e) => {
+                value={documentItem?.title}
+                onChange={(e) =>
                   setDocumentItem((prev) =>
                     prev
-                      ? { ...prev, name: e.target.value || "Untitled" }
-                      : prev
-                  );
-                }}
+                      ? { ...prev, title: e.target.value || "Untitled" }
+                      : {
+                          id: documentId,
+                          title: e.target.value || "Untitled",
+                          content: "",
+                          url: "",
+                          key: "",
+                          type: "document",
+                        }
+                  )
+                }
                 className="text-lg font-semibold border-none bg-transparent px-0 focus-visible:ring-0"
                 placeholder="Document title..."
               />
@@ -580,10 +593,20 @@ export default function CreateDocumentPage() {
           >
             <div id="superdoc-toolbar" className="border-b w-full px-6" />
             <div className="h-[calc(100vh-114px)] overflow-auto">
-              <SuperDocEditor
-                document={documentItem?.url || undefined}
-                onReady={onReady}
-              />
+              {(() => {
+                const DOCX_MIME =
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                const urlVal = documentItem?.url as string | undefined;
+                const isStringUrl =
+                  typeof urlVal === "string" && urlVal.length > 0;
+                const looksDocx = isStringUrl
+                  ? urlVal.toLowerCase().endsWith(".docx")
+                  : false;
+                const mimeIsDocx = documentItem?.fileType === DOCX_MIME;
+                const docxUrl = looksDocx || mimeIsDocx ? urlVal : undefined;
+
+                return <SuperDocEditor document={docxUrl} onReady={onReady} />;
+              })()}
             </div>
           </div>
 

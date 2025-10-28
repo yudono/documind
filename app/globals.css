@@ -96,3 +96,7 @@
 .prose :where(pre):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
   background-color: transparent !important;
 }
+
+.luckysheet-share-logo {
+  display: none;
+}

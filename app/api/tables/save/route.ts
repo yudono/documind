@@ -33,7 +33,10 @@ export async function POST(request: NextRequest) {
     const aoaFromSheet = (s: any): any[][] => {
       const colLabel = (n: number) => {
         let t = "";
-        while (n >= 0) { t = String.fromCharCode((n % 26) + 65) + t; n = Math.floor(n / 26) - 1; }
+        while (n >= 0) {
+          t = String.fromCharCode((n % 26) + 65) + t;
+          n = Math.floor(n / 26) - 1;
+        }
         return t;
       };
       const out: any[][] = [];
@@ -51,7 +54,9 @@ export async function POST(request: NextRequest) {
     };
 
     const wb = XLSX.utils.book_new();
-    const sheets = Array.isArray(contentPayload.sheets) ? contentPayload.sheets : [];
+    const sheets = Array.isArray(contentPayload.sheets)
+      ? contentPayload.sheets
+      : [];
     if (sheets.length) {
       sheets.forEach((s: any) => {
         const ws = XLSX.utils.aoa_to_sheet(aoaFromSheet(s));
@@ -64,7 +69,8 @@ export async function POST(request: NextRequest) {
     const xlsxBuffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
     // Upload XLSX to S3 (or local uploads)
-    let xlsxUploadResult: { url: string; key: string; bucket: string } | null = null;
+    let xlsxUploadResult: { url: string; key: string; bucket: string } | null =
+      null;
     try {
       const xlsxKey = generateFileKey(`${title}.xlsx`, "tables/xlsx");
       xlsxUploadResult = await uploadToS3(

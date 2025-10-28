@@ -14,13 +14,32 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = (session.user as any).id;
-    const { id, title, content, url, key } = await request.json();
+    const { id, title, content, url, key, type } = await request.json();
 
     // Validate required fields
     if (!title) {
       return NextResponse.json(
         { error: "Title are required" },
         { status: 400 }
+      );
+    }
+
+    // Check if item with same name exists in the same parent
+    const existingItem = await prisma.item.findFirst({
+      where: {
+        name: title,
+        parentId: null,
+        userId: (session.user as any).id,
+        deleteAt: null,
+      },
+    });
+
+    if (existingItem) {
+      return NextResponse.json(
+        {
+          error: `Document with this name already exists`,
+        },
+        { status: 409 }
       );
     }
 
@@ -75,6 +94,7 @@ export async function POST(request: NextRequest) {
           url: url,
           key: key,
           updatedAt: new Date(),
+          type: type,
         },
       });
     } else {

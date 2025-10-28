@@ -39,7 +39,10 @@ export async function GET(
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
     }
 
-    return NextResponse.json(item);
+    return NextResponse.json({
+      ...item,
+      title: item.name,
+    });
   } catch (error) {
     console.error("Error fetching item:", error);
     return NextResponse.json(

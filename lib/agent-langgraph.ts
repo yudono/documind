@@ -298,31 +298,6 @@ async function saveMemoryEntry(
   }
 }
 
-// Register Roboto font family using local TTF files
-Font.register({
-  family: "Roboto",
-  fonts: [
-    {
-      src: `${process.env.NEXTAPP_URL}/fonts/Roboto-Regular.ttf`,
-      fontWeight: "normal",
-    },
-    {
-      src: `${process.env.NEXTAPP_URL}/fonts/Roboto-Bold.ttf`,
-      fontWeight: "bold",
-    },
-    {
-      src: `${process.env.NEXTAPP_URL}/fonts/Roboto-Italic.ttf`,
-      fontWeight: "normal",
-      fontStyle: "italic",
-    },
-    {
-      src: `${process.env.NEXTAPP_URL}/fonts/Roboto-BoldItalic.ttf`,
-      fontWeight: "bold",
-      fontStyle: "italic",
-    },
-  ],
-});
-
 // Define the state annotation for the graph
 const AgentStateAnnotation = Annotation.Root({
   query: Annotation<string>,
