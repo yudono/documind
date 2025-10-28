@@ -628,25 +628,43 @@ export default function MyDocumentsPage() {
                           }
 
                           const name = item.name || "";
-                          const ext = (name.split(".").pop() || "").toLowerCase();
+                          const ext = (
+                            name.split(".").pop() || ""
+                          ).toLowerCase();
                           const mime = (item.fileType || "").toLowerCase();
 
-                          const isExcel = ["xlsx", "xls"].includes(ext) ||
-                            mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+                          const isExcel =
+                            ["xlsx", "xls"].includes(ext) ||
+                            mime ===
+                              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
                             mime === "application/vnd.ms-excel";
-                          const isWord = ["docx", "doc"].includes(ext) ||
-                            mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+                          const isWord =
+                            ["docx", "doc"].includes(ext) ||
+                            mime ===
+                              "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
                             mime === "application/msword";
-                          const isImage = ["png", "jpg", "jpeg", "webp", "svg", "gif"].includes(ext) ||
-                            mime.startsWith("image/");
-                          const isPdf = ext === "pdf" || mime === "application/pdf";
+                          const isImage =
+                            [
+                              "png",
+                              "jpg",
+                              "jpeg",
+                              "webp",
+                              "svg",
+                              "gif",
+                            ].includes(ext) || mime.startsWith("image/");
+                          const isPdf =
+                            ext === "pdf" || mime === "application/pdf";
 
                           if (isExcel || item.type === "table") {
-                            router.push(`/dashboard/documents/tables?id=${item.id}`);
+                            router.push(
+                              `/dashboard/documents/tables?id=${item.id}`
+                            );
                             return;
                           }
                           if (isWord) {
-                            router.push(`/dashboard/documents/document?id=${item.id}`);
+                            router.push(
+                              `/dashboard/documents/document?id=${item.id}`
+                            );
                             return;
                           }
                           if (isImage) {
@@ -661,7 +679,17 @@ export default function MyDocumentsPage() {
                             setPdfPreviewOpen(true);
                             return;
                           }
-                          router.push(`/dashboard/documents/document?id=${item.id}`);
+                          // router.push(`/dashboard/documents/document?id=${item.id}`);
+                          // download file
+                          fetch(item.url || "")
+                            .then((res) => res.blob())
+                            .then((blob) => {
+                              const a = document.createElement("a");
+                              a.href = URL.createObjectURL(blob);
+                              a.download = name;
+                              a.click();
+                              URL.revokeObjectURL(a.href);
+                            });
                         }}
                       >
                         {item.type === "folder" ? (

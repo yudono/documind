@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
         where: {
           id: id,
           userId: userId,
-          type: "document",
+          // type: "document",
         },
       });
 
@@ -102,7 +102,8 @@ export async function POST(request: NextRequest) {
       document = await prisma.item.create({
         data: {
           name: title,
-          type: "document",
+          // type: "document",
+          type: type,
           userId: userId,
           content: "{}",
           url: url,
