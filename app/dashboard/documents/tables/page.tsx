@@ -99,6 +99,7 @@ export default function TablesEditorPage() {
   const [sheets, setSheets] = useState<SheetData[]>([
     { id: "sheet-1", name: "Sheet1", rows: 40, cols: 40, cells: {} },
   ]);
+  const [sheetsKey, setSheetsKey] = useState(0);
   const [activeSheetIndex, setActiveSheetIndex] = useState(0);
   const luckysheetRef = useRef<LuckysheetTableRef | null>(null);
   const [pluginLoaded, setPluginLoaded] = useState(false);
@@ -159,8 +160,8 @@ export default function TablesEditorPage() {
             ? crypto.randomUUID()
             : `sheet-${Date.now()}-${name}`,
         name,
-        rows,
-        cols,
+        rows: rows < 40 ? 40 : rows,
+        cols: cols < 40 ? 40 : cols,
         cells,
       });
     });
@@ -207,41 +208,12 @@ export default function TablesEditorPage() {
           return;
         }
         const parsed = sheetsFromWorkbook(wb);
-        console.log(parsed);
-        // output parsed
-        // [
-        //   {
-        //     id: "089caf56-dc14-4c9c-85eb-3280946952fe",
-        //     name: "account-template (2)",
-        //     rows: 4,
-        //     cols: 6,
-        //     cells: {
-        //       A1: "name",
-        //       B1: "email",
-        //       C1: "password",
-        //       D1: "type",
-        //       E1: "environment",
-        //       F1: "school",
-        //       A2: "Candra S",
-        //       B2: "candra.sulistiyono12@gmail.com",
-        //       C2: "123456",
-        //       D2: "ADMIN_SCHOOL",
-        //       E2: "STAGING",
-        //       F2: "staging-admin-school.gurukreator.id",
-        //       A3: "Hizkia Sasangka",
-        //       B3: "hizkiasasangka@gmail.com",
-        //       D3: "Teacher12345",
-        //       E3: "STAGING",
-        //       F3: "staging-admin-school.gurukreator.id",
-        //       A4: "Hizkia Murid",
-        //       B4: "hizkiamurid@gmail.com",
-        //       D4: "nsqHUU5Z",
-        //       E4: "STAGING",
-        //       F4: "staging-admin-school.gurukreator.id",
-        //     },
-        //   },
-        // ];
-        if (!cancelled) setSheets(parsed);
+
+        if (!cancelled) {
+          setSheets(parsed);
+          // Force LuckysheetTable to recreate with the new parsed sheets
+          setSheetsKey((k) => k + 1);
+        }
       } catch (e) {
         console.error("Load from XLSX url failed:", e);
       }
@@ -458,6 +430,7 @@ export default function TablesEditorPage() {
             )}
           >
             <LuckysheetTable
+              key={sheetsKey}
               ref={luckysheetRef}
               sheets={sheets}
               onSheetsChange={setSheets}

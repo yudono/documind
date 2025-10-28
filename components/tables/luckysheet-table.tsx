@@ -65,7 +65,11 @@ function toLuckysheetData(sheets: SheetData[]) {
   return sheets.map((sheet, idx) => {
     const celldata = Object.entries(sheet.cells).map(([addr, v]) => {
       const { r, c } = addrToRC(addr);
-      return { r, c, v: { v } };
+      // Luckysheet expects a cell object with display (m) and value (v).
+      // Ensure both are present so cells render reliably.
+      const display = String(v);
+      const cellObj = { v: display, m: display } as any;
+      return { r, c, v: cellObj };
     });
     return {
       name: sheet.name,
@@ -137,13 +141,19 @@ const LuckysheetTable = forwardRef<LuckysheetTableRef, LuckysheetTableProps>(
     const [created, setCreated] = useState(false);
 
     // Memoize callbacks to prevent unnecessary re-renders
-    const handleSheetsChange = useCallback((newSheets: SheetData[]) => {
-      onSheetsChange?.(newSheets);
-    }, [onSheetsChange]);
+    const handleSheetsChange = useCallback(
+      (newSheets: SheetData[]) => {
+        onSheetsChange?.(newSheets);
+      },
+      [onSheetsChange]
+    );
 
-    const handleActiveSheetChange = useCallback((index: number) => {
-      onActiveSheetIndexChange?.(index);
-    }, [onActiveSheetIndexChange]);
+    const handleActiveSheetChange = useCallback(
+      (index: number) => {
+        onActiveSheetIndexChange?.(index);
+      },
+      [onActiveSheetIndexChange]
+    );
 
     // Determine readiness from external assets
     useEffect(() => {
@@ -158,11 +168,15 @@ const LuckysheetTable = forwardRef<LuckysheetTableRef, LuckysheetTableProps>(
       if (!ls || !ls.create) return;
 
       const data = toLuckysheetData(sheets);
+      // Debug: verify data transformed correctly
+      try {
+        console.debug("Luckysheet init data:", data);
+      } catch {}
 
       // Clean previous instance by clearing container
       containerRef.current.innerHTML = "";
       ls.create({
-        container: "luckysheet",
+        container: containerIdRef.current,
         lang: "en",
         title: "Table",
         data,
@@ -176,7 +190,7 @@ const LuckysheetTable = forwardRef<LuckysheetTableRef, LuckysheetTableProps>(
           },
         },
       });
-      
+
       // Load styles - keeping this as requested
       const loadStyle = () => {
         const styles = [
@@ -266,7 +280,7 @@ const LuckysheetTable = forwardRef<LuckysheetTableRef, LuckysheetTableProps>(
     return (
       <div className={className} style={{ height: "100%" }}>
         <div
-          id={"luckysheet"}
+          id={containerIdRef.current}
           ref={containerRef}
           style={{ width: "100%", height: "100%", minHeight: 400 }}
         />

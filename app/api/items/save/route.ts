@@ -25,23 +25,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if item with same name exists in the same parent
-    const existingItem = await prisma.item.findFirst({
-      where: {
-        name: title,
-        parentId: null,
-        userId: (session.user as any).id,
-        deleteAt: null,
-      },
-    });
+    // const existingItem = await prisma.item.findFirst({
+    //   where: {
+    //     name: title,
+    //     parentId: null,
+    //     userId: (session.user as any).id,
+    //     deleteAt: null,
+    //   },
+    // });
 
-    if (existingItem) {
-      return NextResponse.json(
-        {
-          error: `Document with this name already exists`,
-        },
-        { status: 409 }
-      );
-    }
+    // if (existingItem) {
+    //   return NextResponse.json(
+    //     {
+    //       error: `Document with this name already exists`,
+    //     },
+    //     { status: 409 }
+    //   );
+    // }
 
     let document;
     let docxBuffer: Buffer | null = null;
