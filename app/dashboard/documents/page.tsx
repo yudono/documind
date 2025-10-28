@@ -618,7 +618,9 @@ export default function MyDocumentsPage() {
                               `/dashboard/documents/tables?id=${item.id}`
                             );
                           } else {
-                            router.push(`/dashboard/documents/${item.id}`);
+                            router.push(
+                              `/dashboard/documents/document?id=${item.id}`
+                            );
                           }
                         }}
                       >
@@ -712,10 +714,10 @@ export default function MyDocumentsPage() {
         onSelect={(templateId: string | null) => {
           setShowTemplateDialog(false);
           if (!templateId) {
-            router.push("/dashboard/documents/create?type=document");
+            router.push("/dashboard/documents/document?type=document");
           } else {
             router.push(
-              `/dashboard/documents/create?type=document&template=${templateId}`
+              `/dashboard/documents/document?type=document&template=${templateId}`
             );
           }
         }}

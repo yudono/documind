@@ -8,7 +8,7 @@ import type { Editor as TiptapEditor } from "@tiptap/react";
 import { CommentSidebar, Comment } from "@/components/comment-sidebar";
 import AIGenerationModal from "@/components/ai-generation-modal";
 import AIChatSidebar from "@/components/ai-chat-sidebar";
-import "../styles/comment-styles.css";
+// import "../styles/comment-styles.css";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,18 +103,13 @@ interface DocumentVersion {
   isDraft: boolean;
 }
 
-interface DocumentEditorProps {
-  documentId?: string;
-  mode: "create" | "edit";
-}
-
-export default function DocumentEditor({
-  documentId,
-  mode,
-}: DocumentEditorProps) {
+export default function CreateDocumentPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const searchParams = useSearchParams();
+
+  const documentId = searchParams.get("id") as string;
+  const mode = !!documentId ? "edit" : "create";
 
   const [documentTitle, setDocumentTitle] = useState("Untitled Document");
   const [isSaving, setIsSaving] = useState(false);

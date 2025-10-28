@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url("../styles/comment-styles.css");
+@import url("../styles/ai-placeholders.css");
+
 @media (prefers-color-scheme: dark) {
   :root {
     --foreground-rgb: 255, 255, 255;
