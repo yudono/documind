@@ -121,9 +121,14 @@ export default function PluginPage() {
   return (
     <div className="flex h-screen">
       {/* Main content area */}
-      <div className="bg-white min-h-screen flex-1">
-        {/* Header */}
-        <div className="border-b p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 h-20 flex items-center w-full">
+      <div className="relative min-h-screen flex-1 overflow-hidden">
+        {/* Overlay gradien mengikuti gaya landing */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-secondary/5" />
+        <div className="absolute top-20 left-10 w-72 h-72 bg-primary/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/20 rounded-full blur-3xl" />
+        <div className="relative z-10">
+          {/* Header */}
+          <div className="glass border-b p-4 h-20 flex items-center w-full">
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center space-x-3">
               <div>
@@ -134,9 +139,9 @@ export default function PluginPage() {
               </div>
             </div>
           </div>
-        </div>
+          </div>
 
-        <div className="p-8 relative h-[calc(100vh-80px)] overflow-auto">
+          <div className="p-8 relative h-[calc(100vh-80px)] overflow-auto">
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* skeleton */}
@@ -227,6 +232,7 @@ export default function PluginPage() {
               })}
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

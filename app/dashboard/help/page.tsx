@@ -297,21 +297,26 @@ export default function HelpPage() {
   };
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <div className="border-b p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 h-20 flex items-center w-full">
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center space-x-3">
-            <div>
-              <h1 className="font-semibold">Help & Support</h1>
-              <p className="text-sm text-muted-foreground">
-                Find answers, guides, and get support for your business
-              </p>
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Overlay gradien mengikuti gaya landing */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-secondary/5" />
+      <div className="absolute top-20 left-10 w-72 h-72 bg-primary/20 rounded-full blur-3xl" />
+      <div className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/20 rounded-full blur-3xl" />
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="glass border-b p-4 h-20 flex items-center w-full">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center space-x-3">
+              <div>
+                <h1 className="font-semibold">Help & Support</h1>
+                <p className="text-sm text-muted-foreground">
+                  Find answers, guides, and get support for your business
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div className="p-8">
+        <div className="p-8">
         {/* <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-900 mb-2">Bantuan & Dukungan</h1>
         <p className="text-slate-600">Temukan jawaban, panduan, dan dapatkan bantuan untuk UMKM Anda</p>
@@ -841,6 +846,7 @@ export default function HelpPage() {
             </Card>
           </TabsContent>
         </Tabs>
+        </div>
       </div>
     </div>
   );

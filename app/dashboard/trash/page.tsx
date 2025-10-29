@@ -249,243 +249,249 @@ export default function MyDocumentsPage() {
   return (
     <div className="flex h-screen">
       {/* Main content area */}
-      <div className="bg-background min-h-screen flex-1">
+      <div className="relative min-h-screen flex-1 overflow-hidden">
         {isUploading && (
           <UploadingOverlay status={uploadStatus} error={uploadError} />
         )}
-        {/* Header */}
-        <div className="border-b p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 h-20 flex items-center w-full">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center space-x-3">
-              <div>
-                <h1 className="font-semibold">Trash</h1>
-                <p className="text-sm text-muted-foreground">
-                  Items moved to trash are kept for 30 days before being
-                  permanently deleted.
-                </p>
+        {/* Overlay gradien mengikuti gaya landing */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-secondary/5" />
+        <div className="absolute top-20 left-10 w-72 h-72 bg-primary/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/20 rounded-full blur-3xl" />
+        <div className="relative z-10">
+          {/* Header */}
+          <div className="glass border-b p-4 h-20 flex items-center w-full">
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center space-x-3">
+                <div>
+                  <h1 className="font-semibold">Trash</h1>
+                  <p className="text-sm text-muted-foreground">
+                    Items moved to trash are kept for 30 days before being
+                    permanently deleted.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="p-8 relative h-[calc(100vh-80px)] overflow-auto">
-          <div>
-            <div className="flex justify-between items-center mb-6">
-              <div className="text-lg font-semibold">
-                Trash ( {filteredItems.length} )
-              </div>
-              {/* empty all */}
-
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size={"sm"}>
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Empty All
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete
-                      all items in the trash.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => deleteAll()}
-                      className="bg-red-600 hover:bg-red-700"
-                    >
-                      Yes
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-            {/* Breadcrumb navigation */}
-            {currentFolderId && (
-              <div className="mb-4">
-                <Button
-                  variant="ghost"
-                  onClick={() => navigateToFolder(null)}
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
-                  ← Back to root
-                </Button>
-              </div>
-            )}
-
-            {/* Unified Items Grid */}
-            <div
-              className={cn(
-                viewMode === "grid"
-                  ? "grid grid-cols-1 gap-4 lg:grid-cols-6"
-                  : "flex flex-col gap-2"
-              )}
-            >
-              {isLoading ? (
-                <>
-                  {Array(12)
-                    .fill("")
-                    .map((_, index) => (
-                      <div
-                        className={cn(
-                          "animate-pulse w-full bg-muted rounded-lg",
-                          viewMode === "grid" ? "h-40" : "h-12"
-                        )}
-                        key={index}
-                      ></div>
-                    ))}
-                </>
-              ) : filteredItems.length === 0 ? (
-                <div className="col-span-full text-center py-12">
-                  <FileSearch className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-slate-900 mb-2">
-                    No Items Found
-                  </h3>
-                  <p className="text-slate-500">
-                    {searchTerm
-                      ? "No folders or documents match your search."
-                      : "Create your first folder or upload a document to get started."}
-                  </p>
+          <div className="p-8 relative h-[calc(100vh-80px)] overflow-auto">
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <div className="text-lg font-semibold">
+                  Trash ( {filteredItems.length} )
                 </div>
-              ) : (
-                <>
-                  {/* Unified rendering for both folders and documents */}
-                  {filteredItems.map((item) => (
-                    <div
-                      key={`${item.type}-${item.id}`}
-                      className={cn(
-                        "relative rounded-lg p-4 cursor-pointer transition-all duration-300 group glass border-2 border-transparent hover:shadow-lg hover:border-primary/20",
-                        viewMode === "grid"
-                          ? "flex flex-col items-center justify-center space-y-2 min-h-40"
-                          : "flex items-center justify-between"
-                      )}
-                    >
-                      {/* Dropdown menu */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuSeparator />
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <DropdownMenuItem
-                                onSelect={(e) => e.preventDefault()}
-                              >
-                                <RotateCcw className="w-4 h-4 mr-2" />
-                                Restore
-                              </DropdownMenuItem>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Are you sure?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This action cannot be undone. This will
-                                  restore the {item.type}.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => restoreItem(item.id)}
-                                  className="bg-red-600 hover:bg-red-700"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                {/* empty all */}
 
-                      <div
-                        className={
-                          viewMode === "grid"
-                            ? "flex flex-col items-center justify-center"
-                            : "flex items-center justify-between w-full"
-                        }
-                        onClick={() => {
-                          if (item.type === "folder") {
-                            navigateToFolder(item.id);
-                          } else if (item.type === "table") {
-                            router.push(
-                              `/dashboard/documents/tables?id=${item.id}`
-                            );
-                          } else {
-                            router.push(`/dashboard/documents/${item.id}`);
-                          }
-                        }}
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size={"sm"}>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Empty All
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently
+                        delete all items in the trash.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => deleteAll()}
+                        className="bg-red-600 hover:bg-red-700"
                       >
-                        {item.type === "folder" ? (
-                          viewMode === "grid" ? (
+                        Yes
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+              {/* Breadcrumb navigation */}
+              {currentFolderId && (
+                <div className="mb-4">
+                  <Button
+                    variant="ghost"
+                    onClick={() => navigateToFolder(null)}
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    ← Back to root
+                  </Button>
+                </div>
+              )}
+
+              {/* Unified Items Grid */}
+              <div
+                className={cn(
+                  viewMode === "grid"
+                    ? "grid grid-cols-1 gap-4 lg:grid-cols-6"
+                    : "flex flex-col gap-2"
+                )}
+              >
+                {isLoading ? (
+                  <>
+                    {Array(12)
+                      .fill("")
+                      .map((_, index) => (
+                        <div
+                          className={cn(
+                            "animate-pulse w-full bg-muted rounded-lg",
+                            viewMode === "grid" ? "h-40" : "h-12"
+                          )}
+                          key={index}
+                        ></div>
+                      ))}
+                  </>
+                ) : filteredItems.length === 0 ? (
+                  <div className="col-span-full text-center py-12">
+                    <FileSearch className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-slate-900 mb-2">
+                      No Items Found
+                    </h3>
+                    <p className="text-slate-500">
+                      {searchTerm
+                        ? "No folders or documents match your search."
+                        : "Create your first folder or upload a document to get started."}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Unified rendering for both folders and documents */}
+                    {filteredItems.map((item) => (
+                      <div
+                        key={`${item.type}-${item.id}`}
+                        className={cn(
+                          "relative rounded-lg p-4 cursor-pointer transition-all duration-300 group glass border-2 border-transparent hover:shadow-lg hover:border-primary/20",
+                          viewMode === "grid"
+                            ? "flex flex-col items-center justify-center space-y-2 min-h-40"
+                            : "flex items-center justify-between"
+                        )}
+                      >
+                        {/* Dropdown menu */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuSeparator />
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem
+                                  onSelect={(e) => e.preventDefault()}
+                                >
+                                  <RotateCcw className="w-4 h-4 mr-2" />
+                                  Restore
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    Are you sure?
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This action cannot be undone. This will
+                                    restore the {item.type}.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => restoreItem(item.id)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        <div
+                          className={
+                            viewMode === "grid"
+                              ? "flex flex-col items-center justify-center"
+                              : "flex items-center justify-between w-full"
+                          }
+                          onClick={() => {
+                            if (item.type === "folder") {
+                              navigateToFolder(item.id);
+                            } else if (item.type === "table") {
+                              router.push(
+                                `/dashboard/documents/tables?id=${item.id}`
+                              );
+                            } else {
+                              router.push(`/dashboard/documents/${item.id}`);
+                            }
+                          }}
+                        >
+                          {item.type === "folder" ? (
+                            viewMode === "grid" ? (
+                              <>
+                                <Folder className="w-12 h-12 text-blue-600" />
+                                <div className="text-center text-sm text-slate-600 line-clamp-2">
+                                  {item.name}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex items-center gap-3">
+                                <Folder className="w-6 h-6 text-blue-600 fill-current" />
+                                <div className="text-sm text-slate-700">
+                                  {item.name}
+                                </div>
+                              </div>
+                            )
+                          ) : viewMode === "grid" ? (
                             <>
-                              <Folder className="w-12 h-12 text-blue-600" />
-                              <div className="text-center text-sm text-slate-600 line-clamp-2">
-                                {item.name}
-                              </div>
-                            </>
-                          ) : (
-                            <div className="flex items-center gap-3">
-                              <Folder className="w-6 h-6 text-blue-600 fill-current" />
-                              <div className="text-sm text-slate-700">
-                                {item.name}
-                              </div>
-                            </div>
-                          )
-                        ) : viewMode === "grid" ? (
-                          <>
-                            <img
-                              src={fileToIcon(
-                                item.url?.split(".").pop() || "unknown"
-                              )}
-                              alt={item.name}
-                              className="w-12"
-                            />
-                            <div className="text-center text-sm text-slate-600 break-all hyphens-auto line-clamp-2">
-                              {item.name}
-                            </div>
-                            <div className="text-center text-xs text-slate-800 font-semibold">
-                              {fileSize(item.size || 0)}
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="flex items-center gap-3">
                               <img
                                 src={fileToIcon(
                                   item.url?.split(".").pop() || "unknown"
                                 )}
                                 alt={item.name}
-                                className="w-6"
+                                className="w-12"
                               />
-                              <div>
-                                <div className="text-sm text-slate-700 break-all hyphens-auto">
-                                  {item.name}
-                                </div>
-                                <div className="text-xs text-slate-800 font-semibold">
-                                  {fileSize(item.size || 0)}
+                              <div className="text-center text-sm text-slate-600 break-all hyphens-auto line-clamp-2">
+                                {item.name}
+                              </div>
+                              <div className="text-center text-xs text-slate-800 font-semibold">
+                                {fileSize(item.size || 0)}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={fileToIcon(
+                                    item.url?.split(".").pop() || "unknown"
+                                  )}
+                                  alt={item.name}
+                                  className="w-6"
+                                />
+                                <div>
+                                  <div className="text-sm text-slate-700 break-all hyphens-auto">
+                                    {item.name}
+                                  </div>
+                                  <div className="text-xs text-slate-800 font-semibold">
+                                    {fileSize(item.size || 0)}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </>
-                        )}
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </>
-              )}
+                    ))}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -366,10 +366,14 @@ export default function MyDocumentsPage() {
   return (
     <div className="flex h-screen">
       {/* Main content area */}
-      <div className="bg-white min-h-screen flex-1">
+      <div className="relative min-h-screen flex-1 overflow-hidden">
         {isUploading && (
           <UploadingOverlay status={uploadStatus} error={uploadError} />
         )}
+        {/* Overlay gradien mengikuti gaya landing */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-secondary/5" />
+        <div className="absolute top-20 left-10 w-72 h-72 bg-primary/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/20 rounded-full blur-3xl" />
         {/* Header */}
         <div className="border-b p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 h-20 flex items-center w-full">
           <div className="flex items-center justify-between w-full">

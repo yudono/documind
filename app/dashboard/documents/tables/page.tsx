@@ -440,7 +440,7 @@ export default function TablesEditorPage() {
 
         <div
           className={cn(
-            "w-80 border-l bg-background flex flex-col",
+            "w-80 border-l flex flex-col",
             !showAISidebar && "hidden"
           )}
         >

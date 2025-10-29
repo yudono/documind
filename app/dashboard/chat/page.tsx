@@ -820,9 +820,13 @@ export default function ChatPage() {
     <TooltipProvider>
       <div className="flex h-screen bg-background">
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col">
+        <div className="relative flex-1 flex flex-col overflow-hidden">
+          {/* Overlay gradien mengikuti gaya landing */}
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-secondary/5" />
+          <div className="absolute top-20 left-10 w-72 h-72 bg-primary/20 rounded-full blur-3xl" />
+          <div className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/20 rounded-full blur-3xl" />
           {/* Header */}
-          <div className="border-b p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 h-20 flex items-center w-full">
+          <div className="glass border-b p-4 h-20 flex items-center w-full">
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center space-x-3">
                 <Bot className="h-8 w-8" />

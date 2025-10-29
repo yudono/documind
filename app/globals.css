@@ -52,10 +52,22 @@
     --radius: 0.75rem;
 
     /* Custom design tokens */
-    --gradient-primary: linear-gradient(135deg, hsl(239 67% 60%), hsl(280 67% 65%));
-    --gradient-secondary: linear-gradient(135deg, hsl(10 78% 67%), hsl(30 85% 65%));
-    --gradient-hero: linear-gradient(135deg, hsl(239 67% 60% / 0.1), hsl(280 67% 65% / 0.05));
-    
+    --gradient-primary: linear-gradient(
+      135deg,
+      hsl(239 67% 60%),
+      hsl(280 67% 65%)
+    );
+    --gradient-secondary: linear-gradient(
+      135deg,
+      hsl(10 78% 67%),
+      hsl(30 85% 65%)
+    );
+    --gradient-hero: linear-gradient(
+      135deg,
+      hsl(239 67% 60% / 0.1),
+      hsl(280 67% 65% / 0.05)
+    );
+
     --shadow-sm: 0 2px 8px hsl(239 67% 60% / 0.08);
     --shadow-md: 0 8px 24px hsl(239 67% 60% / 0.12);
     --shadow-lg: 0 16px 48px hsl(239 67% 60% / 0.16);
@@ -100,8 +112,12 @@
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
 
-    --gradient-hero: linear-gradient(135deg, hsl(239 67% 60% / 0.15), hsl(280 67% 65% / 0.08));
-    
+    --gradient-hero: linear-gradient(
+      135deg,
+      hsl(239 67% 60% / 0.15),
+      hsl(280 67% 65% / 0.08)
+    );
+
     --shadow-sm: 0 2px 8px hsl(0 0% 0% / 0.3);
     --shadow-md: 0 8px 24px hsl(0 0% 0% / 0.4);
     --shadow-lg: 0 16px 48px hsl(0 0% 0% / 0.5);
@@ -114,10 +130,15 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground antialiased;
-    font-feature-settings: 'cv11', 'ss01';
+    @apply text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
   }
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-bold tracking-tight font-display;
   }
 }
@@ -174,7 +195,8 @@
   }
 
   @keyframes float {
-    0%, 100% {
+    0%,
+    100% {
       transform: translateY(0px);
     }
     50% {

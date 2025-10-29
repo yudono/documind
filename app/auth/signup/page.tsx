@@ -1,25 +1,31 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
-import { Brain, Eye, EyeOff } from 'lucide-react';
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import { Brain, Eye, EyeOff } from "lucide-react";
 
 export default function SignUp() {
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
   });
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -27,26 +33,26 @@ export default function SignUp() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setIsLoading(true);
 
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+      setError("Passwords do not match");
       setIsLoading(false);
       return;
     }
 
     if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError("Password must be at least 6 characters");
       setIsLoading(false);
       return;
     }
 
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           name: formData.name,
@@ -58,27 +64,29 @@ export default function SignUp() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || 'Something went wrong');
+        setError(data.error || "Something went wrong");
         setIsLoading(false);
         return;
       }
 
       // Auto sign in after successful registration
-      const result = await signIn('credentials', {
+      const result = await signIn("credentials", {
         email: formData.email,
         password: formData.password,
         redirect: false,
       });
 
       if (result?.error) {
-        setError('Registration successful, but login failed. Please try signing in.');
+        setError(
+          "Registration successful, but login failed. Please try signing in."
+        );
         setIsLoading(false);
         return;
       }
 
-      router.push('/dashboard');
+      router.push("/dashboard");
     } catch (error) {
-      setError('Network error. Please try again.');
+      setError("Network error. Please try again.");
       setIsLoading(false);
     }
   };
@@ -106,7 +114,9 @@ export default function SignUp() {
             </div>
           </div>
           <div>
-            <CardTitle className="text-2xl font-display font-bold">Create Account</CardTitle>
+            <CardTitle className="text-2xl font-display font-bold">
+              Create Account
+            </CardTitle>
             <CardDescription className="text-muted-foreground">
               Sign up to start using DocuMind AI
             </CardDescription>
@@ -154,7 +164,7 @@ export default function SignUp() {
                 <Input
                   id="password"
                   name="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   placeholder="Create a password"
                   value={formData.password}
                   onChange={handleInputChange}
@@ -185,7 +195,7 @@ export default function SignUp() {
                 <Input
                   id="confirmPassword"
                   name="confirmPassword"
-                  type={showConfirmPassword ? 'text' : 'password'}
+                  type={showConfirmPassword ? "text" : "password"}
                   placeholder="Confirm your password"
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
@@ -221,11 +231,14 @@ export default function SignUp() {
                 aria-describedby="terms-description"
               />
               <Label htmlFor="terms" className="text-sm text-muted-foreground">
-                I agree to the
-                {" "}
-                <Link href="#" className="text-primary hover:underline">Terms</Link>
-                {" "}and{" "}
-                <Link href="#" className="text-primary hover:underline">Privacy Policy</Link>
+                I agree to the{" "}
+                <Link href="#" className="text-primary hover:underline">
+                  Terms
+                </Link>{" "}
+                and{" "}
+                <Link href="#" className="text-primary hover:underline">
+                  Privacy Policy
+                </Link>
               </Label>
             </div>
 
@@ -235,7 +248,7 @@ export default function SignUp() {
               size="lg"
               disabled={isLoading}
             >
-              {isLoading ? 'Creating Account...' : 'Create Account'}
+              {isLoading ? "Creating Account..." : "Create Account"}
             </Button>
           </form>
 
@@ -244,12 +257,14 @@ export default function SignUp() {
               <Separator className="w-full" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+              <span className="px-2 text-muted-foreground">
+                Or continue with
+              </span>
             </div>
           </div>
 
           <Button
-            onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
             variant="outline"
             className="w-full"
             size="lg"
@@ -277,7 +292,9 @@ export default function SignUp() {
           </Button>
 
           <div className="text-center text-sm">
-            <span className="text-muted-foreground">Already have an account? </span>
+            <span className="text-muted-foreground">
+              Already have an account?{" "}
+            </span>
             <Link
               href="/auth/signin"
               className="text-primary hover:text-primary/80 font-medium hover:underline"

@@ -636,7 +636,7 @@ export default function CreateDocumentPage() {
           {/* Sidebar column */}
           <div
             className={cn(
-              "w-80 border-l bg-background flex flex-col",
+              "w-80 border-l flex flex-col",
               !showAiSidebar && "hidden"
             )}
           >
