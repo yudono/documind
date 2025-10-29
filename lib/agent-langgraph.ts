@@ -82,9 +82,9 @@ function packContextSegments(
     const sim = simNormalizer(s.similarity);
     const rec = tsNormalizer(s.timestamp);
     const sourceBoost =
-      s.source === "conversation" ? 0.15 : s.source === "ocr" ? 0.05 : 0;
+      s.source === "conversation" ? 0.35 : s.source === "ocr" ? 0.08 : 0;
     const manual = s.priorityBoost ?? 0;
-    const score = 0.7 * sim + 0.25 * rec + sourceBoost + manual;
+    const score = 0.6 * sim + 0.25 * rec + sourceBoost + 0.15 * manual;
     return { ...s, score } as ContextSegment & { score: number };
   });
 
@@ -346,7 +346,7 @@ export class LangGraphDocumentAgent {
     this.llm = new ChatGroq({
       apiKey: process.env.GROQ_API_KEY!,
       model: "llama-3.3-70b-versatile",
-      temperature: 0.7,
+      temperature: 0.2,
     });
 
     this.buildGraph();
@@ -420,7 +420,21 @@ export class LangGraphDocumentAgent {
           await initializeMilvus();
         } catch (e) {
           console.warn("Milvus init failed, skipping semantic search:", e);
-          return { ...state, context: "" };
+          // Fallback: tetap gunakan percakapan jika tersedia
+          if (state.conversationContext) {
+            segments.push({
+              source: "conversation",
+              documentId: state.sessionId,
+              text: state.conversationContext,
+              similarity: 0.5,
+              timestamp: Date.now(),
+              priorityBoost: 0.4,
+            });
+          }
+          return {
+            ...state,
+            context: packContextSegments(segments, MAX_CONTEXT_CHARS),
+          };
         }
 
         // Determine primaryDocIds: prioritize referencedDocs, then explicit documentIds, lastly sessionId
@@ -457,13 +471,12 @@ export class LangGraphDocumentAgent {
           .map((d) => d?.name)
           .filter(Boolean)
           .join(" ");
-        const retrievalQuery = [
-          state.query,
-          docNameHints,
-          state.conversationContext,
-        ]
-          .filter((v) => v && v.trim().length)
-          .join(" ");
+        const retrievalQuery = clampText(
+          [state.query, docNameHints, state.conversationContext]
+            .filter((v) => v && v.trim().length)
+            .join(" "),
+          MAX_QUERY_CHARS
+        );
 
         // Pilih satu dokumen saja agar konteks tidak bercampur
         let selectedDocId: string | undefined =
@@ -730,20 +743,33 @@ export class LangGraphDocumentAgent {
       }
     }
 
-    // Add raw conversationContext lines as separate segments to avoid truncation
+    // Tambahkan transcript percakapan sebagai satu segmen prioritas + 3 baris terakhir untuk menonjolkan konteks terbaru
     if (state.conversationContext) {
-      const lines = state.conversationContext
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
-      for (const line of lines) {
+      const full = state.conversationContext.trim();
+      if (full) {
         segments.push({
           source: "conversation",
           documentId: state.sessionId,
-          text: line,
-          similarity: 0.4,
-          priorityBoost: 0.05,
+          text: full,
+          similarity: 0.5,
+          timestamp: Date.now(),
+          priorityBoost: 0.4,
         });
+        const lines = full
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean);
+        const tail = lines.slice(Math.max(0, lines.length - 3));
+        for (const line of tail) {
+          segments.push({
+            source: "conversation",
+            documentId: state.sessionId,
+            text: line,
+            similarity: 0.45,
+            timestamp: Date.now(),
+            priorityBoost: 0.2,
+          });
+        }
       }
     }
 
@@ -1051,14 +1077,16 @@ export class LangGraphDocumentAgent {
   ): Promise<Partial<AgentState>> {
     try {
       const safeContext = state.context; // context already packed
-      const safeQuery = state.query;
+      const safeQuery = clampText(state.query, MAX_QUERY_CHARS);
 
       // console.log("safeContext:", safeContext);
       // console.log("safeQuery:", safeQuery);
 
       const baseSystemText = clampText(
-        `You analyze documents and answer questions using provided context.
-     Respond in Markdown. Do not use HTML unless explicitly requested.`,
+        `You are a document analysis assistant.
+Use ONLY the provided context and prior conversation. If context is insufficient, ask a clarifying question first.
+Cite document names/sections when referencing them. Prefer concise, step-by-step answers.
+Respond in Markdown. Do not use HTML unless explicitly requested.`,
         MAX_SYSTEM_CHARS
       );
       const refDoc =
