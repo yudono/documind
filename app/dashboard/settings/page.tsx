@@ -156,7 +156,11 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Overlay gradien mengikuti gaya landing */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-secondary/5" />
+      <div className="absolute top-20 left-10 w-72 h-72 bg-primary/20 rounded-full blur-3xl" />
+      <div className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/20 rounded-full blur-3xl" />
       {/* Header */}
       <div className="border-b p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 h-20 flex items-center w-full">
         <div className="flex items-center justify-between w-full">
@@ -181,7 +185,7 @@ export default function SettingsPage() {
           onValueChange={setActiveTab}
           className="space-y-6"
         >
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-5 glass">
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
@@ -192,7 +196,7 @@ export default function SettingsPage() {
           {/* Profile Tab */}
           <TabsContent value="profile" className="space-y-6">
             {/* Profile Information */}
-            <Card>
+            <Card className="glass border-2 hover:shadow-lg transition-all">
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <User className="h-5 w-5 mr-2" />
@@ -343,7 +347,7 @@ export default function SettingsPage() {
             </Card>
 
             {/* Change Password */}
-            <Card>
+            <Card className="glass border-2 hover:shadow-lg transition-all">
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Lock className="h-5 w-5 mr-2" />

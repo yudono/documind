@@ -4,7 +4,7 @@ import "../styles/comment-styles.css";
 import "../styles/_variables.scss";
 import "../styles/_keyframe-animations.scss";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Space_Grotesk } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { Toaster } from "@/components/ui/sonner";
 import Script from "next/script";
@@ -12,6 +12,7 @@ import GATracker from "@/components/analytics/ga-tracker";
 import { Suspense } from "react";
 
 const inter = Inter({ subsets: ["latin"] });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "AI Document Assistant",
@@ -24,9 +25,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <Providers>
+          {/* preload Space Grotesk font for display headings */}
+          <span className={spaceGrotesk.className} style={{ display: "none" }} />
           {children}
           <Toaster />
           {/* Google Analytics */}

@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { DashboardSidebar } from '@/components/dashboard/sidebar';
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { DashboardSidebar } from "@/components/dashboard/sidebar";
 
 export default function DashboardLayout({
   children,
@@ -14,12 +14,12 @@ export default function DashboardLayout({
   const router = useRouter();
 
   useEffect(() => {
-    if (status !== 'loading' && !session) {
-      router.push('/auth/signin');
+    if (status !== "loading" && !session) {
+      router.push("/auth/signin");
     }
   }, [session, status, router]);
 
-  if (status === 'loading') {
+  if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -32,12 +32,10 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-secondary/5">
       <div className="flex">
         <DashboardSidebar />
-        <main className="flex-1 ml-64">
-          {children}
-        </main>
+        <main className="flex-1 ml-64">{children}</main>
       </div>
     </div>
   );

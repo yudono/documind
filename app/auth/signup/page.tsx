@@ -91,17 +91,23 @@ export default function SignUp() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4">
-      <Card className="w-full max-w-md shadow-xl">
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
+      {/* Overlay gradien mengikuti gaya landing */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-secondary/5" />
+      {/* Orbs mengambang untuk aksen visual */}
+      <div className="absolute top-20 left-10 w-72 h-72 bg-primary/20 rounded-full blur-3xl" />
+      <div className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/20 rounded-full blur-3xl" />
+
+      <Card className="w-full max-w-md glass border-2 hover:shadow-lg transition-all relative z-10">
         <CardHeader className="text-center space-y-4">
           <div className="flex items-center justify-center">
-            <div className="h-12 w-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
+            <div className="h-12 w-12 rounded-xl bg-gradient-primary flex items-center justify-center">
               <Brain className="h-7 w-7 text-white" />
             </div>
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-2xl font-display font-bold">Create Account</CardTitle>
+            <CardDescription className="text-muted-foreground">
               Sign up to start using DocuMind AI
             </CardDescription>
           </div>
@@ -204,9 +210,28 @@ export default function SignUp() {
               </div>
             </div>
 
+            {/* Persetujuan syarat & privasi */}
+            <div className="flex items-start gap-2">
+              <input
+                id="terms"
+                name="terms"
+                type="checkbox"
+                required
+                className="mt-1 h-4 w-4 rounded border border-border"
+                aria-describedby="terms-description"
+              />
+              <Label htmlFor="terms" className="text-sm text-muted-foreground">
+                I agree to the
+                {" "}
+                <Link href="#" className="text-primary hover:underline">Terms</Link>
+                {" "}and{" "}
+                <Link href="#" className="text-primary hover:underline">Privacy Policy</Link>
+              </Label>
+            </div>
+
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+              className="w-full gradient-primary text-white border-0 shadow-lg hover:shadow-glow transition-all"
               size="lg"
               disabled={isLoading}
             >
@@ -219,7 +244,7 @@ export default function SignUp() {
               <Separator className="w-full" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-slate-500">Or continue with</span>
+              <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
             </div>
           </div>
 
@@ -252,10 +277,10 @@ export default function SignUp() {
           </Button>
 
           <div className="text-center text-sm">
-            <span className="text-slate-600">Already have an account? </span>
+            <span className="text-muted-foreground">Already have an account? </span>
             <Link
               href="/auth/signin"
-              className="text-blue-600 hover:text-blue-500 font-medium hover:underline"
+              className="text-primary hover:text-primary/80 font-medium hover:underline"
             >
               Sign in
             </Link>

@@ -249,7 +249,7 @@ export default function MyDocumentsPage() {
   return (
     <div className="flex h-screen">
       {/* Main content area */}
-      <div className="bg-white min-h-screen flex-1">
+      <div className="bg-background min-h-screen flex-1">
         {isUploading && (
           <UploadingOverlay status={uploadStatus} error={uploadError} />
         )}
@@ -357,10 +357,7 @@ export default function MyDocumentsPage() {
                     <div
                       key={`${item.type}-${item.id}`}
                       className={cn(
-                        "relative rounded-lg p-4 cursor-pointer transition-all duration-200 group border-2",
-                        item.type === "folder"
-                          ? "bg-gray-50 hover:bg-blue-100 border-transparent hover:border-blue-200"
-                          : "bg-gray-50 hover:bg-blue-100 border-transparent hover:border-gray-200",
+                        "relative rounded-lg p-4 cursor-pointer transition-all duration-300 group glass border-2 border-transparent hover:shadow-lg hover:border-primary/20",
                         viewMode === "grid"
                           ? "flex flex-col items-center justify-center space-y-2 min-h-40"
                           : "flex items-center justify-between"

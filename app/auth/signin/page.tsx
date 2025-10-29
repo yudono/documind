@@ -1,24 +1,30 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { signIn, getSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
-import { Brain, Eye, EyeOff } from 'lucide-react';
+import { useState } from "react";
+import { signIn, getSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import { Brain, Eye, EyeOff } from "lucide-react";
 
 export default function SignIn() {
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
+    email: "",
+    password: "",
   });
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
@@ -27,7 +33,7 @@ export default function SignIn() {
     const checkSession = async () => {
       const session = await getSession();
       if (session) {
-        router.push('/dashboard');
+        router.push("/dashboard");
       }
     };
     checkSession();
@@ -35,25 +41,25 @@ export default function SignIn() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setIsLoading(true);
 
     try {
-      const result = await signIn('credentials', {
+      const result = await signIn("credentials", {
         email: formData.email,
         password: formData.password,
         redirect: false,
       });
 
       if (result?.error) {
-        setError('Invalid email or password');
+        setError("Invalid email or password");
         setIsLoading(false);
         return;
       }
 
-      router.push('/dashboard');
+      router.push("/dashboard");
     } catch (error) {
-      setError('Network error. Please try again.');
+      setError("Network error. Please try again.");
       setIsLoading(false);
     }
   };
@@ -66,16 +72,27 @@ export default function SignIn() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4">
-      <Card className="w-full max-w-md shadow-xl">
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
+      {/* Floating orbs for subtle ambiance */}
+      <div className="absolute top-20 left-10 w-72 h-72 bg-primary/20 rounded-full blur-3xl animate-float" />
+      <div
+        className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/20 rounded-full blur-3xl animate-float"
+        style={{ animationDelay: "2s" }}
+      />
+
+      <Card className="w-full max-w-md glass p-8 hover:shadow-lg transition-all duration-300 border-2 hover:border-primary/20 relative z-10">
         <CardHeader className="text-center space-y-4">
           <div className="flex items-center justify-center">
-            <div className="h-12 w-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
-              <Brain className="h-7 w-7 text-white" />
-            </div>
+            <img
+              src={"/logo/logo.svg"}
+              className="w-10 h-10 rounded-xl"
+              alt="logo"
+            />
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
+            <CardTitle className="text-2xl font-display font-bold">
+              Welcome Back
+            </CardTitle>
             <CardDescription>
               Sign in to access your AI Document Assistant
             </CardDescription>
@@ -100,6 +117,7 @@ export default function SignIn() {
                 onChange={handleInputChange}
                 required
                 disabled={isLoading}
+                className="glass"
               />
             </div>
 
@@ -109,7 +127,7 @@ export default function SignIn() {
                 <Input
                   id="password"
                   name="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
                   value={formData.password}
                   onChange={handleInputChange}
@@ -136,11 +154,11 @@ export default function SignIn() {
 
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+              className="w-full gradient-primary text-white border-0 shadow-lg hover:shadow-glow transition-all"
               size="lg"
               disabled={isLoading}
             >
-              {isLoading ? 'Signing In...' : 'Sign In'}
+              {isLoading ? "Signing In..." : "Sign In"}
             </Button>
           </form>
 
@@ -149,14 +167,16 @@ export default function SignIn() {
               <Separator className="w-full" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-slate-500">Or continue with</span>
+              <span className="bg-white px-2 text-slate-500">
+                Or continue with
+              </span>
             </div>
           </div>
 
           <Button
-            onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
             variant="outline"
-            className="w-full"
+            className="w-full glass border-2"
             size="lg"
             disabled={isLoading}
           >
@@ -185,7 +205,7 @@ export default function SignIn() {
             <span className="text-slate-600">Don't have an account? </span>
             <Link
               href="/auth/signup"
-              className="text-blue-600 hover:text-blue-500 font-medium hover:underline"
+              className="text-primary hover:text-primary/80 font-medium hover:underline"
             >
               Sign up
             </Link>

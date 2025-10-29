@@ -195,7 +195,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <div className="border-b p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 h-20 flex items-center w-full">
+      <div className="glass border-b p-4 h-20 flex items-center w-full">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center space-x-3">
             <div>
@@ -216,7 +216,7 @@ export default function Dashboard() {
             const isPositive = stat.trend === "up";
             const isNeutral = stat.trend === "neutral";
             return (
-              <Card key={stat.label}>
+              <Card key={stat.label} className="glass hover:shadow-lg transition-all">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-slate-600">
                     {stat.label}
@@ -257,7 +257,7 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Monthly Trends Line Chart */}
-          <Card>
+          <Card className="glass hover:shadow-lg transition-all">
             <CardHeader>
               <CardTitle className="flex items-center">
                 <TrendingUp className="h-5 w-5 mr-2" />
@@ -302,7 +302,7 @@ export default function Dashboard() {
           </Card>
 
           {/* Document Types Pie Chart */}
-          <Card>
+          <Card className="glass hover:shadow-lg transition-all">
             <CardHeader>
               <CardTitle className="flex items-center">
                 <BarChart3 className="h-5 w-5 mr-2" />
