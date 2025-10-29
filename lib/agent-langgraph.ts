@@ -24,6 +24,40 @@ const DEFAULT_OUTPUT_TOKENS = Number(
   process.env.GROQ_MAX_OUTPUT_TOKENS || "4096"
 );
 
+/**
+ * Ekstraksi document ID dari URL dengan mengambil filename tanpa extension
+ * untuk memastikan konsistensi antara local dan production
+ */
+function extractDocumentIdFromUrl(url: string): string | undefined {
+  try {
+    const u = new URL(url, "http://localhost");
+    const pathname = u.pathname || "";
+    
+    // Ambil filename dari path
+    const filename = pathname.split('/').pop();
+    if (filename && filename.includes('.')) {
+      // Hapus extension untuk mendapatkan document ID
+      const nameWithoutExt = filename.split('.')[0];
+      if (nameWithoutExt.length >= 3) {
+        return nameWithoutExt;
+      }
+    }
+    
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Generate fallback document ID yang konsisten dan deterministic
+ */
+function generateFallbackDocId(url: string, sessionId: string): string {
+  // Buat hash sederhana dari URL untuk konsistensi
+  const urlHash = Buffer.from(url).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+  return `doc_${urlHash}_${sessionId}`;
+}
+
 function clampText(input: string | undefined, max: number): string {
   // Keep for safety in non-context fields; avoid using for context packing
   const text = (input || "").trim();
@@ -442,16 +476,18 @@ export class LangGraphDocumentAgent {
           .map((d: any) => {
             const direct = d?.id || d?.documentId || d?.key;
             if (direct) return direct;
-            // Try parse id from URL like /api/items/{id}/download
-            try {
-              const u = new URL(d?.url || "", "http://localhost");
-              const match = (u.pathname || "").match(
-                /\/items\/(.+?)\/download/
-              );
-              return match && match[1] ? match[1] : undefined;
-            } catch {
-              return undefined;
+            
+            // Gunakan fungsi ekstraksi yang sama dengan OCR node
+            const url = d?.url || "";
+            if (url) {
+              const extractedId = extractDocumentIdFromUrl(url);
+              if (extractedId) return extractedId;
+              
+              // Jika tidak bisa ekstrak, gunakan fallback yang konsisten
+              return generateFallbackDocId(url, state.sessionId || 'default');
             }
+            
+            return undefined;
           })
           .filter(Boolean);
         const explicitDocIds =
@@ -816,19 +852,14 @@ export class LangGraphDocumentAgent {
           try {
             const text = await performOCR(url, ocrPrompt);
 
-            // Derive stable documentId from download URL if possible
-            const itemIdFromUrl = (() => {
-              try {
-                const u = new URL(url, "http://localhost");
-                const pathname = u.pathname || "";
-                const match = pathname.match(/\/items\/(.+?)\/download/);
-                return match && match[1] ? match[1] : undefined;
-              } catch {
-                return undefined;
-              }
-            })();
-
-            const milvusDocId = itemIdFromUrl || state.sessionId;
+            // Ekstrak document ID dengan fungsi terpusat yang robust
+            const itemIdFromUrl = extractDocumentIdFromUrl(url);
+            
+            // Gunakan fallback yang konsisten dan deterministic
+            const milvusDocId = itemIdFromUrl || generateFallbackDocId(url, state.sessionId || 'default');
+            
+            // Log untuk debugging production issues
+            console.log(`OCR Document ID mapping: URL=${url} -> ID=${milvusDocId} (extracted=${itemIdFromUrl || 'fallback'})`);
             return { url, text, milvusDocId };
           } catch (err) {
             console.error("OCR failed for", url, err);
