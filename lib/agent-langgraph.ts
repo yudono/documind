@@ -832,13 +832,19 @@ export class LangGraphDocumentAgent {
       const ocrPrompt =
         "Extract clear text from this document image. Preserve headings, tables, and lists in plain text. Return only clean text for QA/summarization.";
 
-      // Init Milvus once (if configured) before batch inserts
+      // Check Milvus availability and init if possible
+      let milvusAvailable = false;
       if (milvusService) {
         try {
           await initializeMilvus();
+          milvusAvailable = true;
+          console.log("Milvus initialized successfully for OCR");
         } catch (e) {
-          console.warn("Milvus init failed prior to OCR inserts:", e);
+          console.warn("Milvus init failed prior to OCR inserts, continuing without Milvus:", e);
+          milvusAvailable = false;
         }
+      } else {
+        console.log("Milvus not configured, OCR will continue without vector storage");
       }
 
       const OCR_CONCURRENCY = 2;
@@ -883,8 +889,9 @@ export class LangGraphDocumentAgent {
         .map((r) => r.milvusDocId)
         .filter((v): v is string => Boolean(v));
 
-      // Step 2: Insert OCR texts into Milvus in parallel (each handles its own batching)
-      if (milvusService) {
+      // Step 2: Insert OCR texts into Milvus in parallel (only if available)
+      if (milvusAvailable && milvusService) {
+        console.log(`Inserting ${successful.length} OCR results into Milvus`);
         const ms = milvusService!; // narrow to non-null within this block
         await mapWithConcurrency(
           successful,
@@ -903,6 +910,8 @@ export class LangGraphDocumentAgent {
             }
           }
         );
+      } else {
+        console.log("Skipping Milvus insertion for OCR results - Milvus not available");
       }
 
       // Link OCR docIds into state.documentIds to strengthen retrieval

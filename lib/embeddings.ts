@@ -1,7 +1,26 @@
-import { pipeline, env } from '@xenova/transformers';
+import { pipeline, env } from "@xenova/transformers";
+import { mkdirSync, existsSync } from "fs";
+import { join } from "path";
 
-// Disable local model loading for serverless environments
+// Configure for serverless environments
 env.allowLocalModels = false;
+
+// Set cache directory to /tmp for serverless environments (writable directory)
+const cacheDir = "/tmp/.cache/transformers";
+env.cacheDir = cacheDir;
+
+// Also set environment variables as fallback
+process.env.TRANSFORMERS_CACHE = cacheDir;
+process.env.HF_HOME = "/tmp/.cache";
+
+// Ensure cache directory exists
+try {
+  if (!existsSync(cacheDir)) {
+    mkdirSync(cacheDir, { recursive: true });
+  }
+} catch (error) {
+  console.warn("Could not create transformers cache directory:", error);
+}
 
 let embeddingPipeline: any = null;
 
@@ -10,16 +29,16 @@ async function getEmbeddingPipeline() {
   if (!embeddingPipeline) {
     try {
       embeddingPipeline = await pipeline(
-        'feature-extraction',
-        'Xenova/all-MiniLM-L6-v2',
-        { 
-          revision: 'main',
+        "feature-extraction",
+        "Xenova/all-MiniLM-L6-v2",
+        {
+          revision: "main",
           quantized: true,
         }
       );
     } catch (error) {
-      console.error('Error initializing embedding pipeline:', error);
-      throw new Error('Failed to initialize embedding model');
+      console.error("Error initializing embedding pipeline:", error);
+      throw new Error("Failed to initialize embedding model");
     }
   }
   return embeddingPipeline;
@@ -29,12 +48,12 @@ async function getEmbeddingPipeline() {
 export async function generateEmbedding(text: string): Promise<number[]> {
   try {
     if (!text || text.trim().length === 0) {
-      throw new Error('Text cannot be empty');
+      throw new Error("Text cannot be empty");
     }
 
     const pipeline = await getEmbeddingPipeline();
     const result = await pipeline(text, {
-      pooling: 'mean',
+      pooling: "mean",
       normalize: true,
     });
 
@@ -42,15 +61,15 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     const embedding = Array.from(result.data) as number[];
     return embedding;
   } catch (error) {
-    console.error('Error generating embedding:', error);
-    throw new Error('Failed to generate embedding');
+    console.error("Error generating embedding:", error);
+    throw new Error("Failed to generate embedding");
   }
 }
 
 // Calculate cosine similarity between two embeddings (kept for chat embeddings functionality)
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) {
-    throw new Error('Embeddings must have the same length');
+    throw new Error("Embeddings must have the same length");
   }
 
   let dotProduct = 0;
