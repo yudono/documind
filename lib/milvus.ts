@@ -53,16 +53,22 @@ class MilvusService {
       console.log("Connected to Milvus Cloud successfully");
     } catch (error: any) {
       console.error("Failed to connect to Milvus:", error);
-      
+
       // Check for protobuf loading errors common in serverless environments
-      if (error?.message?.includes('Unable to load service') || 
-          error?.message?.includes('milvus.proto') ||
-          error?.message?.includes('protobuf') ||
-          error?.message?.includes('grpc')) {
-        console.error("Milvus protobuf/gRPC loading error detected - this is common in serverless environments");
-        throw new Error("Milvus protobuf loading failed in serverless environment");
+      if (
+        error?.message?.includes("Unable to load service") ||
+        error?.message?.includes("milvus.proto") ||
+        error?.message?.includes("protobuf") ||
+        error?.message?.includes("grpc")
+      ) {
+        console.error(
+          "Milvus protobuf/gRPC loading error detected - this is common in serverless environments"
+        );
+        throw new Error(
+          "Milvus protobuf loading failed in serverless environment"
+        );
       }
-      
+
       throw new Error("Milvus connection failed");
     }
   }

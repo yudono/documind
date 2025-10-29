@@ -86,6 +86,9 @@ const nextConfig = {
   },
   experimental: {
     serverComponentsExternalPackages: [
+      "@zilliz/milvus2-sdk-node",
+      "@grpc/grpc-js",
+      "@grpc/proto-loader",
       "@xenova/transformers",
       "onnxruntime-node",
       "pdf-parse",
