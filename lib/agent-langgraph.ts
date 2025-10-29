@@ -671,6 +671,34 @@ export class LangGraphDocumentAgent {
                 console.warn("Fallback by selected documentId failed:", err);
               }
             }
+
+            // Final fallback: perform a global semantic search if no segments yet
+            if (!segments.length) {
+              try {
+                const globalFallback =
+                  await milvusService!.searchSimilarChunksByText(
+                    retrievalQuery,
+                    state.userId,
+                    12
+                  );
+                if (globalFallback && globalFallback.length > 0) {
+                  for (const chunk of globalFallback) {
+                    segments.push({
+                      source: "doc",
+                      documentId: (chunk as any).documentId,
+                      text: (chunk as any).chunkText,
+                      similarity: (chunk as any).similarity ?? 0,
+                      timestamp: (chunk as any).timestamp ?? 0,
+                    });
+                  }
+                }
+              } catch (err) {
+                console.warn(
+                  "Global semantic search fallback after empty doc retrieval failed:",
+                  err
+                );
+              }
+            }
           }
         }
 
@@ -722,7 +750,7 @@ export class LangGraphDocumentAgent {
     // Pack all segments into final context without truncating individual segments
     context = packContextSegments(segments, MAX_CONTEXT_CHARS);
 
-    // console.log("Final context:", context);
+    // console.log("context", context);
 
     return {
       context,
@@ -1030,8 +1058,7 @@ export class LangGraphDocumentAgent {
 
       const baseSystemText = clampText(
         `You analyze documents and answer questions using provided context.
-     Respond in Markdown. Prefer headings, lists, tables, and code blocks when helpful.
-     Do not use HTML unless explicitly requested.`,
+     Respond in Markdown. Do not use HTML unless explicitly requested.`,
         MAX_SYSTEM_CHARS
       );
       const refDoc =

@@ -140,14 +140,11 @@ interface Item {
   url?: string | null;
   key?: string | null;
   bucket?: string | null;
-  summary?: string | null;
-  keyPoints?: string | null;
-  sentiment?: string | null;
-  topics?: string | null;
   // Relations
   parent?: Item | null;
   children?: Item[];
   status?: "processing" | "ready" | "error";
+  previewUrl?: string | null;
   preview?: string;
   analysis?: AnalysisResult;
 }
@@ -181,7 +178,7 @@ export default function MyDocumentsPage() {
       );
       if (!response.ok) throw new Error("Failed to fetch items");
       const data = await response.json();
-      setItems(data);
+      setItems(data?.data);
     } catch (error) {
       console.error("Error loading items:", error);
     } finally {

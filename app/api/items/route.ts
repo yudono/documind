@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCache, setCache, delByPattern, delCache } from "@/lib/cache";
+// import { getCache, setCache, delByPattern, delCache } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,14 +15,21 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const parentId = searchParams.get("parentId");
     const type = searchParams.get("type"); // Optional filter by type
-
-    // get filter ?deleted=true
-    const deleted = searchParams.get("deleted");
+    const isTemplate = searchParams.get("isTemplate"); // Optional filter by isTemplate
+    const deleted = searchParams.get("deleted"); // get filter ?deleted=true
+    const page = searchParams.get("page");
+    const limit = searchParams.get("limit");
 
     const whereClause: any = {
-      userId: (session.user as any).id,
       parentId: parentId || null,
     };
+
+    if (isTemplate) {
+      whereClause.isTemplate = true;
+    } else {
+      whereClause.isTemplate = false;
+      whereClause.userId = (session.user as any).id;
+    }
 
     // deleteAt null or not
     if (deleted) {
@@ -33,15 +40,17 @@ export async function GET(request: NextRequest) {
 
     if (type && (type === "folder" || type === "document")) {
       whereClause.type = type;
+    } else {
+      whereClause.type = "document";
     }
 
-    const cacheKey = `items:${(session.user as any).id}:${parentId || "root"}:${
-      type || "all"
-    }:${deleted || "false"}`;
-    const cached = await getCache(cacheKey);
-    if (cached) {
-      return NextResponse.json(cached);
-    }
+    // const cacheKey = `items:${(session.user as any).id}:${parentId || "root"}:${
+    //   type || "all"
+    // }:${deleted || "false"}`;
+    // const cached = await getCache(cacheKey);
+    // if (cached) {
+    //   return NextResponse.json(cached);
+    // }
 
     const items = await prisma.item.findMany({
       where: whereClause,
@@ -59,12 +68,35 @@ export async function GET(request: NextRequest) {
         { type: "asc" }, // Folders first
         { name: "asc" }, // Then alphabetical
       ],
+      // paginate only if page and limit are provided
+      ...(page && limit
+        ? {
+            skip: (parseInt(page, 10) - 1) * parseInt(limit || "10", 10),
+            take: parseInt(limit, 10),
+          }
+        : {}),
     });
 
-    const payload = items;
-    await setCache(cacheKey, payload);
+    // const payload = items;
+    // await setCache(cacheKey, payload);
 
-    return NextResponse.json(items);
+    const totalData = await prisma.item.count({
+      where: whereClause,
+    });
+
+    return NextResponse.json({
+      data: items,
+      pagination: {
+        total: totalData,
+        total_page: Math.ceil(totalData / parseInt(limit || "10", 10)),
+        ...(page && limit
+          ? {
+              page: parseInt(page || "1", 10),
+              limit: parseInt(limit || "10", 10),
+            }
+          : {}),
+      },
+    });
   } catch (error) {
     console.error("Error fetching items:", error);
     return NextResponse.json(
@@ -83,7 +115,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, type, parentId, ...itemData } = body;
+    const { name, type, isTemplate, parentId, ...itemData } = body;
 
     // Validate required fields
     if (!name || !type) {
@@ -133,30 +165,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For documents, generate mock analysis
-    let analysisData = {};
-    if (type === "document") {
-      analysisData = {
-        summary: `This document appears to be a ${
-          itemData.fileType?.includes("pdf")
-            ? "PDF report"
-            : itemData.fileType?.includes("word")
-            ? "Word document"
-            : "text file"
-        } containing business-related content.`,
-        keyPoints: JSON.stringify([
-          "Strategic business planning and market analysis",
-          "Financial projections and budget considerations",
-          "Operational efficiency recommendations",
-        ]),
-        sentiment: Math.random() > 0.5 ? "positive" : "neutral",
-        topics: JSON.stringify([
-          "Business Strategy",
-          "Financial Planning",
-          "Market Analysis",
-        ]),
-      };
-    }
+    // Remove mock analysis injection; Item no longer stores analysis fields
 
     const item = await prisma.item.create({
       data: {
@@ -165,7 +174,6 @@ export async function POST(request: NextRequest) {
         parentId: parentId || null,
         userId: (session.user as any).id,
         ...itemData,
-        ...analysisData,
       },
       include: {
         parent: true,
@@ -180,8 +188,8 @@ export async function POST(request: NextRequest) {
     });
 
     // Invalidate items caches and dashboard stats
-    await delByPattern(`items:${(session.user as any).id}:*`);
-    await delCache(`dashboard:stats:${(session.user as any).id}`);
+    // await delByPattern(`items:${(session.user as any).id}:*`);
+    // await delCache(`dashboard:stats:${(session.user as any).id}`);
 
     return NextResponse.json(item, { status: 201 });
   } catch (error) {

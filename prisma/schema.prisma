@@ -186,14 +186,7 @@ model SubscriptionPlan {
   updatedAt       DateTime @updatedAt
 }
 
-model Template {
-  id        String   @id @default(cuid())
-  name      String
-  html      String
-  thumbnail String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+
 
 
 
@@ -209,19 +202,16 @@ model Item {
   parentId    String?  // For hierarchy (both folders and documents can be in folders)
   parent      Item?    @relation("ItemHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   children    Item[]   @relation("ItemHierarchy")
+  isTemplate  Boolean  @default(false)
   
   // Document-specific fields (nullable for folders)
   fileType    String?  // MIME type for documents
   size        Int?     // File size in bytes
   content     String?  // Document content
   url         String?  // S3 URL
+  previewUrl  String?  // Optional preview URL (thumbnail or pre-signed URL)
   key         String?  // S3 key
   bucket      String?  // S3 bucket
-  summary     String?  // AI-generated summary
-  keyPoints   String?  // AI-generated key points
-  sentiment   String?  // AI sentiment analysis
-  topics      String?  // AI-generated topics
-  milvusCollectionId String? // Reference to Milvus collection
   
   color       String?  @default("#3B82F6") // Folder color
   

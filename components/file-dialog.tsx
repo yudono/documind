@@ -28,6 +28,7 @@ interface DocumentItem {
   createdAt?: string | null;
   updatedAt?: string | null;
   url?: string | null;
+  previewUrl?: string | null;
   size?: number | null;
 }
 
@@ -58,7 +59,7 @@ export function FilesDocumentsDialog({
       );
       if (!response.ok) throw new Error("Failed to fetch items");
       const data = await response.json();
-      setItems(data || []);
+      setItems(data?.data || []);
     } catch (error) {
       console.error("Error loading items:", error);
     } finally {
@@ -136,6 +137,7 @@ export function FilesDocumentsDialog({
 
           <TabsContent value="upload" className="space-y-4">
             <FileUpload
+              multiple
               onFileUpload={async (file, result) => {
                 try {
                   const itemData = {

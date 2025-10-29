@@ -101,13 +101,9 @@ export default function CreateDocumentPage() {
     size?: number;
     content?: string;
     url: any;
+    previewUrl?: string | null;
     key: any;
     bucket?: any;
-    summary?: any;
-    keyPoints?: any;
-    sentiment?: any;
-    topics?: any;
-    milvusCollectionId?: any;
     color?: string;
     deleteAt?: any;
     createdAt?: string;

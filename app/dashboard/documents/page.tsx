@@ -117,6 +117,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import ImagePreviewDialog from "@/components/image-preview-dialog";
 import PdfPreviewDialog from "@/components/pdf-preview-dialog";
+import { useSession } from "next-auth/react";
 
 interface AnalysisResult {
   summary: string;
@@ -127,14 +128,14 @@ interface AnalysisResult {
   topics: string[];
 }
 
-interface Item {
-  id: string;
+export interface Item {
+  id: string | null;
   name: string;
   type: "folder" | "document" | "table";
   userId: string;
   parentId: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
   // Document-specific fields
   content?: string | null;
   fileType?: string | null;
@@ -142,29 +143,14 @@ interface Item {
   url?: string | null;
   key?: string | null;
   bucket?: string | null;
-  summary?: string | null;
-  keyPoints?: string | null;
-  sentiment?: string | null;
-  topics?: string | null;
   // Relations
   parent?: Item | null;
   children?: Item[];
   status?: "processing" | "ready" | "error";
   preview?: string;
+  previewUrl?: string | null;
   analysis?: AnalysisResult;
-}
-
-interface Template {
-  id: string;
-  name: string;
-  description: string;
-  type: string;
-  category: string;
-  thumbnailUrl?: string;
-  isPublic: boolean;
-  downloadCount: number;
-  createdAt: string;
-  updatedAt: string;
+  isTemplate?: boolean;
 }
 
 export default function MyDocumentsPage() {
@@ -173,6 +159,10 @@ export default function MyDocumentsPage() {
 
   const currentFolderId = searchParams.get("folderId");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // userid from session or default to empty string
+  const session = useSession();
+  const userId = (session?.data?.user as any)?.id || "";
 
   // Unified state management
   const [items, setItems] = useState<Item[]>([]);
@@ -202,7 +192,7 @@ export default function MyDocumentsPage() {
       );
       if (!response.ok) throw new Error("Failed to fetch items");
       const data = await response.json();
-      setItems(data);
+      setItems(data?.data);
     } catch (error) {
       console.error("Error loading items:", error);
     } finally {
@@ -504,7 +494,7 @@ export default function MyDocumentsPage() {
             <div
               className={cn(
                 viewMode === "grid"
-                  ? "grid grid-cols-1 gap-4 lg:grid-cols-6"
+                  ? "grid grid-cols-4 gap-4 lg:grid-cols-6"
                   : "flex flex-col gap-2"
               )}
             >
@@ -604,7 +594,7 @@ export default function MyDocumentsPage() {
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => deleteItem(item.id)}
+                                  onClick={() => deleteItem(item.id!)}
                                   className="bg-red-600 hover:bg-red-700"
                                 >
                                   Delete
@@ -790,6 +780,8 @@ export default function MyDocumentsPage() {
 
       {/* Template Select Dialog */}
       <TemplateSelectDialog
+        userId={userId}
+        parentId={currentFolderId}
         open={showTemplateDialog}
         onOpenChange={setShowTemplateDialog}
         onSelect={(templateId: string | null) => {
@@ -798,7 +790,7 @@ export default function MyDocumentsPage() {
             router.push("/dashboard/documents/document?type=document");
           } else {
             router.push(
-              `/dashboard/documents/document?type=document&template=${templateId}`
+              `/dashboard/documents/document?type=document&id=${templateId}`
             );
           }
         }}

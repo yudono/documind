@@ -28,7 +28,7 @@ export async function GET() {
     }
 
     const channels = Array.isArray(data?.data)
-      ? data.data.map((ch: any) => ({
+      ? data?.data.map((ch: any) => ({
           code: ch.code,
           name: ch.name,
           image: ch.icon_url,

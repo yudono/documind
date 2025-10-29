@@ -53,7 +53,7 @@ export default function ChartVisual({
   linkedResource,
 }: ChartVisualProps) {
   const labels = Array.isArray(data?.labels) ? data.labels : [];
-  const datasets = Array.isArray(data?.datasets) ? data.datasets : [];
+  const datasets = Array.isArray(data?.datasets) ? data?.datasets : [];
 
   // Build config for ChartContainer (maps series keys to colors/labels)
   const config = (() => {

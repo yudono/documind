@@ -98,6 +98,7 @@ interface Document {
   createdAt?: string | null;
   updatedAt?: string | null;
   url?: string | null;
+  previewUrl?: string | null;
   size?: number | null;
 }
 
