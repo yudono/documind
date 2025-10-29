@@ -9,6 +9,7 @@ import { Providers } from "@/components/providers";
 import { Toaster } from "@/components/ui/sonner";
 import Script from "next/script";
 import GATracker from "@/components/analytics/ga-tracker";
+import { Suspense } from "react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -36,7 +37,7 @@ export default function RootLayout({
           <Script id="ga-init" strategy="afterInteractive">
             {`
               window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
+              function gtag(){dataLayer.push(arguments);} 
               gtag('js', new Date());
               gtag('config', '${process.env.NEXT_PUBLIC_GA_ID || "G-884EFRLQ06"}', {
                 page_path: window.location.pathname,
@@ -44,7 +45,10 @@ export default function RootLayout({
               });
             `}
           </Script>
-          <GATracker />
+          {/* Wrap client tracker using usePathname/useSearchParams in Suspense to satisfy Next CSR bailout requirements */}
+          <Suspense fallback={null}>
+            <GATracker />
+          </Suspense>
         </Providers>
       </body>
     </html>
