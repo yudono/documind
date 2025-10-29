@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const deleted = searchParams.get("deleted"); // get filter ?deleted=true
     const page = searchParams.get("page");
     const limit = searchParams.get("limit");
+    const search = searchParams.get("search"); // search
 
     const whereClause: any = {
       parentId: parentId || null,
@@ -42,6 +43,14 @@ export async function GET(request: NextRequest) {
       whereClause.type = type;
     } else {
       whereClause.type = "document";
+    }
+
+    // search
+    if (search) {
+      whereClause.name = {
+        contains: search,
+        mode: "insensitive",
+      };
     }
 
     // const cacheKey = `items:${(session.user as any).id}:${parentId || "root"}:${
