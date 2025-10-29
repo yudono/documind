@@ -2,17 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
-}
-
 @layer base {
   :root {
-    --background: 240 20% 99%;
+    /* --background: 240 20% 99%; */
+    /* background is white */
+    --background: 0 0% 100%;
     --foreground: 240 10% 10%;
 
     --card: 0 0% 100%;

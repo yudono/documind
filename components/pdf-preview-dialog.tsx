@@ -13,9 +13,9 @@ type PdfPreviewDialogProps = {
 export default function PdfPreviewDialog({ open, onOpenChange, url, title }: PdfPreviewDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
+      <DialogContent className="max-w-5xl glass">
         <DialogHeader>
-          <DialogTitle>{title || "PDF Preview"}</DialogTitle>
+          <DialogTitle className="font-display">{title || "PDF Preview"}</DialogTitle>
         </DialogHeader>
         <div className="w-full h-[75vh]">
           {url ? (

@@ -84,9 +84,9 @@ export default function TemplateSelectDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl">
+      <DialogContent className="max-w-6xl glass">
         <DialogHeader>
-          <DialogTitle>Select a Template</DialogTitle>
+          <DialogTitle className="font-display">Select a Template</DialogTitle>
           <DialogDescription>
             Choose a template to start from, or select Blank.
           </DialogDescription>
@@ -131,12 +131,12 @@ export default function TemplateSelectDialog({
                   onClick={() => onSelect(t.id)}
                   className="cursor-pointer group"
                 >
-                  <div className="flex flex-col items-center justify-center rounded-lg group-hover:border-2 group-hover:border-blue-500 rounded-lg h-48">
+                  <div className="flex flex-col items-center justify-center h-48 rounded-xl glass border-2 hover:border-primary/20 transition-all duration-300 hover:shadow-lg">
                     {t.id ? (
                       <img
                         src={t?.previewUrl || "/placeholder.svg"}
                         alt={t.name}
-                        className="w-full h-48 object-cover rounded border"
+                        className="w-full h-48 object-cover rounded-xl border"
                       />
                     ) : (
                       <File className="w-10 h-10 text-blue-600" />
@@ -173,7 +173,7 @@ export default function TemplateSelectDialog({
               </Button>
             </div>
           </div>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" className="glass" onClick={() => onOpenChange(false)}>
             Close
           </Button>
         </div>

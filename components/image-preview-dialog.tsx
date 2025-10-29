@@ -13,11 +13,11 @@ type ImagePreviewDialogProps = {
 export default function ImagePreviewDialog({ open, onOpenChange, url, title }: ImagePreviewDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-4xl glass">
         <DialogHeader>
-          <DialogTitle>{title || "Image Preview"}</DialogTitle>
+          <DialogTitle className="font-display">{title || "Image Preview"}</DialogTitle>
         </DialogHeader>
-        <div className="w-full h-[70vh] flex items-center justify-center bg-muted">
+        <div className="w-full h-[70vh] flex items-center justify-center glass rounded-xl">
           {url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={url} alt={title || "Preview"} className="max-w-full max-h-full object-contain" />

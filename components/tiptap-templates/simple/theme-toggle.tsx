@@ -12,9 +12,9 @@ import { SunIcon } from "@/components/tiptap-icons/sun-icon"
 export function ThemeToggle() {
   const [isDarkMode, setIsDarkMode] = React.useState<boolean>(false)
 
-  // Force light mode by default and allow manual toggle
+  // Force light mode regardless of system preference or toggles
   React.useEffect(() => {
-    document.documentElement.classList.toggle("dark", isDarkMode)
+    document.documentElement.classList.remove("dark")
   }, [isDarkMode])
 
   const toggleDarkMode = () => setIsDarkMode((isDark) => !isDark)
@@ -22,14 +22,10 @@ export function ThemeToggle() {
   return (
     <Button
       onClick={toggleDarkMode}
-      aria-label={`Switch to ${isDarkMode ? "light" : "dark"} mode`}
+      aria-label={"Light mode"}
       data-style="ghost"
     >
-      {isDarkMode ? (
-        <MoonStarIcon className="tiptap-button-icon" />
-      ) : (
-        <SunIcon className="tiptap-button-icon" />
-      )}
+      <SunIcon className="tiptap-button-icon" />
     </Button>
   )
 }

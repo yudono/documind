@@ -90,12 +90,12 @@ export default function ResourceFile({
 
   return (
     <div
-      className={`mt-3 p-3 bg-background border rounded-lg ${className ?? ""}`}
+      className={`mt-3 p-3 glass border-2 rounded-xl hover:shadow-lg transition-all ${className ?? ""}`}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <FileText className="h-5 w-5 text-primary" />
+          <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center">
+            <FileText className="h-5 w-5 text-white" />
           </div>
           <div>
             <p className="font-medium text-sm">{resource?.name}</p>
@@ -109,7 +109,7 @@ export default function ResourceFile({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 glass"
                     onClick={handleDownload}
                   >
                     <Download className="h-4 w-4" />
@@ -122,7 +122,7 @@ export default function ResourceFile({
             <Button
               variant="outline"
               size="sm"
-              className="h-8 w-8 p-0"
+              className="h-8 w-8 p-0 glass"
               onClick={handleDownload}
             >
               <Download className="h-4 w-4" />

@@ -32,9 +32,9 @@ export default function CreateFolderDialog({
 }: CreateFolderDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="glass">
         <DialogHeader>
-          <DialogTitle>Create New Folder</DialogTitle>
+          <DialogTitle className="font-display">Create New Folder</DialogTitle>
           <DialogDescription>
             Enter a name for your new folder.
           </DialogDescription>
@@ -56,6 +56,7 @@ export default function CreateFolderDialog({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={isLoading}
+            className="glass"
           >
             Close{" "}
             {isLoading && <RefreshCw size={14} className="ml-4 animate-spin" />}
@@ -63,6 +64,7 @@ export default function CreateFolderDialog({
           <Button
             onClick={onCreate}
             disabled={!newFolderName.trim() || isLoading}
+            className="gradient-primary text-white border-0 shadow-lg hover:shadow-glow"
           >
             {isLoading ? "Creating" : "Create Folder"}
             {isLoading && <RefreshCw size={14} className="ml-4 animate-spin" />}

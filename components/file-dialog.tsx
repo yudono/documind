@@ -117,13 +117,13 @@ export function FilesDocumentsDialog({
           <File className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-6xl overflow-y-auto">
+      <DialogContent className="max-w-6xl glass overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Files & Documents</DialogTitle>
+          <DialogTitle className="font-display">Files & Documents</DialogTitle>
         </DialogHeader>
         <Tabs defaultValue="select" className="w-full">
           <div className="flex justify-between">
-            <TabsList className="grid w-full grid-cols-2 w-80">
+            <TabsList className="grid w-full grid-cols-2 w-80 glass">
               <TabsTrigger value="upload">Upload Files</TabsTrigger>
               <TabsTrigger value="select">Select Documents</TabsTrigger>
             </TabsList>
@@ -131,7 +131,7 @@ export function FilesDocumentsDialog({
               placeholder="Search documents..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 w-80"
+              className="pl-10 w-80 glass"
             />
           </div>
 
@@ -240,7 +240,7 @@ export function FilesDocumentsDialog({
                             <div
                               key={doc.id}
                               className={cn(
-                                "relative rounded-lg p-4 cursor-pointer transition-all duration-200 group border-2 bg-gray-50 hover:bg-blue-100 border-transparent hover:border-gray-200 flex items-center justify-center",
+                                "relative rounded-xl p-4 cursor-pointer transition-all duration-200 group glass border-2 hover:border-primary/20 hover:shadow-lg flex items-center justify-center",
                                 isSelected && "border-primary bg-primary/10"
                               )}
                               onClick={() => toggleSelect(doc)}
@@ -304,7 +304,7 @@ export function FilesDocumentsDialog({
         </Tabs>
         <div className="flex justify-end gap-2 mt-4">
           <DialogClose asChild>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="glass">
               Cancel
             </Button>
           </DialogClose>
@@ -313,6 +313,7 @@ export function FilesDocumentsDialog({
               size="sm"
               disabled={selectedDocuments.length === 0}
               onClick={handleSubmit}
+              className="gradient-primary text-white border-0 shadow-lg hover:shadow-glow"
             >
               Submit
             </Button>

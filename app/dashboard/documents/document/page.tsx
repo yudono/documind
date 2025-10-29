@@ -64,7 +64,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import HistoryDialog from "@/components/history-dialog";
 import { toast } from "sonner";
 
 interface Message {

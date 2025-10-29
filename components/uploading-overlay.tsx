@@ -14,14 +14,14 @@ export default function UploadingOverlay({ status, error }: UploadingOverlayProp
   const isError = status === "error";
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center">
-      <div className="bg-white rounded-xl shadow-xl p-6 w-[380px]">
+    <div className="fixed inset-0 z-[100] bg-gradient-to-br from-primary/20 via-background/40 to-secondary/20 backdrop-blur-sm flex items-center justify-center">
+      <div className="glass rounded-2xl shadow-lg border-2 border-primary/20 p-6 w-[420px]">
         <div className="flex items-center gap-3">
-          {isUploading && <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />}
-          {isSuccess && <CheckCircle2 className="w-6 h-6 text-green-600" />}
+          {isUploading && <Loader2 className="w-6 h-6 text-primary animate-spin" />}
+          {isSuccess && <CheckCircle2 className="w-6 h-6 text-secondary" />}
           {isError && <XCircle className="w-6 h-6 text-red-600" />}
           <div className="flex-1">
-            <div className="font-semibold">
+            <div className="font-semibold font-display">
               {isUploading && "Uploading documents..."}
               {isSuccess && "Upload complete"}
               {isError && "Upload failed"}
@@ -35,7 +35,7 @@ export default function UploadingOverlay({ status, error }: UploadingOverlayProp
         </div>
         {isUploading && (
           <div className="mt-4 w-full h-2 bg-muted rounded-full overflow-hidden">
-            <div className="h-full w-1/2 bg-blue-600 animate-[progress_1.2s_ease_infinite]" />
+            <div className="h-full w-1/2 bg-gradient-to-r from-primary to-secondary animate-[progress_1.2s_ease_infinite]" />
           </div>
         )}
         <style jsx>{`
