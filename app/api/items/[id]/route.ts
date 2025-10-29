@@ -18,22 +18,49 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const item = await prisma.item.findFirst({
+    const existItem = await prisma.item.findFirst({
       where: {
         id: params.id,
-        userId: (session.user as any).id,
-      },
-      include: {
-        parent: true,
-        children: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-          },
-        },
       },
     });
+
+    let item;
+
+    // if existItem.isTemplate, return existItem
+    if (existItem?.isTemplate) {
+      item = await prisma.item.findFirst({
+        where: {
+          id: params.id,
+        },
+        include: {
+          parent: true,
+          children: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+            },
+          },
+        },
+      });
+    } else {
+      item = await prisma.item.findFirst({
+        where: {
+          id: params.id,
+          userId: (session.user as any).id,
+        },
+        include: {
+          parent: true,
+          children: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+            },
+          },
+        },
+      });
+    }
 
     if (!item) {
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
