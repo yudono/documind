@@ -4,13 +4,36 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 // import { getCache, setCache, delByPattern, delCache } from "@/lib/cache";
 
+type AuthError = { status: number; body: any };
+type AuthResult = { userId: string } | { error: AuthError };
+
+async function getAuthedUserId(): Promise<AuthResult> {
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email;
+  if (!email) {
+    return { error: { status: 401, body: { error: "Unauthorized" } } };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+
+  if (!user) {
+    return { error: { status: 404, body: { error: "User not found" } } };
+  }
+
+  return { userId: user.id };
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user || !(session.user as any).id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const authResult = await getAuthedUserId();
+    if ("error" in authResult) {
+      const err = authResult.error;
+      return NextResponse.json(err.body, { status: err.status });
     }
+    const { userId } = authResult;
 
     const { searchParams } = new URL(request.url);
     const parentId = searchParams.get("parentId");
@@ -29,7 +52,7 @@ export async function GET(request: NextRequest) {
       whereClause.isTemplate = true;
     } else {
       whereClause.isTemplate = false;
-      whereClause.userId = (session.user as any).id;
+      whereClause.userId = userId;
     }
 
     // deleteAt null or not
@@ -117,11 +140,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user || !(session.user as any).id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const authResult = await getAuthedUserId();
+    if ("error" in authResult) {
+      const err = authResult.error;
+      return NextResponse.json(err.body, { status: err.status });
     }
+    const { userId } = authResult;
 
     const body = await request.json();
     const { name, type, isTemplate, parentId, ...itemData } = body;
@@ -157,7 +181,7 @@ export async function POST(request: NextRequest) {
       where: {
         name,
         parentId: parentId || null,
-        userId: (session.user as any).id,
+        userId: userId,
         type,
         deleteAt: null,
       },
@@ -181,7 +205,7 @@ export async function POST(request: NextRequest) {
         name,
         type,
         parentId: parentId || null,
-        userId: (session.user as any).id,
+        userId: userId,
         ...itemData,
       },
       include: {
@@ -197,8 +221,8 @@ export async function POST(request: NextRequest) {
     });
 
     // Invalidate items caches and dashboard stats
-    // await delByPattern(`items:${(session.user as any).id}:*`);
-    // await delCache(`dashboard:stats:${(session.user as any).id}`);
+    // await delByPattern(`items:${userId}:*`);
+    // await delCache(`dashboard:stats:${userId}`);
 
     return NextResponse.json(item, { status: 201 });
   } catch (error) {

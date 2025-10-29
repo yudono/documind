@@ -4,20 +4,26 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCache, setCache, delCache } from "@/lib/cache";
 
+async function getAuthedUser() {
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email ?? null;
+  if (!email)
+    return {
+      session,
+      email: null as string | null,
+      userId: null as string | null,
+    };
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+  return { session, email, userId: user?.id ?? null };
+}
+
 // GET /api/plugins - list plugins with user activation state
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    const userEmail = session?.user?.email ?? null;
-    let userId: string | null = (session?.user as any)?.id ?? null;
-
-    if (!userId && userEmail) {
-      const user = await prisma.user.findUnique({
-        where: { email: userEmail },
-        select: { id: true },
-      });
-      userId = user?.id ?? null;
-    }
+    const { userId } = await getAuthedUser();
 
     const cacheKey = `plugins:list:${userId ?? "anon"}`;
     const cached = await getCache<{ plugins: any[] }>(cacheKey);
@@ -28,6 +34,14 @@ export async function GET() {
     const [plugins, userPlugins] = await Promise.all([
       prisma.plugin.findMany({
         orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          href: true,
+          description: true,
+          isActive: true,
+        },
       }),
       userId
         ? prisma.userPlugin.findMany({
@@ -43,7 +57,7 @@ export async function GET() {
     }
 
     const result = plugins.map((p: any) => {
-      const userActive = userId ? userPluginMap[p.id] ?? true : true;
+      const userActive = userId ? userPluginMap[p.id] ?? false : false;
       const effectiveActive = p.isActive && userActive;
       return {
         id: p.id,
@@ -74,16 +88,11 @@ export async function GET() {
 // PATCH /api/plugins - toggle user activation for a plugin
 export async function PATCH(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    const userEmail = session?.user?.email ?? null;
-    if (!userEmail) {
+    const { email, userId } = await getAuthedUser();
+    if (!email)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await prisma.user.findUnique({ where: { email: userEmail } });
-    if (!user) {
+    if (!userId)
       return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
 
     const body = await req.json();
     const { slug, isActive } = body as { slug?: string; isActive?: boolean };
@@ -95,26 +104,45 @@ export async function PATCH(req: Request) {
       );
     }
 
-    const plugin = await prisma.plugin.findUnique({ where: { slug } });
+    const plugin = await prisma.plugin.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        href: true,
+        description: true,
+        isActive: true,
+      },
+    });
     if (!plugin) {
       return NextResponse.json({ error: "Plugin not found" }, { status: 404 });
     }
 
-    const userPlugin = await prisma.userPlugin.upsert({
-      where: { userId_pluginId: { userId: user.id, pluginId: plugin.id } },
-      create: { userId: user.id, pluginId: plugin.id, isActive },
-      update: { isActive },
+    // Enforce global availability: if plugin is globally OFF, user state must be OFF
+    const desiredActive = plugin.isActive ? isActive : false;
+
+    const existing = await prisma.userPlugin.findUnique({
+      where: { userId_pluginId: { userId, pluginId: plugin.id } },
     });
+    const userPlugin = existing
+      ? await prisma.userPlugin.update({
+          where: { userId_pluginId: { userId, pluginId: plugin.id } },
+          data: { isActive: desiredActive },
+        })
+      : await prisma.userPlugin.create({
+          data: { userId, pluginId: plugin.id, isActive: desiredActive },
+        });
 
     const nextUserActive = userPlugin.isActive;
     const effectiveActive = plugin.isActive && nextUserActive;
 
     // Invalidate cache for this user
-    await delCache(`plugins:list:${user.id}`);
+    await delCache(`plugins:list:${userId}`);
 
     // Simpan state per-user per-plugin di cache
     await setCache(
-      `plugin:state:${user.id}:${plugin.slug}`,
+      `plugin:state:${userId}:${plugin.slug}`,
       {
         isActiveUser: userPlugin.isActive,
         isActiveGlobal: plugin.isActive,
@@ -131,7 +159,7 @@ export async function PATCH(req: Request) {
         name: plugin.name,
         slug: plugin.slug,
         href: plugin.href,
-        description: (plugin as any).description ?? null,
+        description: plugin.description ?? null,
         isActiveGlobal: plugin.isActive,
         isActiveUser: nextUserActive,
         effectiveActive,

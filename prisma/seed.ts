@@ -147,6 +147,60 @@ async function main() {
       href: "/dashboard/forms",
       description: "Create and process forms; route submissions to workflows.",
     },
+    // remove ai  remove bg
+    {
+      name: "Remove AI",
+      href: "/dashboard/removal",
+      description: "Integrate Removal AI for image and video processing.",
+    },
+    // e sign
+    {
+      name: "e Sign",
+      href: "/dashboard/esign",
+      description: "Integrate e-signing for documents and agreements.",
+    },
+    // split pdf
+    {
+      name: "Split PDF",
+      href: "/dashboard/split-pdf",
+      description: "Split PDF documents into individual pages.",
+    },
+    // compress pdf
+    {
+      name: "Compress PDF",
+      href: "/dashboard/compress-pdf",
+      description: "Compress PDF documents to reduce file size.",
+    },
+    // compress image
+    {
+      name: "Compress Image",
+      href: "/dashboard/compress-image",
+      description: "Compress images to reduce file size.",
+    },
+    // crop image
+    {
+      name: "Crop Image",
+      href: "/dashboard/crop-image",
+      description: "Crop images to remove unnecessary parts.",
+    },
+    // resize image
+    {
+      name: "Resize Image",
+      href: "/dashboard/resize-image",
+      description: "Resize images to change dimensions.",
+    },
+    // transcript video
+    {
+      name: "Transcript Video",
+      href: "/dashboard/transcript-video",
+      description: "Transcribe video content into text.",
+    },
+    // image generator
+    {
+      name: "Image Generator",
+      href: "/dashboard/image-generator",
+      description: "Generate images using AI models.",
+    },
   ].map((p) => ({
     ...p,
     slug: p.href.split("/").filter(Boolean).pop()!,

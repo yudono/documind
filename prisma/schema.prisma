@@ -246,7 +246,7 @@ model UserPlugin {
   id        String   @id @default(cuid())
   userId    String
   pluginId  String
-  isActive  Boolean  @default(true)
+  isActive  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

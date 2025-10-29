@@ -51,6 +51,39 @@ const PLUGIN_NAV_ITEMS: Record<string, INavigationItem> = {
     icon: DriveIcon,
   },
   forms: { name: "Form Integration", href: "/dashboard/forms", icon: FormIcon },
+  removal: { name: "Remove AI", href: "/dashboard/removal", icon: Box },
+  esign: { name: "e Sign", href: "/dashboard/esign", icon: Box },
+  "split-pdf": { name: "Split PDF", href: "/dashboard/split-pdf", icon: Box },
+  "compress-pdf": {
+    name: "Compress PDF",
+    href: "/dashboard/compress-pdf",
+    icon: Box,
+  },
+  "compress-image": {
+    name: "Compress Image",
+    href: "/dashboard/compress-image",
+    icon: Box,
+  },
+  "crop-image": {
+    name: "Crop Image",
+    href: "/dashboard/crop-image",
+    icon: Box,
+  },
+  "resize-image": {
+    name: "Resize Image",
+    href: "/dashboard/resize-image",
+    icon: Box,
+  },
+  "transcript-video": {
+    name: "Transcript Video",
+    href: "/dashboard/transcript-video",
+    icon: Box,
+  },
+  "image-generator": {
+    name: "Image Generator",
+    href: "/dashboard/image-generator",
+    icon: Box,
+  },
 };
 
 export function DashboardSidebar() {
@@ -84,9 +117,10 @@ export function DashboardSidebar() {
         if (!res.ok) return;
         const data = await res.json();
         const activeItems: INavigationItem[] = (data.plugins || [])
-          .filter((p: any) => p.effectiveActive)
+          .filter((p: any) => p.isActiveUser)
           .map((p: any) => PLUGIN_NAV_ITEMS[p.slug])
           .filter(Boolean);
+
         setPluginItems(activeItems);
       } catch (e) {
         console.error("Failed to load user plugins", e);
@@ -111,10 +145,14 @@ export function DashboardSidebar() {
         },
       ],
     },
-    {
-      group: "Plugin",
-      items: pluginItems,
-    },
+    ...(pluginItems.length > 0
+      ? [
+          {
+            group: "Plugin",
+            items: pluginItems,
+          },
+        ]
+      : []),
     {
       group: "Setting",
       items: [
