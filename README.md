@@ -28,7 +28,7 @@ npm install
 
 ### 2. Environment Variables
 
-Create a `.env` file in the root directory with the following variables:
+Create a `.env` file in the root directory with the following variables (see `.env.example` for a complete reference):
 
 ```env
 # NextAuth Configuration
@@ -41,6 +41,10 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret
 
 # Database
 DATABASE_URL="postgresql://username:password@host:port/database"
+
+# Google Analytics (Public)
+# This value is embedded in the client bundle, do not store secrets here.
+NEXT_PUBLIC_GA_ID=G-884EFRLQ06
 ```
 
 ### 3. Google OAuth Setup
@@ -185,6 +189,7 @@ https://yourdomain.com/api/auth/callback/google
 ### Development Issues
 1. **Environment variables not loaded**: Restart your development server
 2. **Build errors**: Run `npm run build` to check for TypeScript errors
+3. **Analytics not tracking**: Ensure `NEXT_PUBLIC_GA_ID` is set locally (`.env`) and on Vercel (Project Settings → Environment Variables), then redeploy.
 
 ## Contributing
 
