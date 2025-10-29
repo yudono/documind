@@ -32,7 +32,7 @@ export default function CreateFolderDialog({
 }: CreateFolderDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle className="font-display">Create New Folder</DialogTitle>
           <DialogDescription>

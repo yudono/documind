@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
+import { FullPageLoader, LoadingSpinner } from "@/components/ui/loading-spinner";
 
 export default function DashboardLayout({
   children,
@@ -20,11 +21,7 @@ export default function DashboardLayout({
   }, [session, status, router]);
 
   if (status === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <FullPageLoader><LoadingSpinner size={48} /></FullPageLoader>;
   }
 
   if (!session) {

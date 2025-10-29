@@ -1,7 +1,12 @@
 "use client";
 
 import React from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type PdfPreviewDialogProps = {
   open: boolean;
@@ -10,12 +15,19 @@ type PdfPreviewDialogProps = {
   title?: string;
 };
 
-export default function PdfPreviewDialog({ open, onOpenChange, url, title }: PdfPreviewDialogProps) {
+export default function PdfPreviewDialog({
+  open,
+  onOpenChange,
+  url,
+  title,
+}: PdfPreviewDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl glass">
+      <DialogContent className="max-w-5xl">
         <DialogHeader>
-          <DialogTitle className="font-display">{title || "PDF Preview"}</DialogTitle>
+          <DialogTitle className="font-display">
+            {title || "PDF Preview"}
+          </DialogTitle>
         </DialogHeader>
         <div className="w-full h-[75vh]">
           {url ? (
@@ -23,7 +35,9 @@ export default function PdfPreviewDialog({ open, onOpenChange, url, title }: Pdf
               <iframe src={url} className="w-full h-full" />
             </object>
           ) : (
-            <div className="text-sm text-muted-foreground">No PDF to display</div>
+            <div className="text-sm text-muted-foreground">
+              No PDF to display
+            </div>
           )}
         </div>
       </DialogContent>

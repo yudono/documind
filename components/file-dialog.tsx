@@ -117,13 +117,13 @@ export function FilesDocumentsDialog({
           <File className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-6xl glass overflow-y-auto">
+      <DialogContent className="max-w-6xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display">Files & Documents</DialogTitle>
         </DialogHeader>
         <Tabs defaultValue="select" className="w-full">
           <div className="flex justify-between">
-            <TabsList className="grid w-full grid-cols-2 w-80 glass">
+            <TabsList className="grid w-full grid-cols-2 w-80">
               <TabsTrigger value="upload">Upload Files</TabsTrigger>
               <TabsTrigger value="select">Select Documents</TabsTrigger>
             </TabsList>

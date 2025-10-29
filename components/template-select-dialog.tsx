@@ -84,7 +84,7 @@ export default function TemplateSelectDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl glass">
+      <DialogContent className="max-w-6xl">
         <DialogHeader>
           <DialogTitle className="font-display">Select a Template</DialogTitle>
           <DialogDescription>
@@ -173,7 +173,11 @@ export default function TemplateSelectDialog({
               </Button>
             </div>
           </div>
-          <Button variant="outline" className="glass" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            className="glass"
+            onClick={() => onOpenChange(false)}
+          >
             Close
           </Button>
         </div>
