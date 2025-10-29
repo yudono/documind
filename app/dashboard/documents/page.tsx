@@ -790,7 +790,7 @@ export default function MyDocumentsPage() {
             router.push("/dashboard/documents/document?type=document");
           } else {
             router.push(
-              `/dashboard/documents/document?type=document&id=${templateId}`
+              `/dashboard/documents/document?type=document&templateId=${templateId}`
             );
           }
         }}

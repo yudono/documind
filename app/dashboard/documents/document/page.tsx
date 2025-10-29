@@ -89,6 +89,7 @@ export default function CreateDocumentPage() {
   const searchParams = useSearchParams();
 
   const documentId = searchParams.get("id") as string;
+  const templateId = searchParams.get("templateId") as string;
   const mode = !!documentId ? "edit" : "create";
 
   const [documentItem, setDocumentItem] = useState<{
@@ -148,6 +149,32 @@ export default function CreateDocumentPage() {
       autoSaveTimeoutRef.current = null;
     }
   }, [autoSaveEnabled]);
+
+  useEffect(() => {
+    if (templateId) {
+      // endpoint duplicate from template /api/items/templateId/duplicate
+      const duplicateDocument = async () => {
+        try {
+          const response = await fetch(`/api/items/${templateId}/duplicate`);
+          // if success redirect to new id
+          if (response.ok) {
+            const data = await response.json();
+            router.push(`/dashboard/documents/document?id=${data.id}`);
+          } else {
+            console.error("Failed to duplicate document");
+            router.push("/dashboard/documents");
+          }
+        } catch (error) {
+          console.error("Error duplicating document:", error);
+          router.push("/dashboard/documents");
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      duplicateDocument();
+    }
+  }, [templateId]);
 
   // Load document data for edit mode
   useEffect(() => {

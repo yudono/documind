@@ -24,43 +24,22 @@ export async function GET(
       },
     });
 
-    let item;
-
-    // if existItem.isTemplate, return existItem
-    if (existItem?.isTemplate) {
-      item = await prisma.item.findFirst({
-        where: {
-          id: params.id,
-        },
-        include: {
-          parent: true,
-          children: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-            },
+    const item = await prisma.item.findFirst({
+      where: {
+        id: params.id,
+        userId: (session.user as any).id,
+      },
+      include: {
+        parent: true,
+        children: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
           },
         },
-      });
-    } else {
-      item = await prisma.item.findFirst({
-        where: {
-          id: params.id,
-          userId: (session.user as any).id,
-        },
-        include: {
-          parent: true,
-          children: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-            },
-          },
-        },
-      });
-    }
+      },
+    });
 
     if (!item) {
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
