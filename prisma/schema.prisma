@@ -59,6 +59,11 @@ model User {
 
   // Relations to plugins
   userPlugins   UserPlugin[]
+
+  // Consultant feature relations
+  consultant     Consultant?
+  clientBookings ConsultantBooking[] @relation("ClientBookings")
+  clientReviews  ConsultantReview[]  @relation("ClientReviews")
 }
 
 model VerificationToken {
@@ -254,4 +259,148 @@ model UserPlugin {
   plugin Plugin @relation(fields: [pluginId], references: [id], onDelete: Cascade)
 
   @@unique([userId, pluginId])
+}
+
+// Consultant feature models
+model ConsultantCategory {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  description String?
+  icon        String?
+  color       String?      @default("#3B82F6")
+  isActive    Boolean      @default(true)
+  sortOrder   Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  consultants Consultant[]
+}
+
+model Consultant {
+  id                String              @id @default(cuid())
+  userId            String              @unique
+  fullName          String
+  title             String
+  bio               String?
+  profileImage      String?
+  experience        Int                 @default(0)
+  education         String?
+  certifications    Json?
+  languages         Json?
+  categoryId        String
+  specializations   Json?
+  licenseNumber     String?
+  hourlyRate        Float
+  currency          String              @default("IDR")
+  availability      Json?
+  responseTime      String?
+  consultationTypes Json?
+  isVerified        Boolean             @default(false)
+  verificationDate  DateTime?
+  verificationDocs  Json?
+  status            String              @default("pending")
+  totalBookings     Int                 @default(0)
+  completedBookings Int                 @default(0)
+  averageRating     Float               @default(0)
+  totalReviews      Int                 @default(0)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  category          ConsultantCategory  @relation(fields: [categoryId], references: [id])
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings          ConsultantBooking[]
+  reviews           ConsultantReview[]
+  availableSlots    ConsultantSlot[]
+
+  @@index([categoryId])
+  @@index([isVerified, status])
+  @@index([averageRating])
+}
+
+model ConsultantSlot {
+  id           String     @id @default(cuid())
+  consultantId String
+  dayOfWeek    Int
+  startTime    String
+  endTime      String
+  isAvailable  Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  consultant   Consultant @relation(fields: [consultantId], references: [id], onDelete: Cascade)
+
+  @@index([consultantId, dayOfWeek])
+}
+
+model ConsultantBooking {
+  id                 String             @id @default(cuid())
+  clientId           String
+  consultantId       String
+  sessionDate        DateTime
+  sessionDuration    Int                @default(60)
+  sessionType        String
+  sessionUrl         String?
+  title              String
+  description        String?
+  documents          Json?
+  totalAmount        Float
+  currency           String             @default("IDR")
+  paymentStatus      String             @default("pending")
+  paymentId          String?
+  status             String             @default("pending")
+  cancellationReason String?
+  meetingNotes       String?
+  followUpRequired   Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  client             User               @relation("ClientBookings", fields: [clientId], references: [id], onDelete: Cascade)
+  consultant         Consultant         @relation(fields: [consultantId], references: [id], onDelete: Cascade)
+  payment            ConsultantPayment?
+  review             ConsultantReview?
+
+  @@index([clientId])
+  @@index([consultantId])
+  @@index([sessionDate])
+  @@index([status])
+}
+
+model ConsultantReview {
+  id                    String            @id @default(cuid())
+  bookingId             String            @unique
+  clientId              String
+  consultantId          String
+  rating                Int
+  comment               String?
+  professionalismRating Int?
+  communicationRating   Int?
+  expertiseRating       Int?
+  timelinessRating      Int?
+  isPublic              Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  booking               ConsultantBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  client                User              @relation("ClientReviews", fields: [clientId], references: [id], onDelete: Cascade)
+  consultant            Consultant        @relation(fields: [consultantId], references: [id], onDelete: Cascade)
+
+  @@index([consultantId])
+  @@index([rating])
+}
+
+model ConsultantPayment {
+  id              String            @id @default(cuid())
+  bookingId       String            @unique
+  amount          Float
+  currency        String            @default("IDR")
+  paymentMethod   String
+  merchantCode    String
+  merchantName    String
+  transactionId   String?
+  paymentUrl      String?
+  status          String            @default("pending")
+  paidAt          DateTime?
+  failureReason   String?
+  gatewayResponse Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  booking         ConsultantBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([transactionId])
 }

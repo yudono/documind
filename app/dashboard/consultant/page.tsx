@@ -1,17 +1,40 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Search, Filter, Star, Clock, Video, Phone, MessageCircle, User } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Slider } from '@/components/ui/slider';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import {
+  Search,
+  Filter,
+  Star,
+  Clock,
+  Video,
+  Phone,
+  MessageCircle,
+  User,
+  Icon,
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import dynamicIconImports from "lucide-react/dynamicIconImports";
+import DynamicIcon from "@/components/icons/dynamic-icon";
 interface ConsultantCategory {
   id: string;
   name: string;
@@ -42,11 +65,11 @@ export default function ConsultantsPage() {
   const [consultants, setConsultants] = useState<Consultant[]>([]);
   const [categories, setCategories] = useState<ConsultantCategory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [priceRange, setPriceRange] = useState([0, 1000000]);
-  const [sortBy, setSortBy] = useState('rating');
-  const [consultationType, setConsultationType] = useState<string>('all');
+  const [sortBy, setSortBy] = useState("rating");
+  const [consultationType, setConsultationType] = useState<string>("all");
 
   useEffect(() => {
     fetchConsultants();
@@ -55,13 +78,13 @@ export default function ConsultantsPage() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/consultants/categories');
+      const response = await fetch("/api/consultants/categories");
       if (response.ok) {
-        const data = await response.json();
+        const { data } = await response.json();
         setCategories(data);
       }
     } catch (error) {
-      console.error('Error fetching categories:', error);
+      console.error("Error fetching categories:", error);
     }
   };
 
@@ -70,50 +93,42 @@ export default function ConsultantsPage() {
       setLoading(true);
       const params = new URLSearchParams({
         search: searchQuery,
-        category: selectedCategory,
+        // category: selectedCategory,
         minPrice: priceRange[0].toString(),
         maxPrice: priceRange[1].toString(),
         sortBy,
-        consultationType,
+        // consultationType,
       });
 
       const response = await fetch(`/api/consultants?${params}`);
       if (response.ok) {
-        const data = await response.json();
-        setConsultants(data.consultants || []);
+        const { data } = await response.json();
+        setConsultants(data || []);
       }
     } catch (error) {
-      console.error('Error fetching consultants:', error);
+      console.error("Error fetching consultants:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      fetchConsultants();
-    }, 500);
-
-    return () => clearTimeout(debounceTimer);
-  }, [searchQuery, selectedCategory, priceRange, sortBy, consultationType]);
-
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
       minimumFractionDigits: 0,
     }).format(price);
   };
 
   const getConsultationTypeIcon = (type: string) => {
     switch (type) {
-      case 'video_call':
+      case "video_call":
         return <Video className="h-4 w-4" />;
-      case 'phone_call':
+      case "phone_call":
         return <Phone className="h-4 w-4" />;
-      case 'chat':
+      case "chat":
         return <MessageCircle className="h-4 w-4" />;
-      case 'in_person':
+      case "in_person":
         return <User className="h-4 w-4" />;
       default:
         return <MessageCircle className="h-4 w-4" />;
@@ -122,14 +137,14 @@ export default function ConsultantsPage() {
 
   const getConsultationTypeLabel = (type: string) => {
     switch (type) {
-      case 'video_call':
-        return 'Video Call';
-      case 'phone_call':
-        return 'Phone Call';
-      case 'chat':
-        return 'Chat';
-      case 'in_person':
-        return 'Tatap Muka';
+      case "video_call":
+        return "Video Call";
+      case "phone_call":
+        return "Phone Call";
+      case "chat":
+        return "Chat";
+      case "in_person":
+        return "Tatap Muka";
       default:
         return type;
     }
@@ -147,7 +162,9 @@ export default function ConsultantsPage() {
             <div className="flex items-center justify-between w-full">
               <div>
                 <h1 className="font-semibold">Consultants</h1>
-                <p className="text-sm text-muted-foreground">Temukan konsultan terverifikasi untuk kebutuhan Anda</p>
+                <p className="text-sm text-muted-foreground">
+                  Temukan konsultan terverifikasi untuk kebutuhan Anda
+                </p>
               </div>
             </div>
           </div>
@@ -156,22 +173,29 @@ export default function ConsultantsPage() {
             {/* Categories */}
             <div className="mb-8">
               <h2 className="text-xl font-semibold mb-4">Kategori Konsultan</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {categories.map((category) => (
+              <div className="grid grid-cols-6 gap-4">
+                {categories.slice(0, 6).map((category) => (
                   <Card
                     key={category.id}
-                    className={`cursor-pointer transition-all hover:shadow-md glass border-2 ${selectedCategory === category.id ? 'ring-2 ring-primary/40' : ''}`}
+                    className={`cursor-pointer transition-all hover:shadow-md glass border-2 ${
+                      selectedCategory === category.id
+                        ? "ring-2 ring-primary/40"
+                        : ""
+                    }`}
                     onClick={() => setSelectedCategory(category.id)}
                   >
                     <CardContent className="p-4 text-center">
-                      <div
-                        className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center text-white"
-                        style={{ backgroundColor: category.color }}
-                      >
-                        <span className="text-xl">⚖️</span>
-                      </div>
-                      <h3 className="font-semibold text-sm mb-1">{category.name}</h3>
-                      <p className="text-xs text-muted-foreground">{category.description}</p>
+                      <img
+                        src={category.icon || "https://placehold.co/400"}
+                        className="mx-auto mb-2 w-12 h-12 rounded-full overflow-hidden object-cover"
+                        alt={category.name}
+                      />
+                      <h3 className="font-semibold text-sm mb-1">
+                        {category.name}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {category.description}
+                      </p>
                     </CardContent>
                   </Card>
                 ))}
@@ -218,8 +242,13 @@ export default function ConsultantsPage() {
                     </SheetHeader>
                     <div className="space-y-6 mt-6">
                       <div>
-                        <label className="text-sm font-medium mb-2 block">Kategori</label>
-                        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                        <label className="text-sm font-medium mb-2 block">
+                          Kategori
+                        </label>
+                        <Select
+                          value={selectedCategory}
+                          onValueChange={setSelectedCategory}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Pilih kategori" />
                           </SelectTrigger>
@@ -236,7 +265,8 @@ export default function ConsultantsPage() {
 
                       <div>
                         <label className="text-sm font-medium mb-2 block">
-                          Rentang Harga (per jam): {formatPrice(priceRange[0])} - {formatPrice(priceRange[1])}
+                          Rentang Harga (per jam): {formatPrice(priceRange[0])}{" "}
+                          - {formatPrice(priceRange[1])}
                         </label>
                         <Slider
                           value={priceRange}
@@ -249,17 +279,28 @@ export default function ConsultantsPage() {
                       </div>
 
                       <div>
-                        <label className="text-sm font-medium mb-2 block">Tipe Konsultasi</label>
-                        <Select value={consultationType} onValueChange={setConsultationType}>
+                        <label className="text-sm font-medium mb-2 block">
+                          Tipe Konsultasi
+                        </label>
+                        <Select
+                          value={consultationType}
+                          onValueChange={setConsultationType}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Pilih tipe konsultasi" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">Semua Tipe</SelectItem>
-                            <SelectItem value="video_call">Video Call</SelectItem>
-                            <SelectItem value="phone_call">Phone Call</SelectItem>
+                            <SelectItem value="video_call">
+                              Video Call
+                            </SelectItem>
+                            <SelectItem value="phone_call">
+                              Phone Call
+                            </SelectItem>
                             <SelectItem value="chat">Chat</SelectItem>
-                            <SelectItem value="in_person">Tatap Muka</SelectItem>
+                            <SelectItem value="in_person">
+                              Tatap Muka
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -292,34 +333,60 @@ export default function ConsultantsPage() {
                 <div className="text-muted-foreground mb-4">
                   <Search className="h-16 w-16 mx-auto" />
                 </div>
-                <h3 className="text-lg font-medium mb-2">Tidak ada konsultan ditemukan</h3>
-                <p className="text-muted-foreground">Coba ubah filter pencarian atau kata kunci Anda</p>
+                <h3 className="text-lg font-medium mb-2">
+                  Tidak ada konsultan ditemukan
+                </h3>
+                <p className="text-muted-foreground">
+                  Coba ubah filter pencarian atau kata kunci Anda
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {consultants.map((consultant) => (
-                  <Card key={consultant.id} className="hover:shadow-lg transition-shadow glass border-2">
+                  <Card
+                    key={consultant.id}
+                    className="hover:shadow-lg transition-shadow glass border-2"
+                  >
                     <CardContent className="p-6">
                       <div className="flex items-start space-x-4 mb-4">
                         <div className="relative">
                           <Avatar className="h-16 w-16">
-                            <AvatarImage src={consultant.profileImage} alt={consultant.fullName} />
+                            <AvatarImage
+                              src={consultant.profileImage}
+                              alt={consultant.fullName}
+                              className="w-16 h-16 rounded-full overflow-hidden object-cover"
+                            />
                             <AvatarFallback>
-                              {consultant.fullName.split(' ').map(n => n[0]).join('')}
+                              {consultant.fullName
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")}
                             </AvatarFallback>
                           </Avatar>
                           {consultant.isVerified && (
                             <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full p-1">
-                              <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              <svg
+                                className="h-3 w-3"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                  clipRule="evenodd"
+                                />
                               </svg>
                             </div>
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-lg truncate">{consultant.fullName}</h3>
-                          <p className="text-sm text-muted-foreground mb-1">{consultant.title}</p>
-                          <Badge variant="secondary" className="text-xs">
+                          <h3 className="font-semibold text-lg truncate">
+                            {consultant.fullName}
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-1">
+                            {consultant.title}
+                          </p>
+                          <Badge variant="outline" className="text-xs">
                             {consultant.category.name}
                           </Badge>
                         </div>
@@ -329,8 +396,12 @@ export default function ConsultantsPage() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-1">
                             <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            <span className="text-sm font-medium">{consultant.averageRating.toFixed(1)}</span>
-                            <span className="text-sm text-muted-foreground">({consultant.totalReviews} ulasan)</span>
+                            <span className="text-sm font-medium">
+                              {consultant.averageRating.toFixed(1)}
+                            </span>
+                            <span className="text-sm text-muted-foreground">
+                              ({consultant.totalReviews} ulasan)
+                            </span>
                           </div>
                           <div className="flex items-center space-x-1 text-sm text-muted-foreground">
                             <Clock className="h-4 w-4" />
@@ -338,36 +409,30 @@ export default function ConsultantsPage() {
                           </div>
                         </div>
 
-                        <p className="text-sm text-muted-foreground line-clamp-2">{consultant.bio}</p>
-
-                        <div className="flex flex-wrap gap-1">
-                          {consultant.specializations.slice(0, 3).map((spec, index) => (
-                            <Badge key={index} variant="outline" className="text-xs">
-                              {spec}
-                            </Badge>
-                          ))}
-                          {consultant.specializations.length > 3 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{consultant.specializations.length - 3} lainnya
-                            </Badge>
-                          )}
-                        </div>
-
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {consultant.bio}
+                        </p>
                         <div className="flex items-center justify-between pt-2 border-t">
                           <div>
-                            <div className="text-lg font-bold">{formatPrice(consultant.hourlyRate)}</div>
-                            <div className="text-xs text-muted-foreground">per jam</div>
+                            <div className="text-lg font-bold">
+                              {formatPrice(consultant.hourlyRate)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              per jam
+                            </div>
                           </div>
                           <div className="flex space-x-1">
-                            {consultant.consultationTypes.slice(0, 3).map((type, index) => (
-                              <div
-                                key={index}
-                                className="p-1 bg-muted rounded"
-                                title={getConsultationTypeLabel(type)}
-                              >
-                                {getConsultationTypeIcon(type)}
-                              </div>
-                            ))}
+                            {consultant.consultationTypes
+                              .slice(0, 3)
+                              .map((type, index) => (
+                                <div
+                                  key={index}
+                                  className="p-1 bg-muted rounded"
+                                  title={getConsultationTypeLabel(type)}
+                                >
+                                  {getConsultationTypeIcon(type)}
+                                </div>
+                              ))}
                           </div>
                         </div>
 

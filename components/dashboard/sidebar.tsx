@@ -137,6 +137,7 @@ export function DashboardSidebar() {
         { name: "My Documents", href: "/dashboard/documents", icon: FileText },
         { name: "Chat AI", href: "/dashboard/chat", icon: MessageSquare },
         { name: "Plugin", href: "/dashboard/plugin", icon: Box },
+        { name: "Consultant", href: "/dashboard/consultant", icon: Users },
         { name: "Trash", href: "/dashboard/trash", icon: Trash2 },
         {
           name: "Billing & Usage",
