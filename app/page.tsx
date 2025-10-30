@@ -1,9 +1,9 @@
-import Hero from "@/components/landing/hero";
-import Pricing from "@/components/landing/pricing";
-import Testimonials from "@/components/landing/testimonials";
-import Footer from "@/components/landing/footer";
-import Navbar from "@/components/landing/navbar";
-import Features from "@/components/landing/features";
+import Hero from "@/components/landing/Hero";
+import Pricing from "@/components/landing/Pricing";
+import Testimonials from "@/components/landing/Testimonials";
+import Footer from "@/components/landing/Footer";
+import Navbar from "@/components/landing/Navbar";
+import Features from "@/components/landing/Features";
 
 export default function Home() {
   return (

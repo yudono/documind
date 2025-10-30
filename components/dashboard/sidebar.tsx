@@ -16,6 +16,7 @@ import {
   Shield,
   Trash2,
   Box,
+  Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import N8nIcon from "../icons/n8n";
