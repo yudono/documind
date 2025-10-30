@@ -3,253 +3,336 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
+  console.log('🌱 Starting seeding...');
+  
+  // Seed Consultant Categories
+  console.log('📋 Seeding consultant categories...');
+  const categories = [
+    {
+      name: 'Lawyer',
+      description: 'Qualified legal professionals specializing in various areas of law',
+      icon: 'Scale',
+      color: '#DC2626',
+      sortOrder: 1
+    },
+    {
+      name: 'Legal Advisor',
+      description: 'Legal consultants providing advice on legal matters and compliance',
+      icon: 'FileText',
+      color: '#2563EB',
+      sortOrder: 2
+    },
+    {
+      name: 'Tax & Accounting Consultant',
+      description: 'Certified professionals for tax planning, accounting, and financial advice',
+      icon: 'Calculator',
+      color: '#059669',
+      sortOrder: 3
+    },
+    {
+      name: 'Business Licensing Expert',
+      description: 'Specialists in business permits, licensing, and regulatory compliance',
+      icon: 'Award',
+      color: '#7C3AED',
+      sortOrder: 4
+    }
+  ];
+
+  for (const category of categories) {
+    await prisma.consultantCategory.upsert({
+      where: { name: category.name },
+      update: category,
+      create: category,
+    });
+  }
+
   console.log('🌱 Starting template seeding...');
 
-  // Create dummy templates with form fields and original files
+  // Create simplified templates for current database structure
   const templates = [
     {
       name: 'Business Proposal Template',
-      description: 'Professional business proposal template with modern design and comprehensive sections for project overview, timeline, and budget.',
-      type: 'docx',
-      category: 'business',
-      thumbnail: 'https://via.placeholder.com/300x200/4F46E5/FFFFFF?text=Business+Proposal',
-      isPublic: true,
-      downloadCount: 245,
-      url: 'https://example-bucket.s3.amazonaws.com/templates/business-proposal-template.docx',
-      key: 'templates/business-proposal-template.docx',
-      bucket: 'example-bucket',
-      previewUrl: 'https://via.placeholder.com/600x800/4F46E5/FFFFFF?text=Business+Proposal+Preview',
-      instructions: 'Fill in your company details, project information, and budget to create a professional business proposal.',
-      aiPrompt: 'Create a comprehensive business proposal document for {{companyName}} to present to {{clientName}}. The proposal should include: 1) Executive Summary highlighting the project "{{projectTitle}}" 2) Detailed project description: {{projectDescription}} 3) Timeline of {{timeline}} weeks with key milestones 4) Budget breakdown totaling {{budget}} 5) Company credentials and why {{companyName}} is the best choice 6) Next steps and contact information ({{contactEmail}}). Make it professional, persuasive, and tailored to win the client\'s business. Use formal business language and include relevant industry insights.',
-      templateFields: {
-        fields: [
-          { name: 'companyName', label: 'Company Name', type: 'text', placeholder: 'Enter your company name', required: true },
-          { name: 'clientName', label: 'Client Name', type: 'text', placeholder: 'Enter client name', required: true },
-          { name: 'projectTitle', label: 'Project Title', type: 'text', placeholder: 'Enter project title', required: true },
-          { name: 'projectDescription', label: 'Project Description', type: 'textarea', placeholder: 'Describe the project in detail', required: true },
-          { name: 'budget', label: 'Budget', type: 'number', placeholder: 'Enter budget amount', required: true },
-          { name: 'timeline', label: 'Timeline (weeks)', type: 'number', placeholder: 'Enter project duration', required: true },
-          { name: 'contactEmail', label: 'Contact Email', type: 'email', placeholder: 'Enter contact email', required: true },
-          { name: 'date', label: 'Proposal Date', type: 'date', required: true }
-        ],
-        placeholders: {
-          '{{companyName}}': 'companyName',
-          '{{clientName}}': 'clientName',
-          '{{projectTitle}}': 'projectTitle',
-          '{{projectDescription}}': 'projectDescription',
-          '{{budget}}': 'budget',
-          '{{timeline}}': 'timeline',
-          '{{contactEmail}}': 'contactEmail',
-          '{{date}}': 'date'
-        }
-      }
+      thumbnail: 'https://via.placeholder.com/300x200/3B82F6/FFFFFF?text=Business+Proposal',
+      html: '<h1>Business Proposal Template</h1><p>Professional business proposal template for creating compelling project proposals.</p>'
     },
     {
       name: 'Invoice Template',
-      description: 'Professional invoice template with automatic calculations and customizable branding.',
-      type: 'docx',
-      category: 'finance',
       thumbnail: 'https://via.placeholder.com/300x200/7C2D12/FFFFFF?text=Invoice+Template',
-      isPublic: true,
-      downloadCount: 423,
-      url: 'https://example-bucket.s3.amazonaws.com/templates/invoice-template.docx',
-      key: 'templates/invoice-template.docx',
-      bucket: 'example-bucket',
-      previewUrl: 'https://via.placeholder.com/600x800/7C2D12/FFFFFF?text=Invoice+Preview',
-      instructions: 'Enter your business details and invoice items to generate a professional invoice.',
-      aiPrompt: 'Generate a professional invoice document from {{businessName}} to {{clientName}}. Include: 1) Business header with {{businessName}} and address: {{businessAddress}} 2) Client information: {{clientName}} at {{clientAddress}} 3) Invoice details: Invoice #{{invoiceNumber}}, Date: {{invoiceDate}}, Due Date: {{dueDate}} 4) Itemized billing: {{itemDescription}} - Quantity: {{quantity}} x Unit Price: {{unitPrice}} 5) Calculate subtotal, apply {{taxRate}}% tax if provided, and show total amount 6) Payment terms and instructions 7) Professional formatting with clear sections. Make it legally compliant and business-ready.',
-      templateFields: {
-        fields: [
-          { name: 'businessName', label: 'Business Name', type: 'text', placeholder: 'Enter your business name', required: true },
-          { name: 'businessAddress', label: 'Business Address', type: 'textarea', placeholder: 'Enter your business address', required: true },
-          { name: 'clientName', label: 'Client Name', type: 'text', placeholder: 'Enter client name', required: true },
-          { name: 'clientAddress', label: 'Client Address', type: 'textarea', placeholder: 'Enter client address', required: true },
-          { name: 'invoiceNumber', label: 'Invoice Number', type: 'text', placeholder: 'Enter invoice number', required: true },
-          { name: 'invoiceDate', label: 'Invoice Date', type: 'date', required: true },
-          { name: 'dueDate', label: 'Due Date', type: 'date', required: true },
-          { name: 'itemDescription', label: 'Item Description', type: 'text', placeholder: 'Describe the service/product', required: true },
-          { name: 'quantity', label: 'Quantity', type: 'number', placeholder: 'Enter quantity', required: true },
-          { name: 'unitPrice', label: 'Unit Price', type: 'number', placeholder: 'Enter unit price', required: true },
-          { name: 'taxRate', label: 'Tax Rate (%)', type: 'number', placeholder: 'Enter tax rate', required: false }
-        ],
-        placeholders: {
-          '{{businessName}}': 'businessName',
-          '{{businessAddress}}': 'businessAddress',
-          '{{clientName}}': 'clientName',
-          '{{clientAddress}}': 'clientAddress',
-          '{{invoiceNumber}}': 'invoiceNumber',
-          '{{invoiceDate}}': 'invoiceDate',
-          '{{dueDate}}': 'dueDate',
-          '{{itemDescription}}': 'itemDescription',
-          '{{quantity}}': 'quantity',
-          '{{unitPrice}}': 'unitPrice',
-          '{{taxRate}}': 'taxRate',
-          '{{totalAmount}}': 'calculated'
-        }
-      }
+      html: '<h1>Invoice Template</h1><p>Professional invoice template with automatic calculations and customizable business details.</p>'
     },
     {
       name: 'Contract Agreement Template',
-      description: 'Legal contract template for service agreements with customizable terms and conditions.',
-      type: 'docx',
-      category: 'legal',
       thumbnail: 'https://via.placeholder.com/300x200/059669/FFFFFF?text=Contract+Template',
-      isPublic: true,
-      downloadCount: 189,
-      url: 'https://example-bucket.s3.amazonaws.com/templates/contract-template.docx',
-      key: 'templates/contract-template.docx',
-      bucket: 'example-bucket',
-      previewUrl: 'https://via.placeholder.com/600x800/059669/FFFFFF?text=Contract+Preview',
-      instructions: 'Fill in the contract details to create a legally binding service agreement.',
-      aiPrompt: 'Create a comprehensive service agreement contract between {{partyAName}} and {{partyBName}}. Include: 1) Contract header with parties and effective date 2) Service description: {{serviceDescription}} 3) Contract terms: Start Date {{startDate}}, End Date {{endDate}}, Value {{contractValue}} 4) Payment terms: {{paymentTerms}} 5) Responsibilities and obligations of both parties 6) Termination clauses and conditions 7) Governing law under {{jurisdiction}} jurisdiction 8) Signature blocks and legal disclaimers. Ensure the contract is legally sound, comprehensive, and protects both parties\' interests.',
-      templateFields: {
-        fields: [
-          { name: 'partyAName', label: 'Party A Name', type: 'text', placeholder: 'Enter first party name', required: true },
-          { name: 'partyBName', label: 'Party B Name', type: 'text', placeholder: 'Enter second party name', required: true },
-          { name: 'serviceDescription', label: 'Service Description', type: 'textarea', placeholder: 'Describe the services to be provided', required: true },
-          { name: 'contractValue', label: 'Contract Value', type: 'number', placeholder: 'Enter contract value', required: true },
-          { name: 'startDate', label: 'Start Date', type: 'date', required: true },
-          { name: 'endDate', label: 'End Date', type: 'date', required: true },
-          { name: 'paymentTerms', label: 'Payment Terms', type: 'select', options: ['Net 30', 'Net 15', 'Upon completion', 'Monthly'], required: true },
-          { name: 'jurisdiction', label: 'Jurisdiction', type: 'text', placeholder: 'Enter governing jurisdiction', required: true }
-        ],
-        placeholders: {
-          '{{partyAName}}': 'partyAName',
-          '{{partyBName}}': 'partyBName',
-          '{{serviceDescription}}': 'serviceDescription',
-          '{{contractValue}}': 'contractValue',
-          '{{startDate}}': 'startDate',
-          '{{endDate}}': 'endDate',
-          '{{paymentTerms}}': 'paymentTerms',
-          '{{jurisdiction}}': 'jurisdiction'
-        }
-      }
+      html: '<h1>Contract Agreement Template</h1><p>Legal contract template for service agreements with customizable terms and conditions.</p>'
     },
     {
       name: 'Employee Offer Letter',
-      description: 'Professional job offer letter template with salary, benefits, and terms details.',
-      type: 'docx',
-      category: 'hr',
       thumbnail: 'https://via.placeholder.com/300x200/1F2937/FFFFFF?text=Offer+Letter',
-      isPublic: true,
-      downloadCount: 156,
-      url: 'https://example-bucket.s3.amazonaws.com/templates/offer-letter-template.docx',
-      key: 'templates/offer-letter-template.docx',
-      bucket: 'example-bucket',
-      previewUrl: 'https://via.placeholder.com/600x800/1F2937/FFFFFF?text=Offer+Letter+Preview',
-      instructions: 'Enter employee and position details to generate a professional job offer letter.',
-      templateFields: {
-        fields: [
-          { name: 'candidateName', label: 'Candidate Name', type: 'text', placeholder: 'Enter candidate full name', required: true },
-          { name: 'position', label: 'Position Title', type: 'text', placeholder: 'Enter job position', required: true },
-          { name: 'department', label: 'Department', type: 'text', placeholder: 'Enter department', required: true },
-          { name: 'salary', label: 'Annual Salary', type: 'number', placeholder: 'Enter annual salary', required: true },
-          { name: 'startDate', label: 'Start Date', type: 'date', required: true },
-          { name: 'reportingManager', label: 'Reporting Manager', type: 'text', placeholder: 'Enter manager name', required: true },
-          { name: 'workLocation', label: 'Work Location', type: 'text', placeholder: 'Enter work location', required: true },
-          { name: 'benefits', label: 'Benefits Package', type: 'textarea', placeholder: 'Describe benefits package', required: false }
-        ],
-        placeholders: {
-          '{{candidateName}}': 'candidateName',
-          '{{position}}': 'position',
-          '{{department}}': 'department',
-          '{{salary}}': 'salary',
-          '{{startDate}}': 'startDate',
-          '{{reportingManager}}': 'reportingManager',
-          '{{workLocation}}': 'workLocation',
-          '{{benefits}}': 'benefits'
-        }
-      }
+      html: '<h1>Employee Offer Letter</h1><p>Professional job offer letter template with salary, benefits, and terms details.</p>'
     },
     {
       name: 'Meeting Minutes Template',
-      description: 'Professional meeting minutes template with action items and attendee tracking.',
-      type: 'docx',
-      category: 'business',
       thumbnail: 'https://via.placeholder.com/300x200/0891B2/FFFFFF?text=Meeting+Minutes',
-      isPublic: true,
-      downloadCount: 134,
-      url: 'https://example-bucket.s3.amazonaws.com/templates/meeting-minutes-template.docx',
-      key: 'templates/meeting-minutes-template.docx',
-      bucket: 'example-bucket',
-      previewUrl: 'https://via.placeholder.com/600x800/0891B2/FFFFFF?text=Meeting+Minutes+Preview',
-      instructions: 'Record meeting details and action items to create professional meeting minutes.',
-      templateFields: {
-        fields: [
-          { name: 'meetingTitle', label: 'Meeting Title', type: 'text', placeholder: 'Enter meeting title', required: true },
-          { name: 'meetingDate', label: 'Meeting Date', type: 'date', required: true },
-          { name: 'meetingTime', label: 'Meeting Time', type: 'time', required: true },
-          { name: 'location', label: 'Location', type: 'text', placeholder: 'Enter meeting location', required: true },
-          { name: 'chairperson', label: 'Chairperson', type: 'text', placeholder: 'Enter chairperson name', required: true },
-          { name: 'attendees', label: 'Attendees', type: 'textarea', placeholder: 'List all attendees', required: true },
-          { name: 'agenda', label: 'Agenda Items', type: 'textarea', placeholder: 'List agenda items', required: true },
-          { name: 'decisions', label: 'Key Decisions', type: 'textarea', placeholder: 'Record key decisions made', required: false },
-          { name: 'actionItems', label: 'Action Items', type: 'textarea', placeholder: 'List action items and owners', required: false }
-        ],
-        placeholders: {
-          '{{meetingTitle}}': 'meetingTitle',
-          '{{meetingDate}}': 'meetingDate',
-          '{{meetingTime}}': 'meetingTime',
-          '{{location}}': 'location',
-          '{{chairperson}}': 'chairperson',
-          '{{attendees}}': 'attendees',
-          '{{agenda}}': 'agenda',
-          '{{decisions}}': 'decisions',
-          '{{actionItems}}': 'actionItems'
-        }
-      }
+      html: '<h1>Meeting Minutes Template</h1><p>Professional meeting minutes template with action items and attendee tracking.</p>'
     },
     {
       name: 'Project Status Report',
-      description: 'Comprehensive project status report template with progress tracking and risk assessment.',
-      type: 'docx',
-      category: 'business',
       thumbnail: 'https://via.placeholder.com/300x200/DC2626/FFFFFF?text=Status+Report',
-      isPublic: true,
-      downloadCount: 198,
-      url: 'https://example-bucket.s3.amazonaws.com/templates/status-report-template.docx',
-      key: 'templates/status-report-template.docx',
-      bucket: 'example-bucket',
-      previewUrl: 'https://via.placeholder.com/600x800/DC2626/FFFFFF?text=Status+Report+Preview',
-      instructions: 'Update project progress and status information to generate a comprehensive status report.',
-      templateFields: {
-        fields: [
-          { name: 'projectName', label: 'Project Name', type: 'text', placeholder: 'Enter project name', required: true },
-          { name: 'reportDate', label: 'Report Date', type: 'date', required: true },
-          { name: 'projectManager', label: 'Project Manager', type: 'text', placeholder: 'Enter project manager name', required: true },
-          { name: 'overallStatus', label: 'Overall Status', type: 'select', options: ['On Track', 'At Risk', 'Behind Schedule', 'Completed'], required: true },
-          { name: 'completionPercentage', label: 'Completion %', type: 'number', placeholder: 'Enter completion percentage', required: true },
-          { name: 'accomplishments', label: 'Key Accomplishments', type: 'textarea', placeholder: 'List key accomplishments', required: true },
-          { name: 'upcomingTasks', label: 'Upcoming Tasks', type: 'textarea', placeholder: 'List upcoming tasks', required: true },
-          { name: 'risks', label: 'Risks & Issues', type: 'textarea', placeholder: 'Describe risks and issues', required: false },
-          { name: 'budget', label: 'Budget Status', type: 'text', placeholder: 'Enter budget status', required: false }
-        ],
-        placeholders: {
-          '{{projectName}}': 'projectName',
-          '{{reportDate}}': 'reportDate',
-          '{{projectManager}}': 'projectManager',
-          '{{overallStatus}}': 'overallStatus',
-          '{{completionPercentage}}': 'completionPercentage',
-          '{{accomplishments}}': 'accomplishments',
-          '{{upcomingTasks}}': 'upcomingTasks',
-          '{{risks}}': 'risks',
-          '{{budget}}': 'budget'
-        }
-      }
+      html: '<h1>Project Status Report</h1><p>Comprehensive project status report template with progress tracking and risk assessment.</p>'
     }
   ];
 
   for (const template of templates) {
     await prisma.template.create({
-      data: {
-        ...template,
-        size: Math.floor(Math.random() * 5000000) + 100000, // Random size between 100KB and 5MB
-      },
+      data: template,
     });
   }
 
-  console.log(`✅ Created ${templates.length} template records with form fields`);
+  console.log(`✅ Created ${templates.length} template records`);
   console.log('✅ Templates seeded successfully!');
+
+  // Seed Consultant Users and Consultants
+  console.log('👨‍💼 Seeding consultant users and consultants...');
+  
+  // First, get the categories we created
+  const lawyerCategory = await (prisma as any).consultantCategory.findFirst({
+    where: { name: 'Lawyer' }
+  });
+  const legalAdvisorCategory = await (prisma as any).consultantCategory.findFirst({
+    where: { name: 'Legal Advisor' }
+  });
+  const taxCategory = await (prisma as any).consultantCategory.findFirst({
+    where: { name: 'Tax & Accounting Consultant' }
+  });
+  const businessCategory = await (prisma as any).consultantCategory.findFirst({
+    where: { name: 'Business Licensing Expert' }
+  });
+
+  // Create consultant users and their consultant profiles
+  const consultantData = [
+    {
+      user: {
+        email: 'ahmad.lawyer@example.com',
+        name: 'Ahmad Santoso, S.H., M.H.',
+        image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face',
+      },
+      consultant: {
+        fullName: 'Ahmad Santoso, S.H., M.H.',
+        title: 'Senior Legal Advisor & Corporate Lawyer',
+        bio: 'Pengacara berpengalaman 15 tahun dalam hukum korporat, kontrak bisnis, dan penyelesaian sengketa. Alumni Fakultas Hukum Universitas Indonesia dengan spesialisasi hukum bisnis dan investasi.',
+        experience: 15,
+        education: 'S.H. Universitas Indonesia, M.H. Hukum Bisnis Universitas Gadjah Mada',
+        certifications: ['Advokat Indonesia', 'Certified Corporate Lawyer', 'Mediator Bersertifikat'],
+        languages: ['Bahasa Indonesia', 'English', 'Mandarin'],
+        categoryId: lawyerCategory?.id,
+        specializations: ['Hukum Korporat', 'Kontrak Bisnis', 'Merger & Akuisisi', 'Penyelesaian Sengketa'],
+        licenseNumber: 'ADV-001-2008',
+        hourlyRate: 750000,
+        currency: 'IDR',
+        availability: {
+          monday: ['09:00-12:00', '14:00-17:00'],
+          tuesday: ['09:00-12:00', '14:00-17:00'],
+          wednesday: ['09:00-12:00', '14:00-17:00'],
+          thursday: ['09:00-12:00', '14:00-17:00'],
+          friday: ['09:00-12:00', '14:00-16:00']
+        },
+        responseTime: 'Dalam 2 jam',
+        consultationTypes: ['video_call', 'phone_call', 'in_person'],
+        isVerified: true,
+        verificationDate: new Date(),
+        status: 'approved',
+        averageRating: 4.8,
+        totalReviews: 127,
+        totalBookings: 156,
+        completedBookings: 142
+      }
+    },
+    {
+      user: {
+        email: 'sari.tax@example.com',
+        name: 'Sari Wijaya, S.E., M.Ak., CPA',
+        image: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=400&h=400&fit=crop&crop=face',
+      },
+      consultant: {
+        fullName: 'Sari Wijaya, S.E., M.Ak., CPA',
+        title: 'Senior Tax & Accounting Consultant',
+        bio: 'Konsultan pajak dan akuntansi bersertifikat dengan pengalaman 12 tahun. Spesialis dalam perencanaan pajak perusahaan, audit, dan compliance perpajakan untuk UMKM hingga perusahaan multinasional.',
+        experience: 12,
+        education: 'S.E. Universitas Brawijaya, M.Ak. Universitas Indonesia, CPA Australia',
+        certifications: ['Certified Public Accountant (CPA)', 'Brevet A&B Konsultan Pajak', 'Certified Internal Auditor'],
+        languages: ['Bahasa Indonesia', 'English'],
+        categoryId: taxCategory?.id,
+        specializations: ['Perencanaan Pajak', 'Audit Internal', 'Compliance Perpajakan', 'Akuntansi Manajemen'],
+        licenseNumber: 'CPA-2011-0456',
+        hourlyRate: 650000,
+        currency: 'IDR',
+        availability: {
+          monday: ['08:00-12:00', '13:00-17:00'],
+          tuesday: ['08:00-12:00', '13:00-17:00'],
+          wednesday: ['08:00-12:00', '13:00-17:00'],
+          thursday: ['08:00-12:00', '13:00-17:00'],
+          friday: ['08:00-12:00', '13:00-16:00']
+        },
+        responseTime: 'Dalam 1 jam',
+        consultationTypes: ['video_call', 'phone_call', 'chat'],
+        isVerified: true,
+        verificationDate: new Date(),
+        status: 'approved',
+        averageRating: 4.9,
+        totalReviews: 89,
+        totalBookings: 103,
+        completedBookings: 98
+      }
+    },
+    {
+      user: {
+        email: 'budi.business@example.com',
+        name: 'Budi Hartono, S.H., M.M.',
+        image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop&crop=face',
+      },
+      consultant: {
+        fullName: 'Budi Hartono, S.H., M.M.',
+        title: 'Business Licensing & Regulatory Expert',
+        bio: 'Ahli perizinan usaha dan regulasi bisnis dengan pengalaman 10 tahun. Membantu startup hingga perusahaan besar dalam mengurus izin usaha, SIUP, NIB, dan compliance regulasi pemerintah.',
+        experience: 10,
+        education: 'S.H. Universitas Padjadjaran, M.M. Institut Teknologi Bandung',
+        certifications: ['Certified Business Consultant', 'Licensed Business Advisor', 'Regulatory Compliance Specialist'],
+        languages: ['Bahasa Indonesia', 'English'],
+        categoryId: businessCategory?.id,
+        specializations: ['Perizinan Usaha', 'NIB & OSS', 'Compliance Regulasi', 'Startup Legal Setup'],
+        licenseNumber: 'BLC-2013-0789',
+        hourlyRate: 500000,
+        currency: 'IDR',
+        availability: {
+          monday: ['09:00-12:00', '14:00-18:00'],
+          tuesday: ['09:00-12:00', '14:00-18:00'],
+          wednesday: ['09:00-12:00', '14:00-18:00'],
+          thursday: ['09:00-12:00', '14:00-18:00'],
+          friday: ['09:00-12:00', '14:00-17:00'],
+          saturday: ['09:00-12:00']
+        },
+        responseTime: 'Dalam 3 jam',
+        consultationTypes: ['video_call', 'phone_call', 'chat', 'in_person'],
+        isVerified: true,
+        verificationDate: new Date(),
+        status: 'approved',
+        averageRating: 4.7,
+        totalReviews: 64,
+        totalBookings: 78,
+        completedBookings: 71
+      }
+    },
+    {
+      user: {
+        email: 'maya.legal@example.com',
+        name: 'Maya Putri, S.H.',
+        image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop&crop=face',
+      },
+      consultant: {
+        fullName: 'Maya Putri, S.H.',
+        title: 'Legal Advisor & Contract Specialist',
+        bio: 'Penasihat hukum muda dan dinamis dengan fokus pada hukum kontrak, intellectual property, dan hukum teknologi. Berpengalaman menangani legal startup teknologi dan e-commerce.',
+        experience: 7,
+        education: 'S.H. Universitas Indonesia, Sertifikat Hukum Teknologi Stanford University',
+        certifications: ['Advokat Indonesia', 'Certified IP Lawyer', 'Tech Law Specialist'],
+        languages: ['Bahasa Indonesia', 'English', 'Japanese'],
+        categoryId: legalAdvisorCategory?.id,
+        specializations: ['Hukum Kontrak', 'Intellectual Property', 'Hukum Teknologi', 'E-commerce Law'],
+        licenseNumber: 'ADV-2016-1234',
+        hourlyRate: 450000,
+        currency: 'IDR',
+        availability: {
+          monday: ['10:00-13:00', '15:00-18:00'],
+          tuesday: ['10:00-13:00', '15:00-18:00'],
+          wednesday: ['10:00-13:00', '15:00-18:00'],
+          thursday: ['10:00-13:00', '15:00-18:00'],
+          friday: ['10:00-13:00', '15:00-17:00']
+        },
+        responseTime: 'Dalam 1 jam',
+        consultationTypes: ['video_call', 'chat'],
+        isVerified: true,
+        verificationDate: new Date(),
+        status: 'approved',
+        averageRating: 4.6,
+        totalReviews: 42,
+        totalBookings: 56,
+        completedBookings: 51
+      }
+    },
+    {
+      user: {
+        email: 'andi.senior@example.com',
+        name: 'Andi Wijaya, S.H., M.H.',
+        image: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&h=400&fit=crop&crop=face',
+      },
+      consultant: {
+        fullName: 'Andi Wijaya, S.H., M.H.',
+        title: 'Senior Corporate Lawyer & Legal Strategist',
+        bio: 'Pengacara senior dengan pengalaman 20 tahun dalam hukum korporat, merger & akuisisi, dan restructuring perusahaan. Mantan partner di firma hukum internasional.',
+        experience: 20,
+        education: 'S.H. Universitas Gadjah Mada, M.H. Harvard Law School, LL.M. Corporate Law',
+        certifications: ['Advokat Indonesia', 'New York Bar Association', 'Certified M&A Advisor'],
+        languages: ['Bahasa Indonesia', 'English', 'Mandarin'],
+        categoryId: lawyerCategory?.id,
+        specializations: ['Corporate Law', 'Merger & Acquisition', 'Corporate Restructuring', 'International Business Law'],
+        licenseNumber: 'ADV-2003-0001',
+        hourlyRate: 1200000,
+        currency: 'IDR',
+        availability: {
+          monday: ['09:00-12:00', '14:00-17:00'],
+          tuesday: ['09:00-12:00', '14:00-17:00'],
+          wednesday: ['09:00-12:00', '14:00-17:00'],
+          thursday: ['09:00-12:00', '14:00-17:00'],
+          friday: ['09:00-12:00']
+        },
+        responseTime: 'Dalam 4 jam',
+        consultationTypes: ['video_call', 'phone_call', 'in_person'],
+        isVerified: true,
+        verificationDate: new Date(),
+        status: 'approved',
+        averageRating: 4.9,
+        totalReviews: 203,
+        totalBookings: 234,
+        completedBookings: 228
+      }
+    }
+  ];
+
+  // Create users and consultants
+  for (const data of consultantData) {
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email: data.user.email }
+    });
+
+    let user;
+    if (existingUser) {
+      user = existingUser;
+    } else {
+      user = await prisma.user.create({
+        data: {
+          ...data.user,
+          emailVerified: new Date(),
+        }
+      });
+    }
+
+    // Check if consultant already exists
+    const existingConsultant = await (prisma as any).consultant.findUnique({
+      where: { userId: user.id }
+    });
+
+    if (!existingConsultant) {
+      await (prisma as any).consultant.create({
+        data: {
+          ...data.consultant,
+          userId: user.id,
+        }
+      });
+    }
+  }
+
+  console.log('✅ Consultants seeded successfully!');
 
   // Create credit packages
   console.log('🌱 Starting credit packages seeding...');

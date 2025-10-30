@@ -71,11 +71,17 @@ interface DashboardStats {
 }
 
 export default function Dashboard() {
-  const { data: session } = useSession();
-  const [dashboardData, setDashboardData] = useState<DashboardStats | null>(
-    null
-  );
+  const { data: session, status } = useSession();
+  const [dashboardData, setDashboardData] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Tambahkan state untuk menangani hydration
+  const [isClient, setIsClient] = useState(false);
+  
+  // Tandai bahwa kita sudah di client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -92,10 +98,17 @@ export default function Dashboard() {
       }
     };
 
-    if (session) {
+    if (status === "authenticated" && session) {
       fetchDashboardData();
+    } else if (status === "unauthenticated") {
+      setLoading(false);
     }
-  }, [session]);
+  }, [session, status]);
+
+  // Jangan render konten sampai client-side hydration selesai
+  if (!isClient) {
+    return null;
+  }
 
   if (loading) {
     return (
