@@ -20,7 +20,7 @@ import fileToIcon from "@/lib/fileToIcon";
 import fileSize from "@/lib/fileSize";
 import { Input } from "./ui/input";
 
-interface DocumentItem {
+export interface DocumentItem {
   id: string;
   name: string;
   type: "document" | "folder" | string;
@@ -33,20 +33,22 @@ interface DocumentItem {
 }
 
 interface FilesDocumentsDialogProps {
-  documents: DocumentItem[]; // optional initial docs
+  show: boolean;
+  onClose: (e: any) => void;
   selectedDocuments: DocumentItem[];
   setSelectedDocuments: Dispatch<SetStateAction<DocumentItem[]>>;
   onSubmit?: (urls: string[], docs: DocumentItem[]) => void;
 }
 
 export function FilesDocumentsDialog({
-  documents,
+  show,
+  onClose,
   selectedDocuments,
   setSelectedDocuments,
   onSubmit,
 }: FilesDocumentsDialogProps) {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [items, setItems] = useState<DocumentItem[]>(documents || []);
+  const [items, setItems] = useState<DocumentItem[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
@@ -85,13 +87,6 @@ export function FilesDocumentsDialog({
     }
   };
 
-  const formatDate = (date?: string | Date | null) => {
-    if (!date) return "";
-    const d = typeof date === "string" ? new Date(date) : date;
-    const time = d instanceof Date ? d.getTime() : NaN;
-    return isNaN(time) ? "" : d.toLocaleDateString();
-  };
-
   const handleSubmit = () => {
     const urls = selectedDocuments
       .map((doc) => (doc.url ? String(doc.url) : ""))
@@ -111,12 +106,7 @@ export function FilesDocumentsDialog({
   };
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm">
-          <File className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+    <Dialog open={show} onOpenChange={(open) => onClose(open)}>
       <DialogContent className="max-w-6xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display">Files & Documents</DialogTitle>

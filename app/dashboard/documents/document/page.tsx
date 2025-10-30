@@ -65,6 +65,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import ChatContainer from "@/components/chat/chat-container";
 
 interface Message {
   id: string;
@@ -529,36 +530,6 @@ export default function CreateDocumentPage() {
               />
             </div>
             <div className="flex items-center space-x-2">
-              {/* {lastSaved && (
-                <span className="text-sm text-muted-foreground">
-                  {isSaving
-                    ? "Saving..."
-                    : `Saved ${lastSaved.toLocaleTimeString()}`}
-                </span>
-              )} */}
-              {/* <Button
-                variant="link"
-                className="text-muted-foreground"
-                size="sm"
-                onClick={() => {
-                  setShowVersionHistory(true);
-                }}
-              >
-                <History className="h-4 w-4" />
-              </Button> */}
-              {/* <Button
-                variant="link"
-                className="text-muted-foreground"
-                size="sm"
-                onClick={() => {
-                  const next = !showComments;
-                  setShowComments(next);
-                  if (next) setShowAiSidebar(false);
-                }}
-              >
-                <MessageCircle className="h-4 w-4" />
-              </Button> */}
-              {/* AI Toggle Button moved from AIChatSidebar */}
               <Button
                 variant="link"
                 className="text-muted-foreground"
@@ -569,24 +540,6 @@ export default function CreateDocumentPage() {
               >
                 <Sparkles className="h-4 w-4" />
               </Button>
-              {/* {mode === "edit" && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <Download className="h-4 w-4 mr-2" />
-                      Export
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleExport("docx")}>
-                      DOCX
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExport("pdf")}>
-                      PDF
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )} */}
               <Button
                 variant="outline"
                 size="sm"
@@ -613,7 +566,17 @@ export default function CreateDocumentPage() {
               showAiSidebar ? "w-[calc(100vw-600px)]" : " w-[calc(100vw-260px)]"
             )}
           >
-            <div id="superdoc-toolbar" className="border-b w-full px-6" />
+            <div
+              id="superdoc-toolbar"
+              className={cn(
+                "border-b w-full px-6",
+                "overflow-x-auto scrollbar-hide",
+                showAiSidebar
+                  ? "w-[calc(100vw-600px)]"
+                  : " w-[calc(100vw-260px)]"
+              )}
+            />
+
             <div className="h-[calc(100vh-114px)] overflow-auto">
               {(() => {
                 const DOCX_MIME =
@@ -639,39 +602,7 @@ export default function CreateDocumentPage() {
               !showAiSidebar && "hidden"
             )}
           >
-            {/* <AIChatSidebar
-              isVisible={true}
-              onToggleVisibility={() => setShowAiSidebar(false)}
-              documentContent={editorRef.current?.getHTML() || ""}
-              inline={true}
-              onApplyHtml={applyGeneratedHtml}
-              documentId={documentId}
-            /> */}
-            {/* {showComments ? (
-              <CommentSidebar
-                comments={comments}
-                onAddComment={handleAddComment}
-                onResolveComment={handleResolveComment}
-                onDeleteComment={handleDeleteComment}
-                onReplyToComment={handleReplyToComment}
-                currentUser={{
-                  id: (session?.user as any)?.id || "anonymous",
-                  name: session?.user?.name || "Anonymous",
-                  email: session?.user?.email || "",
-                }}
-                selectedText={selectedText}
-                selectedRange={selectedRange}
-              />
-            ) : showAiSidebar ? (
-              <AIChatSidebar
-                isVisible={true}
-                onToggleVisibility={() => setShowAiSidebar(false)}
-                documentContent={editorRef.current?.getHTML() || ""}
-                inline={true}
-                onApplyHtml={applyGeneratedHtml}
-                documentId={documentId}
-              />
-            ) : null} */}
+            <ChatContainer />
           </div>
         </div>
       </div>

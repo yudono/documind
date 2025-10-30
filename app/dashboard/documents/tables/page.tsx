@@ -44,6 +44,7 @@ import LuckysheetTable, {
 } from "@/components/tables/luckysheet-table";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import ChatContainer from "@/components/chat/chat-container";
 
 // Basic spreadsheet types
 interface CellMap {
@@ -290,40 +291,11 @@ export default function TablesEditorPage() {
     }
   };
 
-  // const exportXlsx = () => {
-  //   const wb = XLSX.utils.book_new();
-  //   sheets.forEach((s) => {
-  //     const ws = XLSX.utils.aoa_to_sheet(aoaFromSheet(s));
-  //     XLSX.utils.book_append_sheet(wb, ws, s.name);
-  //   });
-  //   const wbout = XLSX.write(wb, { type: "array", bookType: "xlsx" });
-  //   const blob = new Blob([wbout], {
-  //     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  //   });
-  //   const url = URL.createObjectURL(blob);
-  //   const a = document.createElement("a");
-  //   a.href = url;
-  //   a.download = `${title}.xlsx`;
-  //   document.body.appendChild(a);
-  //   a.click();
-  //   URL.revokeObjectURL(url);
-  //   document.body.removeChild(a);
-  // };
-
-  // const exportCsv = () => {
-  //   const s = sheets[activeSheetIndex];
-  //   const ws = XLSX.utils.aoa_to_sheet(aoaFromSheet(s));
-  //   const csv = XLSX.utils.sheet_to_csv(ws);
-  //   const blob = new Blob([csv], { type: "text/csv" });
-  //   const url = URL.createObjectURL(blob);
-  //   const a = document.createElement("a");
-  //   a.href = url;
-  //   a.download = `${title}-${s.name}.csv`;
-  //   document.body.appendChild(a);
-  //   a.click();
-  //   URL.revokeObjectURL(url);
-  //   document.body.removeChild(a);
-  // };
+  useEffect(() => {
+    if ((window as any).luckysheet) {
+      (window as any).luckysheet.resize();
+    }
+  }, [showAISidebar]);
 
   return (
     <div className="h-screen bg-background">
@@ -372,13 +344,6 @@ export default function TablesEditorPage() {
             />
           </div>
           <div className="flex items-center space-x-2">
-            {/* {lastSaved && (
-              <span className="text-sm text-muted-foreground">
-                {isSaving
-                  ? "Saving..."
-                  : `Saved ${lastSaved.toLocaleTimeString()}`}
-              </span>
-            )} */}
             <Button
               variant="link"
               className="text-muted-foreground"
@@ -387,19 +352,6 @@ export default function TablesEditorPage() {
             >
               <Sparkles className="h-4 w-4" />
             </Button>
-            {/* <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" /> Export
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={exportXlsx}>XLSX</DropdownMenuItem>
-                <DropdownMenuItem onClick={exportCsv}>
-                  CSV (active sheet)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu> */}
 
             <Button
               variant="outline"
@@ -420,22 +372,20 @@ export default function TablesEditorPage() {
 
       <div className="flex flex-row w-full">
         {/* Spreadsheet Grid (Luckysheet) */}
-        <div className={cn("flex-1")}>
-          <div
-            className={cn(
-              "h-[calc(100vh-74px)] overflow-hidden",
-              showAISidebar ? "w-[calc(100vw-600px)]" : " w-[calc(100vw-260px)]"
-            )}
-          >
-            <LuckysheetTable
-              key={sheetsKey}
-              ref={luckysheetRef}
-              sheets={sheets}
-              onSheetsChange={setSheets}
-              onActiveSheetIndexChange={setActiveSheetIndex}
-              assetsLoaded={assetsLoaded}
-            />
-          </div>
+        <div
+          className={cn(
+            "flex-1 h-[calc(100vh-74px)] overflow-hidden",
+            showAISidebar ? "w-[calc(100vw-600px)]" : " w-[calc(100vw-260px)]"
+          )}
+        >
+          <LuckysheetTable
+            key={sheetsKey}
+            ref={luckysheetRef}
+            sheets={sheets}
+            onSheetsChange={setSheets}
+            onActiveSheetIndexChange={setActiveSheetIndex}
+            assetsLoaded={assetsLoaded}
+          />
         </div>
 
         <div
@@ -444,23 +394,7 @@ export default function TablesEditorPage() {
             !showAISidebar && "hidden"
           )}
         >
-          {/* AI Sidebar */}
-          {/* <AIChatSidebarTables
-            isVisible={showAISidebar}
-            inline={false}
-            onApplyTable={applyRowsToActiveSheet}
-            tableId={tableId ?? undefined}
-            contextRows={
-              activeSheet
-                ? Array.from({ length: activeSheet.rows }).map((_, r) =>
-                    Array.from({ length: activeSheet.cols }).map((_, c) => {
-                      const addr = `${colLabel(c)}${r + 1}`;
-                      return activeSheet.cells[addr] ?? "";
-                    })
-                  )
-                : undefined
-            }
-          /> */}
+          <ChatContainer />
         </div>
       </div>
     </div>

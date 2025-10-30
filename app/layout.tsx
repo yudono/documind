@@ -26,15 +26,22 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      {/* add header link icon */}
+      <link rel="icon" href="/logo/logo.png" />
       <body className={inter.className}>
         <Providers>
           {/* preload Space Grotesk font for display headings */}
-          <span className={spaceGrotesk.className} style={{ display: "none" }} />
+          <span
+            className={spaceGrotesk.className}
+            style={{ display: "none" }}
+          />
           {children}
           <Toaster />
           {/* Google Analytics */}
           <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_ID || "G-884EFRLQ06"}`}
+            src={`https://www.googletagmanager.com/gtag/js?id=${
+              process.env.NEXT_PUBLIC_GA_ID || "G-884EFRLQ06"
+            }`}
             strategy="afterInteractive"
           />
           <Script id="ga-init" strategy="afterInteractive">
@@ -42,7 +49,9 @@ export default function RootLayout({
               window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);} 
               gtag('js', new Date());
-              gtag('config', '${process.env.NEXT_PUBLIC_GA_ID || "G-884EFRLQ06"}', {
+              gtag('config', '${
+                process.env.NEXT_PUBLIC_GA_ID || "G-884EFRLQ06"
+              }', {
                 page_path: window.location.pathname,
                 send_page_view: false
               });

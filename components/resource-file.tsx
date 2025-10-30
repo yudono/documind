@@ -90,7 +90,7 @@ export default function ResourceFile({
 
   return (
     <div
-      className={`mt-3 p-3 border-2 rounded-xl hover:shadow-lg transition-all ${
+      className={`mt-3 p-3 border-2 bg-white rounded-xl hover:shadow-lg transition-all ${
         className ?? ""
       }`}
     >

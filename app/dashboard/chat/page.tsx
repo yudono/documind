@@ -18,7 +18,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { FilesDocumentsDialog } from "@/components/file-dialog";
+import { DocumentItem, FilesDocumentsDialog } from "@/components/file-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,8 +65,11 @@ import { toast } from "sonner";
 import ResourceFile from "@/components/resource-file";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/normalize-text";
+import ChatSessionsSidebar from "@/components/chat/chat-sessions-sidebar";
+import ChatMessagesRich from "@/components/chat/chat-messages-rich";
+import ChatComposer from "@/components/chat/chat-composer";
 
-interface Message {
+export interface Message {
   id: string;
   content: string;
   role: "user" | "assistant";
@@ -82,24 +85,12 @@ interface Message {
   };
 }
 
-interface ChatSession {
+export interface ChatSession {
   id: string;
   title: string;
   lastMessage: string;
   timestamp: Date;
   messageCount: number;
-}
-
-interface Document {
-  id: string;
-  name: string;
-  type: "document" | "folder" | string;
-  fileType?: string | null;
-  createdAt?: string | null;
-  updatedAt?: string | null;
-  url?: string | null;
-  previewUrl?: string | null;
-  size?: number | null;
 }
 
 // Speech recognition types shim
@@ -133,7 +124,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedDocuments, setSelectedDocuments] = useState<Document[]>([]);
+  const [items, setItems] = useState<DocumentItem[]>([]);
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [selectedreferencedDocs, setSelectedreferencedDocs] = useState<
     { name: string; url: string }[]
@@ -147,7 +138,6 @@ export default function ChatPage() {
   );
 
   // Documents state
-  const [documents, setDocuments] = useState<Document[]>([]);
   const [availableDocuments] = useState<Document[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
 
@@ -384,24 +374,12 @@ export default function ChatPage() {
     }
   };
 
-  const toggleDocumentSelection = (doc: Document) => {
-    setSelectedDocuments((prev) =>
+  const toggleDocumentSelection = (doc: DocumentItem) => {
+    setItems((prev) =>
       prev.some((d) => d.id === doc.id)
         ? prev.filter((d) => d.id !== doc.id)
         : [...prev, doc]
     );
-  };
-
-  const handleSingleFileUpload = (file: File, result: any) => {
-    setUploadedFiles((prev: any[]) => [...prev, file]);
-    setShowFileUpload(false);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
   };
 
   const scrollToBottom = () => {
@@ -625,7 +603,7 @@ export default function ChatPage() {
     if (!contentToSend.trim() || isLoading) return;
 
     // Capture current selected documents for context before clearing
-    const docsForContext = selectedDocuments.slice();
+    const docsForContext = items.slice();
     // Capture current referenced docs before clearing
     const refsForContext = Array.isArray(selectedreferencedDocs)
       ? [...selectedreferencedDocs]
@@ -676,7 +654,7 @@ export default function ChatPage() {
           : undefined;
 
       // Clear selection after capturing context
-      setSelectedDocuments([]);
+      setItems([]);
       setSelectedreferencedDocs([]);
 
       // Make API call to the main chat endpoint (which handles credit consumption internally)
@@ -794,28 +772,6 @@ export default function ChatPage() {
       sendMessage();
     }
   };
-
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
-
-  const formatDate = (date: Date) => {
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 1) return "Today";
-    if (diffDays === 2) return "Yesterday";
-    if (diffDays <= 7) return `${diffDays - 1} days ago`;
-    return date.toLocaleDateString();
-  };
-  const copyMessage = (content: string) => {
-    toast.success("Copied to clipboard");
-    navigator.clipboard.writeText(content);
-  };
-
-  const [expand, setExpand] = useState<string[]>([]);
-
   return (
     <TooltipProvider>
       <div className="flex h-screen bg-background">
@@ -830,12 +786,6 @@ export default function ChatPage() {
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center space-x-3">
                 <Bot className="h-8 w-8" />
-                {/* <Avatar className="h-8 w-8">
-                  <AvatarImage src="/logo/logo.svg" alt="DocuMind" />
-                  <AvatarFallback className="bg-primary text-primary-foreground">
-                    <Bot className="h-4 w-4" />
-                  </AvatarFallback>
-                </Avatar> */}
                 <div>
                   <h1 className="font-semibold">
                     {isTemplateMode ? "Template Generator" : "AI Assistant"}
@@ -884,600 +834,41 @@ export default function ChatPage() {
           </div>
 
           {/* Messages */}
-          <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
-            <div className="mx-auto space-y-6">
-              {(isLoadingMessages || isLoadingSessions) && (
-                <div className="space-y-6">
-                  {[...Array(6)].map((_, i) => (
-                    <div key={`skeleton-msg-${i}`} className="space-y-6">
-                      <div className="flex items-start space-x-3">
-                        <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
-                        <div className="h-20 w-2/3 bg-muted rounded-2xl animate-pulse" />
-                      </div>
-                      <div className="flex items-start justify-end space-x-3">
-                        <div className="h-20 w-2/3 bg-muted rounded-2xl animate-pulse" />
-                        <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {(!isLoadingMessages || !isLoadingSessions) &&
-                messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`group flex items-start space-x-3 ${
-                      message.role === "user"
-                        ? "flex-row-reverse space-x-reverse"
-                        : ""
-                    }`}
-                  >
-                    <Avatar className="h-8 w-8 flex-shrink-0">
-                      <AvatarFallback
-                        className={
-                          message.role === "assistant"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted"
-                        }
-                      >
-                        {message.role === "assistant" ? (
-                          <Bot className="h-4 w-4" />
-                        ) : (
-                          <User className="h-4 w-4" />
-                        )}
-                      </AvatarFallback>
-                    </Avatar>
-
-                    <div
-                      className={`flex-1 space-y-2 ${
-                        message.role === "user" ? "flex flex-col items-end" : ""
-                      }`}
-                    >
-                      <div
-                        className={`rounded-2xl px-4 py-3 max-w-[80%] ${
-                          message.role === "user"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted"
-                        }`}
-                      >
-                        {message.isTyping ? (
-                          <div className="flex items-center space-x-2 py-2">
-                            <div className="flex space-x-1">
-                              <div className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce"></div>
-                              <div
-                                className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce"
-                                style={{ animationDelay: "0.1s" }}
-                              ></div>
-                              <div
-                                className="h-2 w-2 bg-muted-foreground rounded-full animate-bounce"
-                                style={{ animationDelay: "0.2s" }}
-                              ></div>
-                            </div>
-                            <span className="text-sm text-muted-foreground">
-                              AI is thinking...
-                            </span>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="text-sm leading-relaxed">
-                              {(() => {
-                                const containsHtml =
-                                  typeof message.content === "string" &&
-                                  /<\/?[a-z][\s\S]*>/i.test(message.content);
-                                if (
-                                  message.role === "assistant" &&
-                                  containsHtml
-                                ) {
-                                  return "📄 Dokumen telah dibuat. Gunakan tombol download di bawah untuk mengunduh.";
-                                }
-                                if (message.role === "assistant") {
-                                  return (
-                                    <div className="prose prose-sm max-w-none dark:prose-invert prose-pre:p-0 prose-code:text-sm">
-                                      <ReactMarkdown
-                                        remarkPlugins={[remarkGfm]}
-                                        components={{
-                                          code({
-                                            node,
-                                            inline,
-                                            className,
-                                            children,
-                                            ...props
-                                          }: any) {
-                                            return (
-                                              <CodeBlock
-                                                className={className}
-                                                inline={inline}
-                                                {...props}
-                                              >
-                                                {String(children).replace(
-                                                  /\n$/,
-                                                  ""
-                                                )}
-                                              </CodeBlock>
-                                            );
-                                          },
-                                          h1: ({ children }) => (
-                                            <h1 className="text-xl font-bold mb-4 text-foreground">
-                                              {children}
-                                            </h1>
-                                          ),
-                                          h2: ({ children }) => (
-                                            <h2 className="text-lg font-semibold mb-3 text-foreground">
-                                              {children}
-                                            </h2>
-                                          ),
-                                          h3: ({ children }) => (
-                                            <h3 className="text-base font-medium mb-2 text-foreground">
-                                              {children}
-                                            </h3>
-                                          ),
-                                          p: ({ children }) => (
-                                            <p className="mb-3 text-foreground leading-relaxed">
-                                              {children}
-                                            </p>
-                                          ),
-                                          ul: ({ children }) => (
-                                            <ul className="list-disc list-inside mb-3 space-y-1 text-foreground">
-                                              {children}
-                                            </ul>
-                                          ),
-                                          ol: ({ children }) => (
-                                            <ol className="list-decimal list-inside mb-3 space-y-1 text-foreground">
-                                              {children}
-                                            </ol>
-                                          ),
-                                          li: ({ children }) => (
-                                            <li className="text-foreground">
-                                              {children}
-                                            </li>
-                                          ),
-                                          blockquote: ({ children }) => (
-                                            <blockquote className="border-l-4 border-muted-foreground pl-4 italic mb-3 text-muted-foreground">
-                                              {children}
-                                            </blockquote>
-                                          ),
-                                          table: ({ children }) => (
-                                            <div className="overflow-x-auto mb-3">
-                                              <table className="min-w-full border-collapse border border-border">
-                                                {children}
-                                              </table>
-                                            </div>
-                                          ),
-                                          th: ({ children }) => (
-                                            <th className="border border-border px-3 py-2 bg-muted font-medium text-left">
-                                              {children}
-                                            </th>
-                                          ),
-                                          td: ({ children }) => (
-                                            <td className="border border-border px-3 py-2">
-                                              {children}
-                                            </td>
-                                          ),
-                                          strong: ({ children }) => (
-                                            <strong className="font-semibold text-foreground">
-                                              {children}
-                                            </strong>
-                                          ),
-                                          em: ({ children }) => (
-                                            <em className="italic text-foreground">
-                                              {children}
-                                            </em>
-                                          ),
-                                        }}
-                                      >
-                                        {message.content}
-                                      </ReactMarkdown>
-                                    </div>
-                                  );
-                                }
-                                return message.content;
-                              })()}
-                            </div>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Document File Display */}
-                      {message.documentFile && (
-                        <div className={cn("mt-2 flex flex-wrap gap-1")}>
-                          <ResourceFile resource={message.documentFile} />
-                        </div>
-                      )}
-
-                      {message.referencedDocs && (
-                        <>
-                          {message.referencedDocs.length > 0 && (
-                            <div
-                              className={cn(
-                                "mt-2 flex flex-wrap gap-1",
-                                expand.includes(message.id)
-                                  ? "h-auto"
-                                  : "h-[80px] overflow-hidden",
-                                message.role === "user"
-                                  ? "justify-end"
-                                  : "justify-start"
-                              )}
-                            >
-                              {message.referencedDocs.map((doc, index) => (
-                                <ResourceFile key={index} resource={doc} />
-                              ))}
-                            </div>
-                          )}
-                          {message.referencedDocs.length > 3 && (
-                            <div
-                              className="text-xs text-foreground cursor-pointer"
-                              onClick={() => {
-                                // toggle expand
-                                setExpand(
-                                  expand.includes(message.id)
-                                    ? expand.filter((id) => id !== message.id)
-                                    : [...expand, message.id]
-                                );
-                              }}
-                            >
-                              {expand.includes(message.id)
-                                ? "Hide all files"
-                                : "Show all files"}
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      <div
-                        className={`flex items-center space-x-2 text-xs text-muted-foreground ${
-                          message.role === "user"
-                            ? "justify-end"
-                            : "justify-start"
-                        }`}
-                      >
-                        <span>{formatTime(message.timestamp)}</span>
-                        {message.role === "assistant" && !message.isTyping && (
-                          <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                                  onClick={() => copyMessage(message.content)}
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Copy message</TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                                >
-                                  <RefreshCw className="h-3 w-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Regenerate</TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                                >
-                                  <ThumbsUp className="h-3 w-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Good response</TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                                >
-                                  <ThumbsDown className="h-3 w-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Poor response</TooltipContent>
-                            </Tooltip>
-                            {/* <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                                >
-                                  <FileDown className="h-3 w-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>
-                                  Generate Document
-                                </DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    generateDocument(
-                                      message.content,
-                                      "pdf",
-                                      "Chat Response",
-                                      aiFormattingEnabled
-                                    )
-                                  }
-                                >
-                                  <Sparkles className="mr-2 h-4 w-4" />
-                                  AI-Enhanced PDF
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    generateDocument(
-                                      message.content,
-                                      "pdf",
-                                      "Chat Response",
-                                      false
-                                    )
-                                  }
-                                >
-                                  <FileText className="mr-2 h-4 w-4" />
-                                  Standard PDF
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    generateDocument(
-                                      message.content,
-                                      "html",
-                                      "Chat Response"
-                                    )
-                                  }
-                                >
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  HTML Document
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    generateDocument(
-                                      message.content,
-                                      "excel",
-                                      "Chat Response"
-                                    )
-                                  }
-                                >
-                                  <FileText className="mr-2 h-4 w-4" />
-                                  Excel Spreadsheet
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu> */}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </ScrollArea>
+          <ChatMessagesRich
+            ref={scrollAreaRef as any}
+            messages={messages as any}
+            isLoadingMessages={isLoadingMessages}
+            isLoadingSessions={isLoadingSessions}
+          />
 
           {/* Input Area */}
-          <div className="border-t p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="mx-auto">
-              {/* Referenced Documents */}
-              {selectedDocuments.length > 0 && (
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {selectedDocuments.map((doc) => (
-                    <Badge
-                      key={doc.id}
-                      variant="secondary"
-                      className="px-2 py-1"
-                    >
-                      <File className="h-3 w-3 mr-1" />
-                      {doc.name}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 ml-1 hover:bg-destructive hover:text-destructive-foreground"
-                        onClick={() => toggleDocumentSelection(doc)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex items-center space-x-2">
-                <div className="flex space-x-1">
-                  <FilesDocumentsDialog
-                    documents={documents}
-                    selectedDocuments={selectedDocuments as any}
-                    setSelectedDocuments={setSelectedDocuments}
-                    onSubmit={(urls, docs) => {
-                      // Store referenced docs as objects { name, url }
-                      try {
-                        const refs = docs.map((d: any) => ({
-                          name: d.name,
-                          url: d.url,
-                        }));
-                        setSelectedreferencedDocs(refs);
-                      } catch (e) {
-                        console.warn("Failed to map referenced docs:", e);
-                      }
-                      // Mirror selection for UI badges (name display)
-                      try {
-                        const mapped = docs.map((d: any) => ({
-                          id: d.id,
-                          name: d.name,
-                          type:
-                            typeof d.fileType === "string"
-                              ? d.fileType
-                              : d.type || "document",
-                          uploadDate: new Date(
-                            d.updatedAt || d.createdAt || Date.now()
-                          ),
-                        }));
-                        setSelectedDocuments(mapped);
-                      } catch (e) {
-                        console.warn(
-                          "Failed to map selected docs for UI display:",
-                          e
-                        );
-                      }
-                    }}
-                  />
-                </div>
-
-                <div className="flex-1 relative">
-                  <Textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Ask me anything about your documents..."
-                    disabled={isLoading}
-                    className="min-h-[44px] max-h-[120px] resize-none pr-12 border-input focus:border-primary"
-                    rows={1}
-                  />
-                  <Button
-                    variant={isRecording ? "destructive" : "ghost"}
-                    size="sm"
-                    className="absolute right-1 top-1"
-                    onClick={toggleRecording}
-                    disabled={!supportsSpeech}
-                    title={
-                      !supportsSpeech
-                        ? "Browser tidak mendukung speech recognition"
-                        : isRecording
-                        ? "Stop recording"
-                        : "Start recording"
-                    }
-                  >
-                    {isRecording ? (
-                      <Square className="h-4 w-4" />
-                    ) : (
-                      <Mic className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-
-                <Button
-                  onClick={() => sendMessage()}
-                  disabled={!input.trim() || isLoading}
-                  size="sm"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <p className="text-xs text-muted-foreground mt-2 text-center">
-                Press Enter to send • Shift+Enter for new line • Use @ to
-                reference documents
-              </p>
-            </div>
-          </div>
+          <ChatComposer
+            items={items}
+            setItems={setItems}
+            setSelectedreferencedDocs={setSelectedreferencedDocs}
+            toggleDocumentSelection={toggleDocumentSelection}
+            textareaRef={textareaRef}
+            input={input}
+            setInput={setInput}
+            handleKeyPress={handleKeyPress}
+            isLoading={isLoading}
+            isRecording={isRecording}
+            toggleRecording={toggleRecording}
+            supportsSpeech={supportsSpeech}
+            sendMessage={sendMessage}
+          />
         </div>
 
         {/* Sidebar with Chat History */}
-        <div className="w-96 border-l h-screen bg-muted/10 flex flex-col">
-          <div className="p-4 border-b h-20 flex items-center w-full">
-            <div className="flex items-center justify-between space-x-2 w-full">
-              <h2 className="text-lg font-semibold flex-1">Chat History</h2>
-              <Button size="sm" variant="outline">
-                <Search className="h-4 w-4" />
-              </Button>
-              <Button
-                onClick={createNewSession}
-                disabled={isCreatingChat}
-                size="sm"
-                variant="outline"
-              >
-                {isCreatingChat ? "Creating..." : "New Chat"}{" "}
-                {!isCreatingChat && <Plus size={14} className="ml-2" />}
-              </Button>
-            </div>
-            {/* <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search conversations..." className="pl-9" />
-            </div> */}
-          </div>
-
-          <ScrollArea className="flex-1 p-4">
-            <div className="space-y-2">
-              {isLoadingSessions ? (
-                <div className="space-y-2">
-                  {[...Array(6)].map((_, i) => (
-                    <Card
-                      key={`skeleton-session-${i}`}
-                      className="cursor-default"
-                    >
-                      <CardContent className="p-3">
-                        <div className="space-y-2 animate-pulse">
-                          <div className="h-4 w-1/2 bg-muted rounded" />
-                          <div className="flex items-center mt-2 space-x-2">
-                            <div className="h-3 w-16 bg-muted rounded" />
-                            <Separator orientation="vertical" className="h-3" />
-                            <div className="h-3 w-10 bg-muted rounded" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                chatSessions.map((chatSession) => (
-                  <Card
-                    key={chatSession.id}
-                    className={`cursor-pointer transition-colors hover:bg-muted/50 ${
-                      selectedSession === chatSession.id
-                        ? "bg-muted border-primary"
-                        : ""
-                    }`}
-                    onClick={() => {
-                      switchToSession(chatSession);
-                    }}
-                  >
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate w-72">
-                            {normalizeText(
-                              chatSession.lastMessage || "New Chat"
-                            )}
-                          </div>
-                          {/* <div className="text-xs text-muted-foreground mt-1 line-clamp-2 w-72">
-                            {chatSession.lastMessage}
-                          </div> */}
-                          <div className="w-full flex items-center mt-2 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3 mr-1" />
-                            {formatDate(chatSession.timestamp)}
-                            <Separator
-                              orientation="vertical"
-                              className="mx-2 h-3"
-                            />
-                            <MessageSquare className="h-3 w-3 mr-1" />
-                            {chatSession.messageCount}
-                          </div>
-                        </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            <DropdownMenuItem
-                              onClick={() => deleteChatSession(chatSession.id)}
-                            >
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
-          </ScrollArea>
-        </div>
+        <ChatSessionsSidebar
+          sessions={chatSessions}
+          selectedId={selectedSession}
+          isLoadingSessions={isLoadingSessions}
+          isCreatingChat={isCreatingChat}
+          onCreateNew={createNewSession}
+          onSelect={switchToSession}
+          onDelete={deleteChatSession}
+        />
       </div>
     </TooltipProvider>
   );
